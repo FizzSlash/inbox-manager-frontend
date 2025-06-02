@@ -105,7 +105,7 @@ const InboxManager = () => {
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
           tags: ['live-data', lead.lead_category ? `category-${lead.lead_category}` : 'uncategorized', replies.length > 0 ? 'has-replies' : 'no-replies'].filter(Boolean),
           conversation: conversation,
-          stage: lead.stage || 'initial-outreach', // Use stage from Supabase
+          stage: lead.stage || 'discovery', // Default to discovery, use stage from Supabase
           lead_category: lead.lead_category || 'Uncategorized' // Add lead category
         };
       });
@@ -210,18 +210,18 @@ const InboxManager = () => {
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
 
-  // Available stages for dropdown (matching your Supabase data)
+  // Available stages for dropdown (sales process stages)
   const availableStages = [
-    { value: 'initial-outreach', label: 'Initial Outreach' },
-    { value: 'interested', label: 'Interested' },
-    { value: 'meeting-request', label: 'Meeting Request' },
-    { value: 'not-interested', label: 'Not Interested' },
-    { value: 'do-not-contact', label: 'Do Not Contact' },
-    { value: 'information-request', label: 'Information Request' },
-    { value: 'out-of-office', label: 'Out Of Office' },
-    { value: 'wrong-person', label: 'Wrong Person' },
-    { value: 'uncategorizable-by-ai', label: 'Uncategorizable by AI' },
-    { value: 'sender-originated-bounce', label: 'Sender Originated Bounce' }
+    { value: 'discovery', label: 'Discovery' },
+    { value: 'sales-process', label: 'Sales Process' },
+    { value: 'call-booked', label: 'Call Booked' },
+    { value: 'call', label: 'Call' },
+    { value: 'proposal', label: 'Proposal' },
+    { value: 'negotiation', label: 'Negotiation' },
+    { value: 'closed-won', label: 'Closed Won' },
+    { value: 'closed-lost', label: 'Closed Lost' },
+    { value: 'stalled', label: 'Stalled' },
+    { value: 'follow-up', label: 'Follow Up' }
   ];
 
   // Update lead stage via API
@@ -304,11 +304,20 @@ const InboxManager = () => {
     return { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', label: 'Low Intent' };
   };
 
-  // Get engagement color
-  const getEngagementColor = (score) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
+  // Get lead category styling
+  const getCategoryStyle = (category) => {
+    const styles = {
+      'Interested': { bg: 'bg-green-100', text: 'text-green-800' },
+      'Meeting Request': { bg: 'bg-purple-100', text: 'text-purple-800' },
+      'Not Interested': { bg: 'bg-red-100', text: 'text-red-800' },
+      'Do Not Contact': { bg: 'bg-red-200', text: 'text-red-900' },
+      'Information Request': { bg: 'bg-blue-100', text: 'text-blue-800' },
+      'Out Of Office': { bg: 'bg-gray-100', text: 'text-gray-800' },
+      'Wrong Person': { bg: 'bg-yellow-100', text: 'text-yellow-800' },
+      'Uncategorizable by AI': { bg: 'bg-gray-100', text: 'text-gray-600' },
+      'Sender Originated Bounce': { bg: 'bg-red-100', text: 'text-red-700' }
+    };
+    return styles[category] || { bg: 'bg-indigo-100', text: 'text-indigo-800' };
   };
 
   // Filter and sort leads
@@ -524,21 +533,21 @@ const InboxManager = () => {
     return 'active';
   };
 
-  // Get stage styling (updated for your Supabase stages)
+  // Get stage styling (sales process stages)
   const getStageStyle = (stage) => {
     const styles = {
-      'initial-outreach': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Initial Outreach' },
-      'interested': { bg: 'bg-green-100', text: 'text-green-800', label: 'Interested' },
-      'meeting-request': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Meeting Request' },
-      'not-interested': { bg: 'bg-red-100', text: 'text-red-800', label: 'Not Interested' },
-      'do-not-contact': { bg: 'bg-red-200', text: 'text-red-900', label: 'Do Not Contact' },
-      'information-request': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Information Request' },
-      'out-of-office': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Out Of Office' },
-      'wrong-person': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Wrong Person' },
-      'uncategorizable-by-ai': { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Uncategorizable by AI' },
-      'sender-originated-bounce': { bg: 'bg-red-100', text: 'text-red-700', label: 'Sender Originated Bounce' }
+      'discovery': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Discovery' },
+      'sales-process': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Sales Process' },
+      'call-booked': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Call Booked' },
+      'call': { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Call' },
+      'proposal': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Proposal' },
+      'negotiation': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Negotiation' },
+      'closed-won': { bg: 'bg-green-100', text: 'text-green-800', label: 'Closed Won' },
+      'closed-lost': { bg: 'bg-red-100', text: 'text-red-800', label: 'Closed Lost' },
+      'stalled': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Stalled' },
+      'follow-up': { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Follow Up' }
     };
-    return styles[stage] || { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Initial Outreach' };
+    return styles[stage] || { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Discovery' };
   };
 
   // Calculate deal value estimate
