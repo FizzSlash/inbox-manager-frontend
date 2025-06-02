@@ -604,20 +604,6 @@ const InboxManager = () => {
         console.error('Status:', response.status);
         console.error('Status Text:', response.statusText);
         console.error('Response Body:', responseText);
-        
-        // Check if this is the specific "draft" header error
-        if (responseText.includes('Invalid character in header content') && responseText.includes('draft')) {
-          console.error('SPECIFIC ISSUE: Your n8n workflow is trying to set a header or return data with problematic characters.');
-          console.error('Check your n8n workflow for:');
-          console.error('1. HTTP Response nodes setting custom headers');
-          console.error('2. Any string manipulation adding quotes around "draft"');
-          console.error('3. Response formatting issues');
-          
-          // Use a fallback response for now
-          setDraftResponse(`Hi ${selectedLead.first_name},\n\nThank you for your message. I appreciate you taking the time to reach out.\n\nI'd love to learn more about your goals and see how we might be able to help.\n\nWould you be open to a brief conversation this week?\n\nBest regards`);
-          return;
-        }
-        
         throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
       }
       
@@ -693,9 +679,9 @@ const InboxManager = () => {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-800">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-white font-medium">Loading leads...</p>
+        <div className="text-center bg-white p-8 rounded-2xl shadow-xl">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading leads...</p>
         </div>
       </div>
     );
@@ -704,12 +690,12 @@ const InboxManager = () => {
   // Error state
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-800">
+      <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-red-400 mb-4 font-medium">Error loading leads: {error}</p>
+          <p className="text-red-600 mb-6 font-medium">Error loading leads: {error}</p>
           <button 
             onClick={fetchLeads}
-            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium shadow-sm transition-all"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Retry
           </button>
@@ -721,14 +707,14 @@ const InboxManager = () => {
   return (
     <div className="flex h-screen bg-gray-800">
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 bg-white border-r border-gray-300 flex flex-col">
+      <div className="w-1/2 bg-white border-r border-gray-300 flex flex-col shadow-lg">
         {/* Header with Metrics */}
-        <div className="p-4 border-b border-gray-300 bg-white">
+        <div className="p-6 border-b border-gray-300 bg-gradient-to-r from-blue-50 to-white">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-xl font-semibold text-gray-900">Inbox Manager</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Inbox Manager</h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className="text-sm text-blue-600 hover:text-blue-800"
             >
               {showMetrics ? 'Hide' : 'Show'} Metrics
             </button>
@@ -736,25 +722,25 @@ const InboxManager = () => {
 
           {/* Dashboard Metrics */}
           {showMetrics && (
-            <div className="grid grid-cols-3 gap-3 mb-4 text-xs">
-              <div className="bg-red-50 p-3 rounded-xl border border-red-200 shadow-sm">
+            <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
+              <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
                 <div className="flex items-center gap-1 mb-1">
                   <AlertCircle className="w-3 h-3 text-red-600" />
-                  <span className="text-red-700 font-semibold">🚨 URGENT</span>
+                  <span className="text-red-600 font-medium">🚨 URGENT</span>
                 </div>
                 <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="bg-orange-50 p-3 rounded-xl border border-orange-200 shadow-sm">
+              <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
                 <div className="flex items-center gap-1 mb-1">
                   <Users className="w-3 h-3 text-orange-600" />
-                  <span className="text-orange-700 font-semibold">⚡ NEEDS RESPONSE</span>
+                  <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
                 </div>
                 <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 shadow-sm">
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
                 <div className="flex items-center gap-1 mb-1">
                   <Target className="w-3 h-3 text-yellow-600" />
-                  <span className="text-yellow-700 font-semibold">📞 NEEDS FOLLOWUP</span>
+                  <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
                 </div>
                 <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
               </div>
@@ -762,24 +748,24 @@ const InboxManager = () => {
           )}
           
           {/* Search */}
-          <div className="relative mb-4">
+          <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
           {/* Enhanced Filters and Sort */}
-          <div className="space-y-2">
-            <div className="flex gap-2">
+          <div className="space-y-3">
+            <div className="flex gap-3">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="flex-1 px-3 py-3 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="recent">Most Recent</option>
                 <option value="intent">Intent Score</option>
@@ -791,7 +777,7 @@ const InboxManager = () => {
               <select
                 value={filterBy}
                 onChange={(e) => setFilterBy(e.target.value)}
-                className="flex-1 px-3 py-3 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Intent</option>
                 <option value="high">High Intent (7-10)</option>
@@ -814,19 +800,19 @@ const InboxManager = () => {
             const getResponseBadge = () => {
               if (urgency === 'urgent-response') {
                 return (
-                  <div className="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse mb-2">
+                  <div className="bg-red-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse mb-3 shadow-lg">
                     🚨 URGENT NEEDS RESPONSE
                   </div>
                 );
               } else if (urgency === 'needs-response') {
                 return (
-                  <div className="bg-red-400 text-white px-3 py-1 rounded-full text-xs font-medium mb-2">
+                  <div className="bg-red-500 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md">
                     ⚡ NEEDS RESPONSE
                   </div>
                 );
               } else if (urgency === 'needs-followup') {
                 return (
-                  <div className="bg-red-300 text-red-800 px-3 py-1 rounded-full text-xs font-medium mb-2">
+                  <div className="bg-yellow-500 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md">
                     📞 NEEDS FOLLOWUP
                   </div>
                 );
@@ -838,27 +824,27 @@ const InboxManager = () => {
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-all duration-200 ${
-                  selectedLead?.id === lead.id ? 'bg-blue-100 border-l-4 border-blue-500' : 'border-l-4 border-transparent hover:border-l-4 hover:border-blue-300'
-                } relative`}
+                className={`p-5 border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-all duration-200 ${
+                  selectedLead?.id === lead.id ? 'bg-blue-100 border-blue-300 shadow-md' : ''
+                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative`}
               >
                 {/* Response Badge at Top */}
                 {getResponseBadge()}
                 
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className={`text-gray-900 ${urgency !== 'none' ? 'font-bold' : 'font-semibold'}`}>
+                  <h3 className={`text-gray-900 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
                     {lead.first_name} {lead.last_name}
-                    {urgency !== 'none' && <span className="ml-2 text-red-500 text-sm">●</span>}
+                    {urgency !== 'none' && <span className="ml-2 text-red-600 text-sm">●</span>}
                   </h3>
                   <div className="flex items-center gap-1">
-                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${intentStyle.bg} ${intentStyle.text} ${intentStyle.border} border`}>
+                    <span className={`px-2 py-1 text-xs rounded-full ${intentStyle.bg} ${intentStyle.text}`}>
                       {lead.intent}
                     </span>
                   </div>
                 </div>
                 
                 <p className="text-sm text-gray-600 mb-1">{lead.email}</p>
-                <p className={`text-sm text-gray-800 mb-2 ${urgency !== 'none' ? 'font-semibold' : 'font-medium'}`}>
+                <p className={`text-sm text-gray-800 mb-2 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
                   {lead.subject}
                 </p>
                 
@@ -878,18 +864,18 @@ const InboxManager = () => {
                 </div>
                 
                 {/* Tags */}
-                <div className="flex flex-wrap gap-1 mb-2">
+                <div className="flex flex-wrap gap-2 mb-3">
                   {displayTags.slice(0, 2).map(tag => (
-                    <span key={tag} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium border border-blue-200">
+                    <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
                       {tag}
                     </span>
                   ))}
                   {displayTags.length > 2 && (
-                    <span className="text-xs text-gray-500 font-medium">+{displayTags.length - 2}</span>
+                    <span className="text-xs text-gray-500">+{displayTags.length - 2}</span>
                   )}
                 </div>
                 
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-gray-400">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center">
                       <Clock className="w-3 h-3 mr-1" />
@@ -901,7 +887,7 @@ const InboxManager = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
+                    <span className="bg-gray-300 text-gray-800 px-3 py-1 rounded-full text-xs border border-gray-400">
                       {lead.conversation.length} messages
                     </span>
                   </div>
@@ -913,20 +899,20 @@ const InboxManager = () => {
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-white shadow-lg">
         {selectedLead ? (
           <>
             {/* Lead Header */}
-            <div className="p-6 bg-white border-b border-gray-300 shadow-sm">
+            <div className="p-8 bg-gradient-to-r from-white to-blue-50 border-b border-gray-300">
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-3xl font-bold text-gray-900">
                     {selectedLead.first_name} {selectedLead.last_name}
                   </h2>
-                  <p className="text-gray-600 mt-1 font-medium">{selectedLead.email}</p>
+                  <p className="text-gray-700 mt-2 font-medium">{selectedLead.email}</p>
                   {selectedLead.website && (
-                    <p className="text-blue-600 text-sm mt-1">
-                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-800 font-medium">
+                    <p className="text-blue-700 text-sm mt-2">
+                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-blue-900 transition-colors">
                         {selectedLead.website}
                         <ExternalLink className="w-3 h-3" />
                       </a>
@@ -937,14 +923,14 @@ const InboxManager = () => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className={`px-4 py-2 rounded-xl text-sm font-semibold ${intentStyle.bg} ${intentStyle.text} ${intentStyle.border} border shadow-sm`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${intentStyle.bg} ${intentStyle.text}`}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
                   })()}
                   <button
                     onClick={() => setSelectedLead(null)}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors"
+                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -953,12 +939,12 @@ const InboxManager = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-800">
-              <div className="space-y-6">
+            <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+              <div className="space-y-8">
                 {/* Lead Information */}
-                <div className="bg-white rounded-xl border border-gray-300 p-6 shadow-sm">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-blue-600" />
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
+                    <User className="w-4 h-4 mr-2" />
                     Lead Information
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -1021,13 +1007,13 @@ const InboxManager = () => {
                 </div>
 
                 {/* Engagement Metrics */}
-                <div className="bg-white rounded-xl border border-gray-300 p-6 shadow-sm">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                    <BarChart3 className="w-5 h-5 mr-2 text-blue-600" />
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
+                    <BarChart3 className="w-4 h-4 mr-2" />
                     Engagement Metrics
                   </h3>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center">
+                    <div className="text-center bg-white p-8 rounded-2xl shadow-lg">
                       <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
                         {selectedLead.engagement_score}%
                       </div>
@@ -1049,18 +1035,16 @@ const InboxManager = () => {
                 </div>
 
                 {/* Conversation History */}
-                <div className="bg-white rounded-xl border border-gray-300 p-6 shadow-sm">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                    <MessageSquare className="w-5 h-5 mr-2 text-blue-600" />
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
+                    <MessageSquare className="w-4 h-4 mr-2" />
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-6 max-h-96 overflow-y-auto">
                     {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-4 rounded-xl border ${
-                        message.type === 'SENT' 
-                          ? 'bg-blue-50 border-blue-200 border-l-4 border-l-blue-500' 
-                          : 'bg-gray-50 border-gray-200 border-l-4 border-l-gray-400'
-                      }`}>
+                      <div key={index} className={`p-5 rounded-xl border-2 ${
+                        message.type === 'SENT' ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-300'
+                      } shadow-sm`}>
                         <div className="flex justify-between items-start mb-2">
                           <div className="text-sm">
                             <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-800' : 'text-gray-800'}`}>
@@ -1083,7 +1067,7 @@ const InboxManager = () => {
                             </span>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed font-medium">
+                        <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                           {message.content}
                         </div>
                       </div>
@@ -1092,18 +1076,18 @@ const InboxManager = () => {
                 </div>
 
                 {/* Response Section */}
-                <div className="bg-white rounded-xl border border-gray-300 p-6 shadow-sm">
-                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                    <Mail className="w-5 h-5 mr-2 text-blue-600" />
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
+                    <Mail className="w-4 h-4 mr-2" />
                     Compose Response
                   </h3>
                   
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
+                  <div className="space-y-6">
+                    <div className="flex gap-3">
                       <button
                         onClick={generateDraft}
                         disabled={isGeneratingDraft}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-sm transition-all"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
@@ -1114,14 +1098,14 @@ const InboxManager = () => {
                       value={draftResponse}
                       onChange={(e) => setDraftResponse(e.target.value)}
                       placeholder="Generated draft will appear here, or write your own response..."
-                      className="w-full h-40 p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white shadow-sm"
+                      className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     />
 
                     <div className="flex justify-end">
                       <button
                         onClick={sendMessage}
                         disabled={!draftResponse.trim() || isSending}
-                        className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-sm transition-all"
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         <Send className="w-4 h-4" />
                         {isSending ? 'Sending...' : 'Send Message'}
@@ -1129,17 +1113,15 @@ const InboxManager = () => {
                     </div>
                   </div>
                 </div>
-                  </div>
-                </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-800">
+          <div className="flex-1 flex items-center justify-center text-gray-600 bg-gray-50">
             <div className="text-center">
               <Mail className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium text-white">Select a lead to view details</p>
-              <p className="text-sm text-gray-300">Choose a lead from the inbox to see their conversation history and respond</p>
+              <p className="text-lg font-medium">Select a lead to view details</p>
+              <p className="text-sm">Choose a lead from the inbox to see their conversation history and respond</p>
             </div>
           </div>
         )}
