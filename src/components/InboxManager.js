@@ -513,23 +513,42 @@ const InboxManager = () => {
       const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
       const urgency = getResponseUrgency(selectedLead);
       
+      // Clean function to remove problematic characters
+      const cleanString = (str) => {
+        if (!str) return '';
+        return str
+          .replace(/\r\n/g, ' ')  // Replace Windows line breaks
+          .replace(/\n/g, ' ')    // Replace Unix line breaks  
+          .replace(/\r/g, ' ')    // Replace Mac line breaks
+          .replace(/\t/g, ' ')    // Replace tabs
+          .replace(/[\x00-\x1F\x7F-\x9F]/g, '')  // Remove other control characters
+          .replace(/"/g, "'")     // Replace double quotes with single quotes
+          .replace(/\s+/g, ' ')   // Replace multiple spaces with single space
+          .trim();
+      };
+
       // Debug: Log the full payload we're sending
       const payload = {
         id: selectedLead.id,
-        email: selectedLead.email,
-        first_name: selectedLead.first_name,
-        last_name: selectedLead.last_name,
-        subject: selectedLead.subject,
+        email: cleanString(selectedLead.email),
+        first_name: cleanString(selectedLead.first_name),
+        last_name: cleanString(selectedLead.last_name),
+        subject: cleanString(selectedLead.subject),
         intent: selectedLead.intent,
         engagement_score: selectedLead.engagement_score,
         urgency: urgency,
         last_message_type: lastMessage?.type || 'SENT',
-        last_message_content: (lastMessage?.content || '').substring(0, 300),
+        last_message_content: cleanString((lastMessage?.content || '').substring(0, 300)),
         reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
         days_since_last_message: Math.floor((new Date() - new Date(lastMessage?.time || new Date())) / (1000 * 60 * 60 * 24)),
-        website: selectedLead.website || '',
-        content_brief: selectedLead.content_brief || '',
-        conversation: selectedLead.conversation // Include full conversation for debugging
+        website: cleanString(selectedLead.website || ''),
+        content_brief: cleanString(selectedLead.content_brief || ''),
+        conversation: selectedLead.conversation.map(msg => ({
+          ...msg,
+          content: cleanString(msg.content),
+          from: cleanString(msg.from || ''),
+          to: cleanString(msg.to || '')
+        }))
       };
 
       console.log('=== WEBHOOK DEBUG INFO ===');
@@ -540,8 +559,7 @@ const InboxManager = () => {
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
