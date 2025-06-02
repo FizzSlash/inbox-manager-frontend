@@ -1354,7 +1354,7 @@ const InboxManager = () => {
         </div>
 
         {/* Lead List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
           {filteredAndSortedLeads.map((lead) => {
             const intentStyle = getIntentStyle(lead.intent);
             const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -1389,40 +1389,45 @@ const InboxManager = () => {
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-5 border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-all duration-200 ${
-                  selectedLead?.id === lead.id ? 'bg-blue-100 border-blue-300 shadow-md' : ''
-                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative`}
+                className={`p-5 cursor-pointer hover:opacity-80 transition-all duration-200 relative m-2 rounded-lg ${
+                  selectedLead?.id === lead.id ? 'shadow-md' : ''
+                }`}
+                style={{
+                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.1)' : 'rgba(26, 28, 26, 0.8)',
+                  border: selectedLead?.id === lead.id ? '2px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.5)',
+                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.5)'
+                }}
               >
                 {/* Response Badge at Top */}
                 {getResponseBadge()}
                 
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className={`text-gray-900 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
+                  <h3 className={`text-white ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
                     {lead.first_name} {lead.last_name}
-                    {urgency !== 'none' && <span className="ml-2 text-red-600 text-sm">●</span>}
+                    {urgency !== 'none' && <span className="ml-2 text-red-400 text-sm">●</span>}
                   </h3>
                   <div className="flex items-center gap-1">
-                    <span className={`px-2 py-1 text-xs rounded-full ${intentStyle.bg} ${intentStyle.text}`}>
+                    <span className="px-2 py-1 text-xs rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                       {lead.intent}
                     </span>
                   </div>
                 </div>
                 
-                <p className="text-sm text-gray-600 mb-1">{lead.email}</p>
-                <p className={`text-sm text-gray-800 mb-2 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
+                <p className="text-sm text-gray-300 mb-1">{lead.email}</p>
+                <p className={`text-sm text-white mb-2 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
                   {lead.subject}
                 </p>
                 
                 {/* Enhanced metadata */}
-                <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                <div className="flex items-center gap-3 text-xs text-gray-300 mb-2">
                   <span className={`font-medium ${getEngagementColor(lead.engagement_score)}`}>
                     {lead.engagement_score}% engagement
                   </span>
-                  <span className="text-blue-600">
+                  <span style={{color: '#54FCFF'}}>
                     {lead.conversation.filter(m => m.type === 'REPLY').length} replies
                   </span>
                   {urgency !== 'none' && (
-                    <span className="text-red-600 font-bold">
+                    <span className="text-red-400 font-bold">
                       {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
                     </span>
                   )}
@@ -1431,16 +1436,16 @@ const InboxManager = () => {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2 mb-3">
                   {displayTags.slice(0, 3).map(tag => (
-                    <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                    <span key={tag} className="text-xs px-3 py-1 rounded-full" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: 'white', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                       {tag}
                     </span>
                   ))}
                   {displayTags.length > 3 && (
-                    <span className="text-xs text-gray-500">+{displayTags.length - 3}</span>
+                    <span className="text-xs text-gray-300">+{displayTags.length - 3}</span>
                   )}
                 </div>
                 
-                <div className="flex items-center justify-between text-xs text-gray-400">
+                <div className="flex items-center justify-between text-xs text-gray-300">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center">
                       <Timer className="w-3 h-3 mr-1" />
@@ -1462,7 +1467,7 @@ const InboxManager = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="bg-gray-300 text-gray-800 px-3 py-1 rounded-full text-xs border border-gray-400">
+                    <span className="px-3 py-1 rounded-full text-xs text-white" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                       {lead.conversation.length} messages
                     </span>
                   </div>
