@@ -826,7 +826,7 @@ const InboxManager = () => {
             />
           </div>
 
-          {/* Enhanced Filters and Sort */}
+          {/* Filter and Sort Buttons */}
           <div className="space-y-3">
             <div className="flex gap-3">
               <select
