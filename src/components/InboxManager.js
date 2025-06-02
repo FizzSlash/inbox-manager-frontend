@@ -26,6 +26,8 @@ const InboxManager = () => {
       const transformedLeads = (data.leads || []).map(lead => {
         // Parse conversation data from email_message_body
         let conversation = [];
+        let extractedSubject = `Campaign for ${lead.first_name || 'Lead'}`;
+        
         try {
           if (lead.email_message_body) {
             const parsedConversation = JSON.parse(lead.email_message_body);
@@ -46,9 +48,15 @@ const InboxManager = () => {
                 content: extractTextFromHTML(msg.email_body || ''),
                 opened: (msg.open_count || 0) > 0,
                 clicked: (msg.click_count || 0) > 0,
-                response_time: responseTime
+                response_time: responseTime,
+                subject: msg.subject || ''
               };
             });
+            
+            // Extract subject from the first message if available
+            if (conversation.length > 0 && conversation[0].subject) {
+              extractedSubject = conversation[0].subject;
+            }
           }
         } catch (e) {
           console.error('Error parsing conversation for lead', lead.id, e);
@@ -96,14 +104,14 @@ const InboxManager = () => {
           last_name: lead.last_name || '',
           website: lead.website || lead.lead_email?.split('@')[1] || '',
           content_brief: `Email marketing campaign for ${lead.lead_category || 'business'}`,
-          subject: conversation.length > 0 ? conversation[0].subject || `Campaign for ${lead.first_name || 'Lead'}` : `Campaign for ${lead.first_name || 'Lead'}`,
+          subject: extractedSubject,
           email_message_body: lead.email_message_body,
           intent: intentScore,
           created_at_best: lead.created_at,
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
-          tags: [lead.lead_category ? `category-${lead.lead_category}` : 'uncategorized', replies.length > 0 ? 'has-replies' : 'no-replies'].filter(Boolean),
+          tags: [getCategoryName(lead.lead_category)].filter(Boolean),
           conversation: conversation
         };
       });
@@ -188,6 +196,22 @@ const InboxManager = () => {
     return result || text; // Fallback to original if extraction fails
   };
 
+  // Map lead category numbers to names
+  const getCategoryName = (categoryNum) => {
+    const categoryMap = {
+      1: 'Interested',
+      2: 'Meeting Request', 
+      3: 'Not Interested',
+      4: 'Do Not Contact',
+      5: 'Information Request',
+      6: 'Out Of Office',
+      7: 'Wrong Person',
+      8: 'Uncategorizable by AI',
+      9: 'Sender Originated Bounce'
+    };
+    return categoryMap[categoryNum] || 'Uncategorized';
+  };
+
   const [selectedLead, setSelectedLead] = useState(null);
 
   // Clear draft when switching leads
@@ -206,7 +230,7 @@ const InboxManager = () => {
   const [draftResponse, setDraftResponse] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [showMetrics, setShowMetrics] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Available stages for dropdown
   const availableStages = [
@@ -434,27 +458,9 @@ const InboxManager = () => {
     return lastMessage.type === 'REPLY';
   };
 
-  // Auto-generate tags based on conversation
+  // Auto-generate tags based on conversation (simplified to just category)
   const generateAutoTags = (conversation, lead) => {
-    const tags = [...lead.tags]; // Keep existing manual tags
-    const lastMessage = conversation[conversation.length - 1];
-    const isHighMediumIntent = lead.intent >= 4;
-    const theyRepliedLast = lastMessage.type === 'REPLY';
-    const daysSinceReply = (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24);
-    
-    // Remove any existing priority tags first
-    const cleanTags = tags.filter(tag => !['needs-reply', 'urgent-reply'].includes(tag));
-    
-    // Add priority tags for high/medium intent leads only
-    if (isHighMediumIntent && theyRepliedLast) {
-      if (daysSinceReply >= 2) {
-        cleanTags.unshift('urgent-reply'); // VERY urgent - 2+ days
-      } else {
-        cleanTags.unshift('needs-reply'); // Normal priority - same day/1 day
-      }
-    }
-    
-    return cleanTags;
+    return [getCategoryName(lead.lead_category || 8)];
   };
 
   // Detect conversation stage
@@ -778,31 +784,29 @@ const InboxManager = () => {
           </div>
 
           {/* Dashboard Metrics */}
-          {showMetrics && (
-            <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-              <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
-                <div className="flex items-center gap-1 mb-1">
-                  <AlertCircle className="w-3 h-3 text-red-600" />
-                  <span className="text-red-600 font-medium">🚨 URGENT</span>
-                </div>
-                <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
+          <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
+            <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
+              <div className="flex items-center gap-1 mb-1">
+                <AlertCircle className="w-3 h-3 text-red-600" />
+                <span className="text-red-600 font-medium">🚨 URGENT</span>
               </div>
-              <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
-                <div className="flex items-center gap-1 mb-1">
-                  <Users className="w-3 h-3 text-orange-600" />
-                  <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
-                </div>
-                <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
-              </div>
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
-                <div className="flex items-center gap-1 mb-1">
-                  <Target className="w-3 h-3 text-yellow-600" />
-                  <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
-                </div>
-                <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
-              </div>
+              <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
             </div>
-          )}
+            <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
+              <div className="flex items-center gap-1 mb-1">
+                <Users className="w-3 h-3 text-orange-600" />
+                <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
+              </div>
+              <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
+            </div>
+            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
+              <div className="flex items-center gap-1 mb-1">
+                <Target className="w-3 h-3 text-yellow-600" />
+                <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
+              </div>
+              <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
+            </div>
+          </div>
           
           {/* Search */}
           <div className="relative mb-6">
@@ -1049,17 +1053,11 @@ const InboxManager = () => {
                       })()}</p>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-500">Tags:</span>
+                      <span className="text-gray-500">Category:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {generateAutoTags(selectedLead.conversation, selectedLead).map(tag => (
-                          <span key={tag} className={`text-xs px-2 py-1 rounded-full ${
-                            tag === 'needs-reply' 
-                              ? 'bg-red-100 text-red-800 font-medium' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {tag === 'needs-reply' ? '⚡ NEEDS REPLY' : tag}
-                          </span>
-                        ))}
+                        <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                          {getCategoryName(selectedLead.lead_category)}
+                        </span>
                       </div>
                     </div>
                   </div>
