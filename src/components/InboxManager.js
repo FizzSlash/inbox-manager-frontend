@@ -1103,13 +1103,13 @@ const InboxManager = () => {
 
               {/* Sort Popup */}
               {showSortPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto" style={{backgroundColor: 'rgba(26, 28, 26, 0.95)', border: '1px solid white'}}>
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-gray-900">Sort Options</h4>
+                      <h4 className="font-medium text-white">Sort Options</h4>
                       <button
                         onClick={() => setShowSortPopup(false)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-gray-400 hover:text-white"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1118,27 +1118,28 @@ const InboxManager = () => {
                     {/* Active Sorts */}
                     {activeSorts.length > 0 && (
                       <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE SORTS</h5>
+                        <h5 className="text-xs font-medium text-gray-300 mb-2">ACTIVE SORTS</h5>
                         <div className="space-y-2">
                           {activeSorts.map((sort, index) => {
                             const option = sortOptions.find(opt => opt.field === sort.field);
                             return (
-                              <div key={sort.field} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+                              <div key={sort.field} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  <span className="text-xs px-2 py-1 rounded" style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}>
                                     {index + 1}
                                   </span>
-                                  <span className="text-sm">{option?.label}</span>
+                                  <span className="text-sm text-white">{option?.label}</span>
                                   <button
                                     onClick={() => handleAddSort(sort.field, sort.direction === 'desc' ? 'asc' : 'desc')}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                    className="text-xs hover:opacity-80"
+                                    style={{color: '#54FCFF'}}
                                   >
                                     {sort.direction === 'desc' ? '↓' : '↑'}
                                   </button>
                                 </div>
                                 <button
                                   onClick={() => handleRemoveSort(sort.field)}
-                                  className="text-gray-400 hover:text-red-600"
+                                  className="text-gray-400 hover:text-red-400"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -1151,7 +1152,7 @@ const InboxManager = () => {
 
                     {/* Available Sort Options */}
                     <div>
-                      <h5 className="text-xs font-medium text-gray-500 mb-2">ADD SORT</h5>
+                      <h5 className="text-xs font-medium text-gray-300 mb-2">ADD SORT</h5>
                       <div className="space-y-1">
                         {sortOptions.map((option) => {
                           const isActive = activeSorts.some(s => s.field === option.field);
@@ -1162,12 +1163,12 @@ const InboxManager = () => {
                               disabled={isActive}
                               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                                 isActive 
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                  : 'hover:bg-gray-100 text-gray-700'
+                                  ? 'cursor-not-allowed text-gray-500' 
+                                  : 'hover:bg-white/10 text-white'
                               }`}
                             >
                               {option.label}
-                              {isActive && <span className="text-xs ml-2">(active)</span>}
+                              {isActive && <span className="text-xs ml-2 text-gray-400">(active)</span>}
                             </button>
                           );
                         })}
@@ -1198,22 +1199,22 @@ const InboxManager = () => {
 
               {/* Filter Popup */}
               {showFilterPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto" style={{backgroundColor: 'rgba(26, 28, 26, 0.95)', border: '1px solid white'}}>
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-gray-900">Filter Options</h4>
+                      <h4 className="font-medium text-white">Filter Options</h4>
                       <div className="flex gap-2">
                         {Object.keys(activeFilters).length > 0 && (
                           <button
                             onClick={handleClearAllFilters}
-                            className="text-xs text-red-600 hover:text-red-800"
+                            className="text-xs text-red-400 hover:text-red-300"
                           >
                             Clear All
                           </button>
                         )}
                         <button
                           onClick={() => setShowFilterPopup(false)}
-                          className="text-gray-400 hover:text-gray-600"
+                          className="text-gray-400 hover:text-white"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1223,7 +1224,7 @@ const InboxManager = () => {
                     {/* Active Filters */}
                     {Object.keys(activeFilters).length > 0 && (
                       <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE FILTERS</h5>
+                        <h5 className="text-xs font-medium text-gray-300 mb-2">ACTIVE FILTERS</h5>
                         <div className="flex flex-wrap gap-2">
                           {Object.entries(activeFilters).map(([category, values]) =>
                             values.map((value) => {
@@ -1232,12 +1233,13 @@ const InboxManager = () => {
                               return (
                                 <span
                                   key={`${category}-${value}`}
-                                  className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
+                                  style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
                                 >
                                   {valueOption?.label || value}
                                   <button
                                     onClick={() => handleRemoveFilter(category, value)}
-                                    className="hover:text-blue-900"
+                                    className="hover:opacity-80"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
@@ -1253,7 +1255,7 @@ const InboxManager = () => {
                     <div className="space-y-4">
                       {Object.entries(filterOptions).map(([category, config]) => (
                         <div key={category}>
-                          <h5 className="text-xs font-medium text-gray-500 mb-2 uppercase">
+                          <h5 className="text-xs font-medium text-gray-300 mb-2 uppercase">
                             {config.label}
                           </h5>
                           <div className="space-y-1">
@@ -1271,13 +1273,14 @@ const InboxManager = () => {
                                   }}
                                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                                     isActive
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'hover:bg-gray-100 text-gray-700'
+                                      ? 'text-white'
+                                      : 'hover:bg-white/10 text-white'
                                   }`}
+                                  style={isActive ? {backgroundColor: 'rgba(84, 252, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'} : {}}
                                 >
                                   <div className="flex items-center justify-between">
                                     {option.label}
-                                    {isActive && <span className="text-blue-600">✓</span>}
+                                    {isActive && <span style={{color: '#54FCFF'}}>✓</span>}
                                   </div>
                                 </button>
                               );
@@ -1296,27 +1299,27 @@ const InboxManager = () => {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm border ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'all'
-                  ? 'border-white/40' 
-                  : 'border-white/20 hover:border-white/30'
+                  ? 'opacity-100' 
+                  : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'all' ? '#54FCFF' : 'white'}}
+              style={{backgroundColor: '#1A1C1A', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid white'}}
             >
               All Leads
             </button>
             <button
               onClick={() => setActiveTab('need_response')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm border ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'need_response'
-                  ? 'border-white/40'
-                  : 'border-white/20 hover:border-white/30'
+                  ? 'opacity-100'
+                  : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'need_response' ? '#54FCFF' : 'white'}}
+              style={{backgroundColor: '#1A1C1A', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid white'}}
             >
               Need Response
               {activeTab !== 'need_response' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: '#1A1C1A', color: '#FFFFFF'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return false;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -1327,16 +1330,16 @@ const InboxManager = () => {
             </button>
             <button
               onClick={() => setActiveTab('recently_sent')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm border ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'recently_sent'
-                  ? 'border-white/40'
-                  : 'border-white/20 hover:border-white/30'
+                  ? 'opacity-100'
+                  : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white'}}
+              style={{backgroundColor: '#1A1C1A', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid white'}}
             >
               Recently Sent
               {activeTab !== 'recently_sent' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: '#1A1C1A', color: '#FFFFFF'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return true;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
