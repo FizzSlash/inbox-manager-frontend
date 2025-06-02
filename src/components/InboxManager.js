@@ -312,6 +312,10 @@ const InboxManager = () => {
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
   
+  // New state for editable email fields
+  const [editableToEmail, setEditableToEmail] = useState('');
+  const [editableCcEmails, setEditableCcEmails] = useState('');
+  
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
@@ -643,7 +647,60 @@ const InboxManager = () => {
     return filtered;
   }, [leads, searchQuery, activeFilters, activeSorts, activeTab]);
 
-  // Auto-calculate engagement score
+  // Auto-populate email fields when lead is selected
+  useEffect(() => {
+    if (selectedLead && selectedLead.conversation.length > 0) {
+      const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
+      
+      // Get all unique email participants from the conversation
+      const getAllParticipants = () => {
+        const participants = new Set();
+        
+        // Go through conversation to find all unique email addresses
+        selectedLead.conversation.forEach(msg => {
+          if (msg.from) participants.add(msg.from);
+          if (msg.to) participants.add(msg.to);
+          if (msg.cc && Array.isArray(msg.cc)) {
+            msg.cc.forEach(ccEntry => {
+              if (ccEntry.address) participants.add(ccEntry.address);
+            });
+          }
+        });
+        
+        // Remove our own email (assuming it's connor@campaignretain.com or similar)
+        const ourEmails = ['connor@campaignretain.com', 'connor@retentionharbor.com']; // Add your emails here
+        ourEmails.forEach(email => participants.delete(email));
+        
+        return Array.from(participants);
+      };
+      
+      // Determine recipients based on the last message
+      let primaryRecipient = '';
+      let ccRecipients = [];
+      
+      if (lastMessage.type === 'REPLY') {
+        // If they replied, send back to the sender and CC everyone else who was involved
+        primaryRecipient = lastMessage.from;
+        
+        // Get all other participants for CC
+        const allParticipants = getAllParticipants();
+        ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
+      } else {
+        // If we sent last, use the same recipients as the last sent message
+        primaryRecipient = lastMessage.to || selectedLead.email;
+        if (lastMessage.cc && Array.isArray(lastMessage.cc)) {
+          ccRecipients = lastMessage.cc.map(cc => cc.address).filter(Boolean);
+        }
+      }
+      
+      setEditableToEmail(primaryRecipient);
+      setEditableCcEmails(ccRecipients.join(', '));
+    } else if (selectedLead) {
+      // Fallback to original lead email if no conversation
+      setEditableToEmail(selectedLead.email);
+      setEditableCcEmails('');
+    }
+  }, [selectedLead]);
   const calculateEngagementScore = (conversation) => {
     const replies = conversation.filter(m => m.type === 'REPLY').length;
     const sent = conversation.filter(m => m.type === 'SENT').length;
