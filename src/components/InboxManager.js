@@ -241,7 +241,7 @@ const InboxManager = () => {
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
-  const [activeSorts, setActiveSorts] = useState([{ field: 'recent', direction: 'desc' }]);
+  const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
   const [activeFilters, setActiveFilters] = useState({});
 
   // Available sort options
@@ -344,7 +344,7 @@ const InboxManager = () => {
   const handleRemoveSort = (field) => {
     setActiveSorts(prev => prev.filter(s => s.field !== field));
     if (activeSorts.length === 1) {
-      setActiveSorts([{ field: 'recent', direction: 'desc' }]); // Always have at least one sort
+      setActiveSorts([{ field: 'last_reply', direction: 'desc' }]); // Always have at least one sort
     }
   };
 
