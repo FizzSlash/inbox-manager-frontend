@@ -740,9 +740,6 @@ const InboxManager = () => {
     
     setIsSending(true);
     try {
-      // Get the last message in the conversation to reply to
-      const lastMessage = selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1] : null;
-      
       // Prepare payload with draft message data and lead data
       const sendPayload = {
         // Draft message data
@@ -752,11 +749,6 @@ const InboxManager = () => {
           subject: `Re: ${selectedLead.subject}`,
           type: 'SENT'
         },
-        
-        // Reply message fields (from the last message in conversation)
-        reply_message_id: lastMessage?.message_id || null,
-        reply_email_time: lastMessage?.time || null,
-        reply_email_body: lastMessage?.content || null,
         
         // Lead data
         lead: {
