@@ -1880,11 +1880,33 @@ const InboxManager = () => {
                             <span><strong>From:</strong> {message.from || 'N/A'}</span>
                             <span><strong>To:</strong> {message.to || 'N/A'}</span>
                           </div>
-                          {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
-                            <div>
-                              <strong>CC:</strong> {message.cc.map(cc => cc.address || cc.name || cc).join(', ')}
-                            </div>
-                          )}
+                          {(() => {
+                            // Handle different CC formats from the API
+                            let ccList = [];
+                            if (message.cc) {
+                              if (Array.isArray(message.cc)) {
+                                ccList = message.cc
+                                  .map(cc => {
+                                    if (typeof cc === 'string') return cc;
+                                    if (cc && cc.address) return cc.address;
+                                    if (cc && cc.name) return cc.name;
+                                    return null;
+                                  })
+                                  .filter(Boolean);
+                              } else if (typeof message.cc === 'string') {
+                                ccList = [message.cc];
+                              }
+                            }
+                            
+                            // Debug: Log CC data for troubleshooting
+                            console.log('Message CC data:', message.cc, 'Parsed CC list:', ccList);
+                            
+                            return ccList.length > 0 ? (
+                              <div>
+                                <strong>CC:</strong> {ccList.join(', ')}
+                              </div>
+                            ) : null;
+                          })()}
                           {message.subject && (
                             <div>
                               <strong>Subject:</strong> {message.subject}
