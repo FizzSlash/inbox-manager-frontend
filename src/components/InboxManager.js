@@ -1504,11 +1504,11 @@ const InboxManager = () => {
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A', border: '1px solid white', borderRadius: '12px', margin: '8px', marginLeft: '4px'}}>
+      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', borderRadius: '12px', margin: '8px', marginLeft: '4px'}}>
         {selectedLead ? (
           <>
             {/* Lead Header */}
-            <div className="p-8 border-b border-white/20" style={{borderRadius: '12px 12px 0 0'}}>
+            <div className="p-8 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-3xl font-bold text-white">
@@ -1528,7 +1528,7 @@ const InboxManager = () => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className="px-3 py-1 rounded-full text-sm font-medium text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid white'}}>
+                      <span className="px-3 py-1 rounded-full text-sm font-medium text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
@@ -1537,7 +1537,7 @@ const InboxManager = () => {
                     onClick={() => showDeleteConfirmation(selectedLead)}
                     className="px-3 py-2 text-white hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm hover:bg-white/5"
                     title="Delete lead"
-                    style={{border: '1px solid white'}}
+                    style={{border: '1px solid rgba(255, 255, 255, 0.2)', backgroundColor: 'rgba(255, 255, 255, 0.05)'}}
                   >
                     <X className="w-4 h-4" />
                     Delete
@@ -1545,7 +1545,7 @@ const InboxManager = () => {
                   <button
                     onClick={() => setSelectedLead(null)}
                     className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5"
-                    style={{border: '1px solid white'}}
+                    style={{border: '1px solid rgba(255, 255, 255, 0.2)', backgroundColor: 'rgba(255, 255, 255, 0.05)'}}
                   >
                     <X className="w-5 h-5" />
                   </button>
