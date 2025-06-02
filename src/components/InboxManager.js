@@ -1,9 +1,4 @@
-// Get engagement color
-  const getEngagementColor = (score) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
-  };import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity } from 'lucide-react';
 
 const InboxManager = () => {
@@ -108,10 +103,8 @@ const InboxManager = () => {
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
-          tags: ['live-data', lead.lead_category ? `category-${lead.lead_category}` : 'uncategorized', replies.length > 0 ? 'has-replies' : 'no-replies'].filter(Boolean),
-          conversation: conversation,
-          stage: lead.stage || 'discovery', // Default to discovery, use stage from Supabase
-          lead_category: lead.lead_category || 'Uncategorized' // Add lead category
+          tags: [lead.lead_category ? `category-${lead.lead_category}` : 'uncategorized', replies.length > 0 ? 'has-replies' : 'no-replies'].filter(Boolean),
+          conversation: conversation
         };
       });
       
@@ -215,47 +208,29 @@ const InboxManager = () => {
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
 
-  // Available stages for dropdown (sales process stages)
+  // Available stages for dropdown
   const availableStages = [
-    { value: 'discovery', label: 'Discovery' },
-    { value: 'sales-process', label: 'Sales Process' },
-    { value: 'call-booked', label: 'Call Booked' },
-    { value: 'call', label: 'Call' },
-    { value: 'proposal', label: 'Proposal' },
-    { value: 'negotiation', label: 'Negotiation' },
-    { value: 'closed-won', label: 'Closed Won' },
-    { value: 'closed-lost', label: 'Closed Lost' },
-    { value: 'stalled', label: 'Stalled' },
-    { value: 'follow-up', label: 'Follow Up' }
+    'initial-outreach',
+    'engaged', 
+    'pricing-discussion',
+    'samples-requested',
+    'call-scheduled',
+    'considering',
+    'stalled',
+    'no-response',
+    'rejected',
+    'active'
   ];
 
-  // Update lead stage via API
-  const updateLeadStage = async (leadId, newStage) => {
-    try {
-      const response = await fetch(`https://leads-api-nu.vercel.app/api/retention-harbor/${leadId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ stage: newStage })
-      });
-
-      if (response.ok) {
-        // Update local state
-        setLeads(prevLeads => 
-          prevLeads.map(lead => 
-            lead.id === leadId 
-              ? { ...lead, stage: newStage }
-              : lead
-          )
-        );
-        console.log(`Stage updated to ${newStage} for lead ${leadId}`);
-      } else {
-        console.error('Failed to update stage:', response.status);
-      }
-    } catch (error) {
-      console.error('Error updating stage:', error);
-    }
+  // Update lead stage
+  const updateLeadStage = (leadId, newStage) => {
+    setLeads(prevLeads => 
+      prevLeads.map(lead => 
+        lead.id === leadId 
+          ? { ...lead, stage: newStage }
+          : lead
+      )
+    );
   };
 
   // Get response urgency level
@@ -309,20 +284,11 @@ const InboxManager = () => {
     return { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', label: 'Low Intent' };
   };
 
-  // Get lead category styling
-  const getCategoryStyle = (category) => {
-    const styles = {
-      'Interested': { bg: 'bg-green-100', text: 'text-green-800' },
-      'Meeting Request': { bg: 'bg-purple-100', text: 'text-purple-800' },
-      'Not Interested': { bg: 'bg-red-100', text: 'text-red-800' },
-      'Do Not Contact': { bg: 'bg-red-200', text: 'text-red-900' },
-      'Information Request': { bg: 'bg-blue-100', text: 'text-blue-800' },
-      'Out Of Office': { bg: 'bg-gray-100', text: 'text-gray-800' },
-      'Wrong Person': { bg: 'bg-yellow-100', text: 'text-yellow-800' },
-      'Uncategorizable by AI': { bg: 'bg-gray-100', text: 'text-gray-600' },
-      'Sender Originated Bounce': { bg: 'bg-red-100', text: 'text-red-700' }
-    };
-    return styles[category] || { bg: 'bg-indigo-100', text: 'text-indigo-800' };
+  // Get engagement color
+  const getEngagementColor = (score) => {
+    if (score >= 90) return 'text-green-600';
+    if (score >= 75) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
   // Filter and sort leads
@@ -538,21 +504,21 @@ const InboxManager = () => {
     return 'active';
   };
 
-  // Get stage styling (sales process stages)
+  // Get stage styling
   const getStageStyle = (stage) => {
     const styles = {
-      'discovery': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Discovery' },
-      'sales-process': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Sales Process' },
-      'call-booked': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Call Booked' },
-      'call': { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Call' },
-      'proposal': { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Proposal' },
-      'negotiation': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Negotiation' },
-      'closed-won': { bg: 'bg-green-100', text: 'text-green-800', label: 'Closed Won' },
-      'closed-lost': { bg: 'bg-red-100', text: 'text-red-800', label: 'Closed Lost' },
-      'stalled': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Stalled' },
-      'follow-up': { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Follow Up' }
+      'initial-outreach': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Initial Outreach' },
+      'engaged': { bg: 'bg-green-100', text: 'text-green-800', label: 'Engaged' },
+      'pricing-discussion': { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Pricing Discussion' },
+      'samples-requested': { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Samples Requested' },
+      'call-scheduled': { bg: 'bg-cyan-100', text: 'text-cyan-800', label: 'Call Scheduled' },
+      'considering': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Considering' },
+      'stalled': { bg: 'bg-red-100', text: 'text-red-800', label: 'Stalled' },
+      'no-response': { bg: 'bg-gray-100', text: 'text-gray-800', label: 'No Response' },
+      'rejected': { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' },
+      'active': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Active' }
     };
-    return styles[stage] || { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Discovery' };
+    return styles[stage] || styles['active'];
   };
 
   // Calculate deal value estimate
@@ -939,16 +905,6 @@ const InboxManager = () => {
                   {lead.subject}
                 </p>
                 
-                {/* Lead Category and Stage */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`text-xs px-2 py-1 rounded-full border ${getCategoryStyle(lead.lead_category).bg} ${getCategoryStyle(lead.lead_category).text}`}>
-                    {lead.lead_category}
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded-full ${getStageStyle(lead.stage).bg} ${getStageStyle(lead.stage).text}`}>
-                    {getStageStyle(lead.stage).label}
-                  </span>
-                </div>
-                
                 {/* Enhanced metadata */}
                 <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
                   <span className={`font-medium ${getEngagementColor(lead.engagement_score)}`}>
@@ -979,12 +935,22 @@ const InboxManager = () => {
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center">
-                      <Clock className="w-3 h-3 mr-1" />
-                      {formatTime(lead.created_at_best)}
+                      <Timer className="w-3 h-3 mr-1" />
+                      Last followup: {(() => {
+                        const lastSent = lead.conversation.filter(m => m.type === 'SENT');
+                        if (lastSent.length === 0) return 'N/A';
+                        const daysSince = Math.floor((new Date() - new Date(lastSent[lastSent.length - 1].time)) / (1000 * 60 * 60 * 24));
+                        return `${daysSince}d ago`;
+                      })()}
                     </div>
                     <div className="flex items-center">
-                      <Timer className="w-3 h-3 mr-1" />
-                      {formatResponseTime(lead.response_time_avg)} avg
+                      <Clock className="w-3 h-3 mr-1" />
+                      Last reply: {(() => {
+                        const lastReply = getLastResponseFromThem(lead.conversation);
+                        if (!lastReply) return 'None';
+                        const daysSince = Math.floor((new Date() - new Date(lastReply)) / (1000 * 60 * 60 * 24));
+                        return `${daysSince}d ago`;
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1069,32 +1035,18 @@ const InboxManager = () => {
                       <p className="font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Last Activity:</span>
-                      <p className="font-medium">{formatTime(selectedLead.updated_at)}</p>
+                      <span className="text-gray-500">Last Followup:</span>
+                      <p className="font-medium">{(() => {
+                        const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
+                        return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
+                      })()}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Stage:</span>
-                      <div className="mt-1">
-                        <select
-                          value={selectedLead.stage}
-                          onChange={(e) => updateLeadStage(selectedLead.id, e.target.value)}
-                          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                        >
-                          {availableStages.map(stage => (
-                            <option key={stage.value} value={stage.value}>
-                              {stage.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Category:</span>
-                      <p className="font-medium">{selectedLead.lead_category}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-500">Brief:</span>
-                      <p className="font-medium">{selectedLead.content_brief}</p>
+                      <span className="text-gray-500">Last Reply from Lead:</span>
+                      <p className="font-medium">{(() => {
+                        const lastReply = getLastResponseFromThem(selectedLead.conversation);
+                        return lastReply ? formatTime(lastReply) : 'No replies yet';
+                      })()}</p>
                     </div>
                     <div className="col-span-2">
                       <span className="text-gray-500">Tags:</span>
