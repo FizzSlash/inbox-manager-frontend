@@ -317,6 +317,11 @@ const InboxManager = () => {
   const [editableToEmail, setEditableToEmail] = useState('');
   const [editableCcEmails, setEditableCcEmails] = useState('');
   
+  // New state for rich text editor
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const [draftHtml, setDraftHtml] = useState('');
+  
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
@@ -826,7 +831,28 @@ const InboxManager = () => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  // Format response time
+  // Rich text formatting functions
+  const formatText = (command, value = null) => {
+    document.execCommand(command, false, value);
+  };
+
+  const insertLink = () => {
+    const url = prompt('Enter URL:');
+    if (url) {
+      const selectedText = window.getSelection().toString();
+      const linkText = selectedText || url;
+      formatText('createLink', url);
+    }
+  };
+
+  const handleTextareaChange = (e) => {
+    setDraftResponse(e.target.textContent || e.target.innerText);
+    setDraftHtml(e.target.innerHTML);
+  };
+
+  const convertToHtml = (text) => {
+    return text.replace(/\n/g, '<br>');
+  };
   const formatResponseTime = (hours) => {
     if (hours < 1) return `${Math.round(hours * 60)}m`;
     if (hours < 24) return `${hours.toFixed(1)}h`;
@@ -995,7 +1021,10 @@ const InboxManager = () => {
 
   // Handle send message
   const sendMessage = async () => {
-    if (!draftResponse.trim()) return;
+    const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
+    const htmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
+    
+    if (!textContent.trim()) return;
     
     setIsSending(true);
     try {
@@ -1005,16 +1034,39 @@ const InboxManager = () => {
         .map(email => email.trim())
         .filter(email => email.length > 0)
         .map(email => ({ name: '', address: email }));
+
+      // Get file attachments
+      const attachmentInput = document.getElementById('attachment-input');
+      const attachments = [];
+      if (attachmentInput && attachmentInput.files.length > 0) {
+        for (let file of attachmentInput.files) {
+          // Convert file to base64 for sending
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(file);
+          });
+          
+          attachments.push({
+            filename: file.name,
+            content: base64,
+            encoding: 'base64',
+            contentType: file.type
+          });
+        }
+      }
       
-      // Prepare payload with editable recipients
+      // Prepare payload with editable recipients and HTML content
       const sendPayload = {
-        // Draft message data with user-editable recipients
+        // Draft message data with user-editable recipients and rich formatting
         message: {
-          content: draftResponse.trim(),
+          content: textContent.trim(), // Plain text version
+          html_content: htmlContent, // Rich HTML version
           to: editableToEmail.trim(),
           cc: ccEmails,
           subject: `Re: ${selectedLead.subject}`,
-          type: 'SENT'
+          type: 'SENT',
+          attachments: attachments
         },
         
         // Lead data
@@ -1040,9 +1092,11 @@ const InboxManager = () => {
         }
       };
 
-      console.log('Sending message with editable recipients:', {
+      console.log('Sending message with rich formatting:', {
         to: editableToEmail.trim(),
         cc: ccEmails,
+        htmlContent: htmlContent,
+        attachments: attachments.length,
         payload: sendPayload
       });
 
@@ -1068,8 +1122,18 @@ const InboxManager = () => {
       // Show success modal instead of alert
       setShowSentConfirm(true);
       
-      // Clear draft and close lead
+      // Clear draft and editor
       setDraftResponse('');
+      setDraftHtml('');
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        editor.innerHTML = '';
+      }
+      
+      // Clear file input
+      if (attachmentInput) {
+        attachmentInput.value = '';
+      }
       
       // Optionally refresh leads to get updated data
       await fetchLeads();
@@ -1961,13 +2025,117 @@ const InboxManager = () => {
                       </button>
                     </div>
 
-                    <textarea
-                      value={draftResponse}
-                      onChange={(e) => setDraftResponse(e.target.value)}
-                      placeholder="Generated draft will appear here, or write your own response..."
-                      className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2"
-                      style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
-                    />
+                    {/* Rich Text Editor with Formatting */}
+                    <div className="space-y-3">
+                      {/* Formatting Toolbar */}
+                      <div className="flex flex-wrap gap-2 p-3 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                        <button
+                          type="button"
+                          onClick={() => formatText('bold')}
+                          className="px-3 py-1 rounded text-xs font-bold text-white hover:opacity-80 transition-opacity"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Bold"
+                        >
+                          B
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => formatText('italic')}
+                          className="px-3 py-1 rounded text-xs italic text-white hover:opacity-80 transition-opacity"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Italic"
+                        >
+                          I
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => formatText('underline')}
+                          className="px-3 py-1 rounded text-xs underline text-white hover:opacity-80 transition-opacity"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Underline"
+                        >
+                          U
+                        </button>
+                        <button
+                          type="button"
+                          onClick={insertLink}
+                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity flex items-center gap-1"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Insert Link"
+                        >
+                          🔗 Link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => formatText('insertUnorderedList')}
+                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Bullet List"
+                        >
+                          • List
+                        </button>
+                        <div className="border-l border-white/20 mx-2"></div>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                          className="hidden"
+                          id="attachment-input"
+                        />
+                        <label
+                          htmlFor="attachment-input"
+                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1"
+                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          title="Attach File"
+                        >
+                          📎 Attach
+                        </label>
+                      </div>
+
+                      {/* Rich Text Editor */}
+                      <div
+                        contentEditable
+                        suppressContentEditableWarning={true}
+                        onInput={handleTextareaChange}
+                        onKeyDown={(e) => {
+                          // Handle common keyboard shortcuts
+                          if (e.ctrlKey || e.metaKey) {
+                            switch(e.key) {
+                              case 'b':
+                                e.preventDefault();
+                                formatText('bold');
+                                break;
+                              case 'i':
+                                e.preventDefault();
+                                formatText('italic');
+                                break;
+                              case 'u':
+                                e.preventDefault();
+                                formatText('underline');
+                                break;
+                            }
+                          }
+                        }}
+                        className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2 focus:outline-none overflow-y-auto"
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+                          border: '1px solid rgba(255, 255, 255, 0.2)', 
+                          '--tw-ring-color': '#54FCFF',
+                          minHeight: '160px'
+                        }}
+                        data-placeholder="Generated draft will appear here, or write your own response..."
+                      />
+                      
+                      {/* Show HTML preview for debugging */}
+                      {draftHtml && (
+                        <details className="text-xs">
+                          <summary className="text-gray-400 cursor-pointer">HTML Preview</summary>
+                          <pre className="mt-2 p-2 rounded text-gray-300 whitespace-pre-wrap" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)'}}>
+                            {draftHtml}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
 
                     <div className="flex justify-end">
                       <button
