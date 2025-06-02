@@ -1044,30 +1044,51 @@ const InboxManager = () => {
           {/* Dashboard Metrics */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1" style={{backgroundColor: 'rgba(239, 68, 68, 0.5)', border: '1px solid white'}}>
+              <button
+                onClick={() => {
+                  setActiveFilters({urgency: ['urgent-response']});
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)', border: '1px solid white'}}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-4 h-4 text-white" />
                   <span className="text-white font-bold text-sm">🚨 URGENT</span>
                 </div>
                 <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
                 <div className="text-xs text-white opacity-80 mt-1">Needs immediate response</div>
-              </div>
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1" style={{backgroundColor: 'rgba(234, 179, 8, 0.5)', border: '1px solid white'}}>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveFilters({urgency: ['needs-response']});
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)', border: '1px solid white'}}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="w-4 h-4 text-white" />
                   <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
                 </div>
                 <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
                 <div className="text-xs text-white opacity-80 mt-1">Awaiting your reply</div>
-              </div>
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1" style={{backgroundColor: 'rgba(255, 255, 255, 0.5)', border: '1px solid white'}}>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveFilters({urgency: ['needs-followup']});
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)', border: '1px solid white'}}
+              >
                 <div className="flex items-center gap-2 mb-2">
-                  <Target className="w-4 h-4 text-black" />
-                  <span className="text-black font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                  <Target className="w-4 h-4 text-white" />
+                  <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
                 </div>
-                <div className="text-2xl font-bold text-black">{dashboardMetrics.needsFollowup}</div>
-                <div className="text-xs text-black opacity-80 mt-1">Time for follow-up</div>
-              </div>
+                <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
+                <div className="text-xs text-white opacity-80 mt-1">Time for follow-up</div>
+              </button>
             </div>
           )}
           
