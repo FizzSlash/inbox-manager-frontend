@@ -111,7 +111,7 @@ const InboxManager = () => {
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
-          tags: [getCategoryName(lead.lead_category)].filter(Boolean),
+          tags: [lead.lead_category].filter(Boolean),
           conversation: conversation
         };
       });
@@ -199,17 +199,20 @@ const InboxManager = () => {
   // Map lead category numbers to names
   const getCategoryName = (categoryNum) => {
     const categoryMap = {
-      1: 'Interested',
-      2: 'Meeting Request', 
-      3: 'Not Interested',
-      4: 'Do Not Contact',
-      5: 'Information Request',
-      6: 'Out Of Office',
-      7: 'Wrong Person',
-      8: 'Uncategorizable by AI',
-      9: 'Sender Originated Bounce'
+      '1': 'Interested',
+      '2': 'Meeting Request', 
+      '3': 'Not Interested',
+      '4': 'Do Not Contact',
+      '5': 'Information Request',
+      '6': 'Out Of Office',
+      '7': 'Wrong Person',
+      '8': 'Uncategorizable by AI',
+      '9': 'Sender Originated Bounce'
     };
-    return categoryMap[categoryNum] || 'Uncategorized';
+    
+    // Handle both string and number inputs
+    const key = String(categoryNum);
+    return categoryMap[key] || 'Uncategorized';
   };
 
   const [selectedLead, setSelectedLead] = useState(null);
@@ -389,6 +392,17 @@ const InboxManager = () => {
       filtered = filtered.filter(lead => getResponseUrgency(lead) === responseFilter);
     }
 
+    // Apply engagement filter
+    if (sourceFilter !== 'all') {
+      if (sourceFilter === 'high-engagement') {
+        filtered = filtered.filter(lead => lead.engagement_score >= 80);
+      } else if (sourceFilter === 'medium-engagement') {
+        filtered = filtered.filter(lead => lead.engagement_score >= 50 && lead.engagement_score < 80);
+      } else if (sourceFilter === 'low-engagement') {
+        filtered = filtered.filter(lead => lead.engagement_score < 50);
+      }
+    }
+
     // Apply sorting
     if (sortBy === 'recent') {
       filtered.sort((a, b) => new Date(b.created_at_best) - new Date(a.created_at_best));
@@ -461,7 +475,7 @@ const InboxManager = () => {
 
   // Auto-generate tags based on conversation (simplified to just category)
   const generateAutoTags = (conversation, lead) => {
-    return [getCategoryName(lead.lead_category || 8)];
+    return [getCategoryName(lead.lead_category)];
   };
 
   // Detect conversation stage
@@ -927,13 +941,11 @@ const InboxManager = () => {
                 
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {displayTags.slice(0, 2).map(tag => (
-                    <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
-                      {tag}
-                    </span>
-                  ))}
-                  {displayTags.length > 2 && (
-                    <span className="text-xs text-gray-500">+{displayTags.length - 2}</span>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                    {getCategoryName(lead.lead_category)}
+                  </span>
+                  {displayTags.length > 1 && (
+                    <span className="text-xs text-gray-500">+{displayTags.length - 1}</span>
                   )}
                 </div>
                 
