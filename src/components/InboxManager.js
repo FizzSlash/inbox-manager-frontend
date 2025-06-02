@@ -1086,8 +1086,8 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['urgent-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
-                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)', animation: 'breathe 3s ease-in-out infinite'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
               >
                 <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
                 <div className="relative z-10">
@@ -1104,8 +1104,8 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['needs-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
-                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)', animation: 'breathe 3s ease-in-out infinite', animationDelay: '0.5s'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
               >
                 <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
                 <div className="relative z-10">
@@ -1122,8 +1122,8 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['needs-followup']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
-                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)', animation: 'breathe 3s ease-in-out infinite', animationDelay: '1s'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
               >
                 <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
                 <div className="relative z-10">
@@ -1424,8 +1424,9 @@ const InboxManager = () => {
         </div>
 
         {/* Lead List */}
-        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
-          {filteredAndSortedLeads.map((lead, index) => {
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
+          <div className="pb-4">
+            {filteredAndSortedLeads.map((lead, index) => {
             const intentStyle = getIntentStyle(lead.intent);
             const lastMessage = lead.conversation[lead.conversation.length - 1];
             const urgency = getResponseUrgency(lead);
@@ -1573,6 +1574,7 @@ const InboxManager = () => {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
@@ -1896,6 +1898,10 @@ const InboxManager = () => {
         @keyframes breathe {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.02); }
+        }
+        
+        .animate-breathe-once:active {
+          animation: breathe 0.6s ease-in-out;
         }
         
         @keyframes slideIn {
