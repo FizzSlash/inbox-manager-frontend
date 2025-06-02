@@ -117,10 +117,12 @@ const InboxManager = () => {
     }
   };
 
-  // Helper function to extract text from HTML
+  // Helper function to extract text from HTML and clean reply content
   const extractTextFromHTML = (html) => {
     if (!html) return '';
-    return html
+    
+    // First clean HTML tags and entities
+    let text = html
       .replace(/<[^>]*>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
@@ -129,6 +131,61 @@ const InboxManager = () => {
       .replace(/\r\n/g, '\n')
       .replace(/\s+/g, ' ')
       .trim();
+    
+    // Extract only the new reply content (before common reply separators)
+    const replyIndicators = [
+      'On ', // "On [date], [person] wrote:"
+      'From:', // "From: [email]"
+      '-----Original Message-----',
+      '________________________________',
+      '--- On ',
+      'Sent from my iPhone',
+      'Sent from my iPad',
+      'Get Outlook for',
+      'This email was sent to'
+    ];
+    
+    // Find the first occurrence of any reply indicator
+    let cutoffIndex = text.length;
+    replyIndicators.forEach(indicator => {
+      const index = text.indexOf(indicator);
+      if (index !== -1 && index < cutoffIndex) {
+        cutoffIndex = index;
+      }
+    });
+    
+    // Also look for common quote patterns like "> "
+    const lines = text.split('\n');
+    let newReplyLines = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Stop if we hit quoted content (lines starting with >)
+      if (line.startsWith('>')) {
+        break;
+      }
+      
+      // Stop if we hit a reply indicator
+      const hasReplyIndicator = replyIndicators.some(indicator => 
+        line.includes(indicator)
+      );
+      if (hasReplyIndicator) {
+        break;
+      }
+      
+      newReplyLines.push(line);
+    }
+    
+    // Use the shorter of the two methods
+    const methodOne = text.substring(0, cutoffIndex).trim();
+    const methodTwo = newReplyLines.join('\n').trim();
+    
+    const result = methodTwo.length > 0 && methodTwo.length < methodOne.length 
+      ? methodTwo 
+      : methodOne;
+    
+    return result || text; // Fallback to original if extraction fails
   };
 
   const [selectedLead, setSelectedLead] = useState(null);
