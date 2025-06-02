@@ -1769,41 +1769,6 @@ const InboxManager = () => {
                         ))}
                       </div>
                     </div>
-                    
-                    {/* Editable Email Recipients */}
-                    <div className="col-span-2 mt-4 pt-4 border-t border-white/10">
-                      <h4 className="text-white font-medium mb-3 flex items-center">
-                        <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                        Email Recipients (for next response)
-                      </h4>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-gray-300 text-xs block mb-1">To:</label>
-                          <input
-                            type="email"
-                            value={editableToEmail}
-                            onChange={(e) => setEditableToEmail(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
-                            placeholder="Primary recipient email"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
-                          <input
-                            type="text"
-                            value={editableCcEmails}
-                            onChange={(e) => setEditableCcEmails(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
-                            placeholder="CC recipients (optional)"
-                          />
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Auto-populated based on conversation participants. Edit as needed before sending.
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -1909,6 +1874,41 @@ const InboxManager = () => {
                   </h3>
                   
                   <div className="space-y-6">
+                    {/* Editable Email Recipients */}
+                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                      <h4 className="text-white font-medium mb-3 flex items-center text-sm">
+                        <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                        Email Recipients
+                      </h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <label className="text-gray-300 text-xs block mb-1">To:</label>
+                          <input
+                            type="email"
+                            value={editableToEmail}
+                            onChange={(e) => setEditableToEmail(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            placeholder="Primary recipient email"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
+                          <input
+                            type="text"
+                            value={editableCcEmails}
+                            onChange={(e) => setEditableCcEmails(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            placeholder="CC recipients (optional)"
+                          />
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Auto-populated based on conversation. Edit as needed before sending.
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex gap-3">
                       <button
                         onClick={generateDraft}
