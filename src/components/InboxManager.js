@@ -527,9 +527,9 @@ const InboxManager = () => {
 
   // Get intent color and label
   const getIntentStyle = (intent) => {
-    if (intent >= 7) return { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-800', label: 'High Intent' };
-    if (intent >= 4) return { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800', label: 'Medium Intent' };
-    return { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', label: 'Low Intent' };
+    if (intent >= 7) return { bg: 'bg-green-500', border: 'border-green-400', text: 'text-white', label: 'High Intent' };
+    if (intent >= 4) return { bg: 'bg-yellow-500', border: 'border-yellow-400', text: 'text-white', label: 'Medium Intent' };
+    return { bg: 'bg-red-500', border: 'border-red-400', text: 'text-white', label: 'Low Intent' };
   };
 
   // Get engagement color
