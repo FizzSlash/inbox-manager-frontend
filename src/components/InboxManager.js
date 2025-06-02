@@ -998,10 +998,10 @@ const InboxManager = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-900">
-        <div className="text-center bg-slate-800 p-8 rounded-2xl shadow-xl border border-blue-500/20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-slate-300">Loading leads...</p>
+      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        <div className="text-center p-8 rounded-2xl shadow-xl" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderColor: '#54FCFF'}}></div>
+          <p className="text-white">Loading leads...</p>
         </div>
       </div>
     );
@@ -1010,12 +1010,13 @@ const InboxManager = () => {
   // Error state
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-900">
+      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
         <div className="text-center">
           <p className="text-red-400 mb-6 font-medium">Error loading leads: {error}</p>
           <button 
             onClick={fetchLeads}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 border border-blue-500/30"
+            className="px-4 py-2 text-white rounded-lg hover:opacity-80 transition-colors"
+            style={{backgroundColor: '#54FCFF', color: '#1A1C1A', border: '1px solid white'}}
           >
             Retry
           </button>
@@ -1691,9 +1692,9 @@ const InboxManager = () => {
                 </div>
 
                 {/* Response Section */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <Mail className="w-4 h-4 mr-2" />
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                    <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Compose Response
                   </h3>
                   
@@ -1702,7 +1703,8 @@ const InboxManager = () => {
                       <button
                         onClick={generateDraft}
                         disabled={isGeneratingDraft}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 text-white rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                        style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
                       >
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
@@ -1713,14 +1715,16 @@ const InboxManager = () => {
                       value={draftResponse}
                       onChange={(e) => setDraftResponse(e.target.value)}
                       placeholder="Generated draft will appear here, or write your own response..."
-                      className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2"
+                      style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', border: '1px solid white', '--tw-ring-color': '#54FCFF'}}
                     />
 
                     <div className="flex justify-end">
                       <button
                         onClick={sendMessage}
                         disabled={!draftResponse.trim() || isSending}
-                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-2 text-white rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                        style={{backgroundColor: '#22c55e'}}
                       >
                         <Send className="w-4 h-4" />
                         {isSending ? 'Sending...' : 'Send Message'}
@@ -1734,9 +1738,9 @@ const InboxManager = () => {
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
             <div className="text-center">
-              <Mail className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-              <p className="text-lg font-medium text-gray-300">Select a lead to view details</p>
-              <p className="text-sm text-gray-500">Choose a lead from the inbox to see their conversation history and respond</p>
+              <Mail className="w-12 h-12 mx-auto mb-4" style={{color: '#54FCFF'}} />
+              <p className="text-lg font-medium text-white">Select a lead to view details</p>
+              <p className="text-sm text-gray-300">Choose a lead from the inbox to see their conversation history and respond</p>
             </div>
           </div>
         )}
@@ -1745,10 +1749,10 @@ const InboxManager = () => {
       {/* Delete Confirmation Popup */}
       {showDeleteConfirm && leadToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Lead</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete <strong>{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
+          <div className="rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
+            <h3 className="text-lg font-semibold text-white mb-2">Delete Lead</h3>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete <strong className="text-white">{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
               This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
@@ -1757,7 +1761,8 @@ const InboxManager = () => {
                   setShowDeleteConfirm(false);
                   setLeadToDelete(null);
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-white hover:opacity-80 rounded-lg transition-colors"
+                style={{border: '1px solid white'}}
               >
                 Cancel
               </button>
@@ -1775,9 +1780,9 @@ const InboxManager = () => {
       {/* Message Sent Confirmation Popup */}
       {showSentConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-green-700 mb-2">Message Sent Successfully!</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
+            <h3 className="text-lg font-semibold text-green-400 mb-2">Message Sent Successfully!</h3>
+            <p className="text-gray-300 mb-6">
               Your message has been sent and the conversation has been updated.
             </p>
             <div className="flex gap-3 justify-end">
@@ -1794,6 +1799,24 @@ const InboxManager = () => {
           </div>
         </div>
       )}
+
+      {/* Loading and Error States */}
+      <style jsx>{`
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: rgba(26, 28, 26, 0.5);
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #54FCFF;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: rgba(84, 252, 255, 0.8);
+        }
+      `}</style>
     </div>
   );
 };
