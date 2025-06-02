@@ -1851,8 +1851,8 @@ const InboxManager = () => {
       {/* CSS Animations */}
       <style jsx>{`
         @keyframes gradientShift {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          50% { transform: rotate(180deg) scale(1.1); }
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.05); opacity: 0.4; }
         }
         
         @keyframes float {
