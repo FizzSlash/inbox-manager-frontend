@@ -24,7 +24,7 @@ const InboxManager = () => {
       
       // Transform the data to match the expected format
       const transformedLeads = (data.leads || []).map(lead => {
-        // Parse conversation data from email_message_body
+        // Parse conversation data from email_message_body and extract subject
         let conversation = [];
         let extractedSubject = `Campaign for ${lead.first_name || 'Lead'}`;
         
@@ -46,16 +46,20 @@ const InboxManager = () => {
                 type: msg.type || 'SENT',
                 time: msg.time || new Date().toISOString(),
                 content: extractTextFromHTML(msg.email_body || ''),
+                subject: msg.subject || '',
                 opened: (msg.open_count || 0) > 0,
                 clicked: (msg.click_count || 0) > 0,
-                response_time: responseTime,
-                subject: msg.subject || ''
+                response_time: responseTime
               };
             });
             
-            // Extract subject from the first message if available
-            if (conversation.length > 0 && conversation[0].subject) {
-              extractedSubject = conversation[0].subject;
+            // Extract subject from the first message in conversation or any message with subject
+            if (conversation.length > 0) {
+              // Try to find the first message with a subject
+              const messageWithSubject = conversation.find(msg => msg.subject && msg.subject.trim() !== '');
+              if (messageWithSubject) {
+                extractedSubject = messageWithSubject.subject.trim();
+              }
             }
           }
         } catch (e) {
@@ -111,7 +115,7 @@ const InboxManager = () => {
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
-          tags: [lead.lead_category].filter(Boolean),
+          tags: [lead.lead_category ? getCategoryName(lead.lead_category) : 'Uncategorized'],
           conversation: conversation
         };
       });
@@ -196,31 +200,20 @@ const InboxManager = () => {
     return result || text; // Fallback to original if extraction fails
   };
 
-  // Map lead category numbers to names
-  const getCategoryName = (categoryNum) => {
-    const categoryMap = {
-      '1': 'Interested',
-      '2': 'Meeting Request', 
-      '3': 'Not Interested',
-      '4': 'Do Not Contact',
-      '5': 'Information Request',
-      '6': 'Out Of Office',
-      '7': 'Wrong Person',
-      '8': 'Uncategorizable by AI',
-      '9': 'Sender Originated Bounce'
-    };
-    
-    // Handle both string and number inputs
-    const key = String(categoryNum);
-    return categoryMap[key] || 'Uncategorized';
+  // Lead category mapping
+  const leadCategoryMap = {
+    1: 'Interested',
+    2: 'Meeting Request', 
+    3: 'Not Interested',
+    4: 'Do Not Contact',
+    5: 'Information Request',
+    6: 'Out Of Office',
+    7: 'Wrong Person',
+    8: 'Uncategorizable by AI',
+    9: 'Sender Originated Bounce'
   };
 
   const [selectedLead, setSelectedLead] = useState(null);
-
-  // Clear draft when switching leads
-  useEffect(() => {
-    setDraftResponse('');
-  }, [selectedLead]);
   const [sortBy, setSortBy] = useState('recent');
   const [filterBy, setFilterBy] = useState('all');
   const [responseFilter, setResponseFilter] = useState('all');
@@ -233,7 +226,6 @@ const InboxManager = () => {
   const [draftResponse, setDraftResponse] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
 
   // Available stages for dropdown
@@ -344,6 +336,13 @@ const InboxManager = () => {
       filtered = filtered.filter(lead => intentRange[filterBy](lead.intent));
     }
 
+    // Apply industry/category filter
+    if (industryFilter !== 'all') {
+      filtered = filtered.filter(lead => {
+        const leadCategory = lead.lead_category?.toString();
+        return leadCategory === industryFilter;
+      });
+    }
     // Apply date filter (based on last response from them)
     if (dateFilter !== 'all') {
       const now = new Date();
@@ -390,17 +389,6 @@ const InboxManager = () => {
     // Apply response filter
     if (responseFilter !== 'all') {
       filtered = filtered.filter(lead => getResponseUrgency(lead) === responseFilter);
-    }
-
-    // Apply engagement filter
-    if (sourceFilter !== 'all') {
-      if (sourceFilter === 'high-engagement') {
-        filtered = filtered.filter(lead => lead.engagement_score >= 80);
-      } else if (sourceFilter === 'medium-engagement') {
-        filtered = filtered.filter(lead => lead.engagement_score >= 50 && lead.engagement_score < 80);
-      } else if (sourceFilter === 'low-engagement') {
-        filtered = filtered.filter(lead => lead.engagement_score < 50);
-      }
     }
 
     // Apply sorting
@@ -473,9 +461,10 @@ const InboxManager = () => {
     return lastMessage.type === 'REPLY';
   };
 
-  // Auto-generate tags based on conversation (simplified to just category)
+  // Auto-generate tags based on conversation - DISABLED
   const generateAutoTags = (conversation, lead) => {
-    return [getCategoryName(lead.lead_category)];
+    // Only return the lead category tag
+    return lead.tags || [];
   };
 
   // Detect conversation stage
@@ -799,29 +788,31 @@ const InboxManager = () => {
           </div>
 
           {/* Dashboard Metrics */}
-          <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-            <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <AlertCircle className="w-3 h-3 text-red-600" />
-                <span className="text-red-600 font-medium">🚨 URGENT</span>
+          {showMetrics && (
+            <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
+              <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
+                <div className="flex items-center gap-1 mb-1">
+                  <AlertCircle className="w-3 h-3 text-red-600" />
+                  <span className="text-red-600 font-medium">🚨 URGENT</span>
+                </div>
+                <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
-            </div>
-            <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <Users className="w-3 h-3 text-orange-600" />
-                <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
+              <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
+                <div className="flex items-center gap-1 mb-1">
+                  <Users className="w-3 h-3 text-orange-600" />
+                  <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
+                </div>
+                <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
-            </div>
-            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <Target className="w-3 h-3 text-yellow-600" />
-                <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
+                <div className="flex items-center gap-1 mb-1">
+                  <Target className="w-3 h-3 text-yellow-600" />
+                  <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
+                </div>
+                <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
               </div>
-              <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
             </div>
-          </div>
+          )}
           
           {/* Search */}
           <div className="relative mb-6">
@@ -941,11 +932,13 @@ const InboxManager = () => {
                 
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2 mb-3">
-                  <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
-                    {getCategoryName(lead.lead_category)}
-                  </span>
-                  {displayTags.length > 1 && (
-                    <span className="text-xs text-gray-500">+{displayTags.length - 1}</span>
+                  {displayTags.slice(0, 3).map(tag => (
+                    <span key={tag} className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                      {tag}
+                    </span>
+                  ))}
+                  {displayTags.length > 3 && (
+                    <span className="text-xs text-gray-500">+{displayTags.length - 3}</span>
                   )}
                 </div>
                 
@@ -1066,11 +1059,13 @@ const InboxManager = () => {
                       })()}</p>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-500">Category:</span>
+                      <span className="text-gray-500">Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                          {getCategoryName(selectedLead.lead_category)}
-                        </span>
+                        {selectedLead.tags.map(tag => (
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
