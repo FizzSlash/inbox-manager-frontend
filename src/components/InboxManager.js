@@ -1425,7 +1425,7 @@ const InboxManager = () => {
 
         {/* Lead List */}
         <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
-          {filteredAndSortedLeads.map((lead) => {
+          {filteredAndSortedLeads.map((lead, index) => {
             const intentStyle = getIntentStyle(lead.intent);
             const lastMessage = lead.conversation[lead.conversation.length - 1];
             const urgency = getResponseUrgency(lead);
@@ -1435,20 +1435,23 @@ const InboxManager = () => {
             const getResponseBadge = () => {
               if (urgency === 'urgent-response') {
                 return (
-                  <div className="bg-red-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse mb-3 shadow-lg">
-                    🚨 URGENT NEEDS RESPONSE
+                  <div className="bg-red-600 text-white px-4 py-2 rounded-full text-xs font-bold mb-3 shadow-lg relative overflow-hidden">
+                    <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />
+                    <span className="relative z-10">🚨 URGENT NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-response') {
                 return (
-                  <div className="bg-red-500 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md">
-                    ⚡ NEEDS RESPONSE
+                  <div className="bg-red-500 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 transform -skew-x-12 animate-shimmer" />
+                    <span className="relative z-10">⚡ NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-followup') {
                 return (
-                  <div className="bg-green-600 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md">
-                    📞 NEEDS FOLLOWUP
+                  <div className="bg-green-600 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
+                    <div className="absolute inset-0 bg-white opacity-10 animate-pulse" />
+                    <span className="relative z-10">📞 NEEDS FOLLOWUP</span>
                   </div>
                 );
               }
@@ -1459,87 +1462,112 @@ const InboxManager = () => {
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-5 cursor-pointer hover:opacity-80 transition-all duration-200 relative m-2 rounded-lg ${
-                  selectedLead?.id === lead.id ? 'shadow-md' : ''
+                className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group hover:shadow-xl ${
+                  selectedLead?.id === lead.id ? 'shadow-2xl transform scale-105' : 'hover:scale-102 hover:-translate-y-1'
                 }`}
                 style={{
-                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                  border: selectedLead?.id === lead.id ? '1px solid rgba(84, 252, 255, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
-                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)'
+                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  border: selectedLead?.id === lead.id ? '2px solid rgba(84, 252, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)',
+                  boxShadow: selectedLead?.id === lead.id ? '0 0 30px rgba(84, 252, 255, 0.3)' : 'none',
+                  animation: `slideIn 0.5s ease-out ${index * 0.1}s both`,
+                  backdropFilter: 'blur(5px)'
                 }}
               >
-                {/* Response Badge at Top */}
-                {getResponseBadge()}
+                {/* Hover glow effect */}
+                <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" 
+                     style={{background: 'linear-gradient(45deg, rgba(84, 252, 255, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%)'}} />
                 
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className={`text-white ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
-                    {lead.first_name} {lead.last_name}
-                    {urgency !== 'none' && <span className="ml-2 text-red-400 text-sm">●</span>}
-                  </h3>
-                  <div className="flex items-center gap-1">
-                    <span className="px-2 py-1 text-xs rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
-                      {lead.intent}
-                    </span>
+                {/* Selected state ripple effect */}
+                {selectedLead?.id === lead.id && (
+                  <div className="absolute inset-0 rounded-lg pointer-events-none">
+                    <div className="absolute inset-0 rounded-lg animate-ping" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)'}} />
                   </div>
-                </div>
-                
-                <p className="text-sm text-gray-300 mb-1">{lead.email}</p>
-                <p className={`text-sm text-white mb-2 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}>
-                  {lead.subject}
-                </p>
-                
-                {/* Enhanced metadata */}
-                <div className="flex items-center gap-3 text-xs text-gray-300 mb-2">
-                  <span className={`font-medium ${getEngagementColor(lead.engagement_score)}`}>
-                    {lead.engagement_score}% engagement
-                  </span>
-                  <span style={{color: '#54FCFF'}}>
-                    {lead.conversation.filter(m => m.type === 'REPLY').length} replies
-                  </span>
-                  {urgency !== 'none' && (
-                    <span className="text-red-400 font-bold">
-                      {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
-                    </span>
-                  )}
-                </div>
-                
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {displayTags.slice(0, 3).map(tag => (
-                    <span key={tag} className="text-xs px-3 py-1 rounded-full" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', color: 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                      {tag}
-                    </span>
-                  ))}
-                  {displayTags.length > 3 && (
-                    <span className="text-xs text-gray-300">+{displayTags.length - 3}</span>
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-between text-xs text-gray-300">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center">
-                      <Timer className="w-3 h-3 mr-1" />
-                      Last followup: {(() => {
-                        const lastSent = lead.conversation.filter(m => m.type === 'SENT');
-                        if (lastSent.length === 0) return 'N/A';
-                        const daysSince = Math.floor((new Date() - new Date(lastSent[lastSent.length - 1].time)) / (1000 * 60 * 60 * 24));
-                        return `${daysSince}d ago`;
-                      })()}
-                    </div>
-                    <div className="flex items-center">
-                      <Clock className="w-3 h-3 mr-1" />
-                      Last reply: {(() => {
-                        const lastReply = getLastResponseFromThem(lead.conversation);
-                        if (!lastReply) return 'None';
-                        const daysSince = Math.floor((new Date() - new Date(lastReply)) / (1000 * 60 * 60 * 24));
-                        return `${daysSince}d ago`;
-                      })()}
+                )}
+
+                <div className="relative z-10">
+                  {/* Response Badge at Top */}
+                  {getResponseBadge()}
+                  
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className={`text-white transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} ${selectedLead?.id === lead.id ? 'text-cyan-100' : ''}`}>
+                      {lead.first_name} {lead.last_name}
+                      {urgency !== 'none' && <span className="ml-2 text-red-400 text-sm animate-pulse">●</span>}
+                    </h3>
+                    <div className="flex items-center gap-1">
+                      <span className="px-2 py-1 text-xs rounded-full text-white transition-all duration-300 transform group-hover:scale-110" 
+                            style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                        {lead.intent}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs text-white" style={{backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                      {lead.conversation.length} messages
+                  
+                  <p className="text-sm text-gray-300 mb-1 transition-colors duration-300 group-hover:text-gray-200">{lead.email}</p>
+                  <p className={`text-sm text-white mb-2 transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} ${selectedLead?.id === lead.id ? 'text-cyan-100' : ''}`}>
+                    {lead.subject}
+                  </p>
+                  
+                  {/* Enhanced metadata with animations */}
+                  <div className="flex items-center gap-3 text-xs text-gray-300 mb-2">
+                    <span className={`font-medium transition-all duration-300 ${getEngagementColor(lead.engagement_score)} group-hover:scale-105`}>
+                      {lead.engagement_score}% engagement
                     </span>
+                    <span className="transition-all duration-300 group-hover:scale-105" style={{color: '#54FCFF'}}>
+                      {lead.conversation.filter(m => m.type === 'REPLY').length} replies
+                    </span>
+                    {urgency !== 'none' && (
+                      <span className="text-red-400 font-bold animate-pulse transition-all duration-300 group-hover:scale-105">
+                        {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Tags with staggered animations */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {displayTags.slice(0, 3).map((tag, tagIndex) => (
+                      <span key={tag} 
+                            className="text-xs px-3 py-1 rounded-full transition-all duration-300 transform hover:scale-110" 
+                            style={{
+                              backgroundColor: 'rgba(84, 252, 255, 0.15)', 
+                              color: 'white', 
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              animation: `tagFadeIn 0.5s ease-out ${(index * 0.1) + (tagIndex * 0.1)}s both`
+                            }}>
+                        {tag}
+                      </span>
+                    ))}
+                    {displayTags.length > 3 && (
+                      <span className="text-xs text-gray-300 transition-colors duration-300 group-hover:text-gray-200">+{displayTags.length - 3}</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs text-gray-300">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center transition-all duration-300 group-hover:text-gray-200">
+                        <Timer className="w-3 h-3 mr-1 transition-transform duration-300 group-hover:rotate-12" />
+                        Last followup: {(() => {
+                          const lastSent = lead.conversation.filter(m => m.type === 'SENT');
+                          if (lastSent.length === 0) return 'N/A';
+                          const daysSince = Math.floor((new Date() - new Date(lastSent[lastSent.length - 1].time)) / (1000 * 60 * 60 * 24));
+                          return `${daysSince}d ago`;
+                        })()}
+                      </div>
+                      <div className="flex items-center transition-all duration-300 group-hover:text-gray-200">
+                        <Clock className="w-3 h-3 mr-1 transition-transform duration-300 group-hover:rotate-12" />
+                        Last reply: {(() => {
+                          const lastReply = getLastResponseFromThem(lead.conversation);
+                          if (!lastReply) return 'None';
+                          const daysSince = Math.floor((new Date() - new Date(lastReply)) / (1000 * 60 * 60 * 24));
+                          return `${daysSince}d ago`;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full text-xs text-white transition-all duration-300 transform group-hover:scale-105" 
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                        {lead.conversation.length} messages
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1870,9 +1898,19 @@ const InboxManager = () => {
           50% { transform: scale(1.02); }
         }
         
+        @keyframes slideIn {
+          0% { opacity: 0; transform: translateX(-20px) scale(0.95); }
+          100% { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        
+        @keyframes tagFadeIn {
+          0% { opacity: 0; transform: translateY(10px) scale(0.8); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
         @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+          0% { transform: translateX(-100%) skewX(-12deg); }
+          100% { transform: translateX(200%) skewX(-12deg); }
         }
         
         @keyframes ripple {
