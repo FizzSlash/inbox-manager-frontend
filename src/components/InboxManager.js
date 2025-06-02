@@ -7,6 +7,36 @@ const InboxManager = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Helper functions (moved up before they're used)
+  // Get last response date from them (last REPLY message)
+  const getLastResponseFromThem = (conversation) => {
+    const replies = conversation.filter(msg => msg.type === 'REPLY');
+    if (replies.length === 0) return null;
+    return replies[replies.length - 1].time;
+  };
+
+  // Get response urgency level
+  const getResponseUrgency = (lead) => {
+    const lastMessage = lead.conversation[lead.conversation.length - 1];
+    const isHighMediumIntent = lead.intent >= 4;
+    const theyRepliedLast = lastMessage.type === 'REPLY';
+    const weRepliedLast = lastMessage.type === 'SENT';
+    const daysSinceLastMessage = (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24);
+    
+    // NEEDS RESPONSE: High/medium intent + they replied last
+    if (isHighMediumIntent && theyRepliedLast) {
+      if (daysSinceLastMessage >= 2) return 'urgent-response';  // 2+ days = URGENT
+      return 'needs-response';  // Same day/1 day = normal priority
+    }
+    
+    // NEEDS FOLLOWUP: We replied last + no response for 3+ days
+    if (weRepliedLast && daysSinceLastMessage >= 3) {
+      return 'needs-followup';
+    }
+    
+    return 'none';
+  };
+
   // Fetch leads from API
   useEffect(() => {
     fetchLeads();
@@ -223,26 +253,7 @@ const InboxManager = () => {
     9: 'Sender Originated Bounce'
   };
 
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [sortBy, setSortBy] = useState('recent');
-  const [filterBy, setFilterBy] = useState('all');
-  const [responseFilter, setResponseFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [industryFilter, setIndustryFilter] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [draftResponse, setDraftResponse] = useState('');
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [showMetrics, setShowMetrics] = useState(true);
-  
-  // New state for advanced sort/filter popups
-  const [showSortPopup, setShowSortPopup] = useState(false);
-  const [showFilterPopup, setShowFilterPopup] = useState(false);
-  const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
-  const [activeFilters, setActiveFilters] = useState({});
+
 
   // Available sort options
   const sortOptions = [
@@ -265,6 +276,28 @@ const InboxManager = () => {
       return urgencyOrder[urgency] || 0;
     }}
   ];
+
+  // State for UI controls
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [sortBy, setSortBy] = useState('recent');
+  const [filterBy, setFilterBy] = useState('all');
+  const [responseFilter, setResponseFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [draftResponse, setDraftResponse] = useState('');
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(true);
+  
+  // New state for advanced sort/filter popups
+  const [showSortPopup, setShowSortPopup] = useState(false);
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
+  const [activeFilters, setActiveFilters] = useState({});
 
   // Available filter options
   const filterOptions = {
@@ -395,28 +428,6 @@ const InboxManager = () => {
           : lead
       )
     );
-  };
-
-  // Get response urgency level
-  const getResponseUrgency = (lead) => {
-    const lastMessage = lead.conversation[lead.conversation.length - 1];
-    const isHighMediumIntent = lead.intent >= 4;
-    const theyRepliedLast = lastMessage.type === 'REPLY';
-    const weRepliedLast = lastMessage.type === 'SENT';
-    const daysSinceLastMessage = (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24);
-    
-    // NEEDS RESPONSE: High/medium intent + they replied last
-    if (isHighMediumIntent && theyRepliedLast) {
-      if (daysSinceLastMessage >= 2) return 'urgent-response';  // 2+ days = URGENT
-      return 'needs-response';  // Same day/1 day = normal priority
-    }
-    
-    // NEEDS FOLLOWUP: We replied last + no response for 3+ days
-    if (weRepliedLast && daysSinceLastMessage >= 3) {
-      return 'needs-followup';
-    }
-    
-    return 'none';
   };
 
   // Calculate dashboard metrics
@@ -566,13 +577,6 @@ const InboxManager = () => {
     else if (avgResponse < 72) score += 10; // Under 3 days = 10 points
     
     return Math.round(Math.min(score, 100));
-  };
-
-  // Get last response date from them (last REPLY message)
-  const getLastResponseFromThem = (conversation) => {
-    const replies = conversation.filter(msg => msg.type === 'REPLY');
-    if (replies.length === 0) return null;
-    return replies[replies.length - 1].time;
   };
 
   // Check if lead needs reply (they replied last)
