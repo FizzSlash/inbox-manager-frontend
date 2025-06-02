@@ -575,35 +575,35 @@ const InboxManager = () => {
       console.log('Response status:', response.status);
       console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
-      // Try to get response text even if it's an error
+      // Get raw response text to see what we're actually getting
       const responseText = await response.text();
       console.log('Raw response text:', responseText);
+      console.log('Response text length:', responseText.length);
+      console.log('Response text type:', typeof responseText);
       
       if (!response.ok) {
         console.error('=== ERROR DETAILS ===');
         console.error('Status:', response.status);
         console.error('Status Text:', response.statusText);
         console.error('Response Body:', responseText);
-        
-        // Try to parse error response if it's JSON
-        try {
-          const errorData = JSON.parse(responseText);
-          console.error('Parsed error data:', errorData);
-        } catch (e) {
-          console.error('Response is not valid JSON');
-        }
-        
         throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
       }
       
-      // Try to parse successful response
+      // Check if response is empty
+      if (!responseText || responseText.trim() === '') {
+        console.error('Empty response from webhook');
+        throw new Error('Empty response from webhook');
+      }
+      
+      // Try to parse JSON response
       let data;
       try {
         data = JSON.parse(responseText);
         console.log('Parsed response data:', data);
       } catch (e) {
-        console.error('Success response is not valid JSON:', responseText);
-        throw new Error('Invalid JSON response from webhook');
+        console.error('JSON parsing failed. Raw response:', responseText);
+        console.error('JSON parse error:', e.message);
+        throw new Error(`Invalid JSON response from webhook. Raw response: ${responseText}`);
       }
       
       // Handle both array and object response formats
