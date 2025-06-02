@@ -320,6 +320,7 @@ const InboxManager = () => {
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'need_response', 'recently_sent'
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
+  const [showSentConfirm, setShowSentConfirm] = useState(false);
 
   // Available filter options
   const filterOptions = {
@@ -979,12 +980,11 @@ const InboxManager = () => {
       const responseData = await response.json();
       console.log('Send response data:', responseData);
 
-      // Show success message
-      alert('Message sent successfully!');
+      // Show success modal instead of alert
+      setShowSentConfirm(true);
       
       // Clear draft and close lead
       setDraftResponse('');
-      setSelectedLead(null);
       
       // Optionally refresh leads to get updated data
       await fetchLeads();
@@ -1714,6 +1714,29 @@ const InboxManager = () => {
                 className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
               >
                 Delete Lead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Message Sent Confirmation Popup */}
+      {showSentConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-green-700 mb-2">Message Sent Successfully!</h3>
+            <p className="text-gray-600 mb-6">
+              Your message has been sent and the conversation has been updated.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowSentConfirm(false);
+                  setSelectedLead(null);
+                }}
+                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>
