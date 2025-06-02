@@ -574,11 +574,11 @@ const InboxManager = () => {
       const data = await response.json();
       console.log('Response data:', data);
       
-      if (data.draft) {
-        setDraftResponse(data.draft);
+      if (data.text) {
+        setDraftResponse(data.text);
         console.log('Draft set successfully');
       } else {
-        console.log('No draft in response, using fallback');
+        console.log('No text in response, using fallback');
         setDraftResponse(`Hi ${selectedLead.first_name},\n\nThank you for your message.\n\nBest regards`);
       }
     } catch (error) {
