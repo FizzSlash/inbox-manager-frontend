@@ -426,6 +426,55 @@ const InboxManager = () => {
   const handleClearAllFilters = () => {
     setActiveFilters({});
   };
+
+  // Handle delete lead
+  const handleDeleteLead = async (lead, event) => {
+    // Prevent the lead card click event from firing
+    event.stopPropagation();
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete lead: ${lead.first_name} ${lead.last_name}?`)) {
+      return;
+    }
+
+    try {
+      console.log('Deleting lead:', lead);
+      
+      // Send all lead data to delete webhook
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/bfffab96-188f-4a4a-9ae2-62aa9e0a02f4', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(lead)
+      });
+
+      console.log('Delete response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Delete webhook error:', errorText);
+        throw new Error(`Failed to delete lead: ${response.status}`);
+      }
+
+      console.log('Lead deleted successfully');
+      
+      // Remove from local state immediately for better UX
+      setLeads(prevLeads => prevLeads.filter(l => l.id !== lead.id));
+      
+      // If this was the selected lead, clear selection
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(null);
+      }
+      
+      // Optionally refresh leads from server
+      // await fetchLeads();
+      
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      alert(`Error deleting lead: ${error.message}`);
+    }
+  };
   const availableStages = [
     'initial-outreach',
     'engaged', 
@@ -1331,8 +1380,17 @@ const InboxManager = () => {
                 onClick={() => setSelectedLead(lead)}
                 className={`p-5 border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-all duration-200 ${
                   selectedLead?.id === lead.id ? 'bg-blue-100 border-blue-300 shadow-md' : ''
-                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative`}
+                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative group`}
               >
+                {/* Delete Button */}
+                <button
+                  onClick={(e) => handleDeleteLead(lead, e)}
+                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                  title="Delete lead"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
                 {/* Response Badge at Top */}
                 {getResponseBadge()}
                 
