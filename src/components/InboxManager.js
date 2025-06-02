@@ -660,7 +660,7 @@ const InboxManager = () => {
       console.log('Request method: POST');
       console.log('Content-Type: application/json');
 
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
