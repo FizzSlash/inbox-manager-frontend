@@ -231,6 +231,7 @@ const InboxManager = () => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(true);
 
   // Available stages for dropdown
   const availableStages = [
