@@ -1418,9 +1418,9 @@ const InboxManager = () => {
                   selectedLead?.id === lead.id ? 'shadow-md' : ''
                 }`}
                 style={{
-                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.1)' : 'rgba(26, 28, 26, 0.8)',
-                  border: selectedLead?.id === lead.id ? '2px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.5)',
-                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.5)'
+                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  border: selectedLead?.id === lead.id ? '1px solid rgba(84, 252, 255, 0.5)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)'
                 }}
               >
                 {/* Response Badge at Top */}
@@ -1461,7 +1461,7 @@ const InboxManager = () => {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2 mb-3">
                   {displayTags.slice(0, 3).map(tag => (
-                    <span key={tag} className="text-xs px-3 py-1 rounded-full" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: 'white', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                    <span key={tag} className="text-xs px-3 py-1 rounded-full" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', color: 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
                       {tag}
                     </span>
                   ))}
@@ -1492,7 +1492,7 @@ const InboxManager = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs text-white" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                    <span className="px-3 py-1 rounded-full text-xs text-white" style={{backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
                       {lead.conversation.length} messages
                     </span>
                   </div>
