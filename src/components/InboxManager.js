@@ -525,11 +525,9 @@ const InboxManager = () => {
     };
   }, [leads]);
 
-  // Get intent color and label - ONLY for circles, no card backgrounds
+  // Get intent color and label - NO COLORS, only for circles
   const getIntentStyle = (intent) => {
-    if (intent >= 7) return { bg: 'bg-green-500', border: 'border-green-400', text: 'text-white', label: 'High Intent' };
-    if (intent >= 4) return { bg: 'bg-yellow-500', border: 'border-yellow-400', text: 'text-white', label: 'Medium Intent' };
-    return { bg: 'bg-red-500', border: 'border-red-400', text: 'text-white', label: 'Low Intent' };
+    return { bg: '', border: '', text: 'text-white', label: intent >= 7 ? 'High Intent' : intent >= 4 ? 'Medium Intent' : 'Low Intent' };
   };
 
   // Get engagement color
@@ -1048,7 +1046,7 @@ const InboxManager = () => {
             <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
               <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
                 <div className="flex items-center gap-1 mb-1">
-                  <AlertCircle className="w-3 h-3 text-red-400" />
+                  <AlertCircle className="w-3 h-3 text-white" />
                   <span className="text-white font-medium">🚨 URGENT</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.urgentResponse}</div>
@@ -1497,14 +1495,14 @@ const InboxManager = () => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium border ${intentStyle.bg} ${intentStyle.text}`}>
+                      <span className="px-3 py-1 rounded-full text-sm font-medium border border-white/20 text-white" style={{backgroundColor: '#1A1C1A'}}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
                   })()}
                   <button
                     onClick={() => showDeleteConfirmation(selectedLead)}
-                    className="px-3 py-2 text-red-400 hover:text-red-300 rounded-lg transition-colors flex items-center gap-2 text-sm border border-red-500/30 hover:bg-red-500/10"
+                    className="px-3 py-2 text-white hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm border border-white/20 hover:bg-white/5"
                     title="Delete lead"
                   >
                     <X className="w-4 h-4" />
