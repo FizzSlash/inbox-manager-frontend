@@ -574,7 +574,10 @@ const InboxManager = () => {
       const data = await response.json();
       console.log('Response data:', data);
       
-      if (data.text) {
+      if (data && data.length > 0 && data[0].text) {
+        setDraftResponse(data[0].text);
+        console.log('Draft set successfully');
+      } else if (data.text) {
         setDraftResponse(data.text);
         console.log('Draft set successfully');
       } else {
