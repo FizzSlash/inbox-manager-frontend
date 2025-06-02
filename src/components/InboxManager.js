@@ -154,7 +154,7 @@ const InboxManager = () => {
           created_at_best: lead.created_at,
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
-          deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
+          lead_category: lead.lead_category,
           tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
           conversation: conversation
         };
@@ -269,7 +269,6 @@ const InboxManager = () => {
     { field: 'engagement', label: 'Engagement Score', getValue: (lead) => lead.engagement_score },
     { field: 'response_time', label: 'Response Time', getValue: (lead) => lead.response_time_avg },
     { field: 'name', label: 'Name (A-Z)', getValue: (lead) => `${lead.first_name} ${lead.last_name}`.toLowerCase() },
-    { field: 'deal_value', label: 'Deal Value', getValue: (lead) => lead.deal_value_estimate },
     { field: 'urgency', label: 'Urgency Level', getValue: (lead) => {
       const urgency = getResponseUrgency(lead);
       const urgencyOrder = { 'urgent-response': 4, 'needs-response': 3, 'needs-followup': 2, 'none': 1 };
@@ -498,7 +497,8 @@ const InboxManager = () => {
               return getResponseUrgency(lead) === value;
             
             case 'category':
-              return lead.lead_category?.toString() === value;
+              const leadCategoryValue = lead.lead_category?.toString();
+              return leadCategoryValue === value;
             
             case 'engagement':
               if (value === 'high') return lead.engagement_score >= 80;
@@ -653,24 +653,6 @@ const InboxManager = () => {
       'active': { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Active' }
     };
     return styles[stage] || styles['active'];
-  };
-
-  // Calculate deal value estimate
-  const estimateDealValue = (lead) => {
-    const baseValue = 3000; // Base monthly rate
-    let multiplier = 6; // Default 6 months
-    
-    // Adjust based on engagement and conversation content
-    if (lead.engagement_score > 80) multiplier = 12; // High engagement = annual deal
-    else if (lead.engagement_score > 60) multiplier = 8; // Medium engagement = 8 months
-    else if (lead.engagement_score < 30) multiplier = 3; // Low engagement = 3 months
-    
-    // Content-based adjustments
-    const allText = lead.conversation.map(m => m.content.toLowerCase()).join(' ');
-    if (allText.includes('annual') || allText.includes('year')) multiplier = 12;
-    if (allText.includes('3000') || allText.includes('$3,000')) multiplier = 12; // They saw the price and didn't object
-    
-    return baseValue * multiplier;
   };
 
   // Format timestamp
