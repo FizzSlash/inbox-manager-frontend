@@ -983,57 +983,20 @@ const InboxManager = () => {
     
     setIsSending(true);
     try {
-      // Get the latest message to determine current participants
-      const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
+      // Parse CC emails from the editable field
+      const ccEmails = editableCcEmails
+        .split(',')
+        .map(email => email.trim())
+        .filter(email => email.length > 0)
+        .map(email => ({ name: '', address: email }));
       
-      // Extract all unique email participants from the conversation
-      const getAllParticipants = () => {
-        const participants = new Set();
-        
-        // Go through conversation to find all unique email addresses
-        selectedLead.conversation.forEach(msg => {
-          if (msg.from) participants.add(msg.from);
-          if (msg.to) participants.add(msg.to);
-          if (msg.cc && Array.isArray(msg.cc)) {
-            msg.cc.forEach(ccEntry => {
-              if (ccEntry.address) participants.add(ccEntry.address);
-            });
-          }
-        });
-        
-        // Remove our own email (assuming it's connor@campaignretain.com or similar)
-        const ourEmails = ['connor@campaignretain.com', 'connor@retentionharbor.com']; // Add your emails here
-        ourEmails.forEach(email => participants.delete(email));
-        
-        return Array.from(participants);
-      };
-      
-      // Determine reply recipients based on the last message
-      let primaryRecipient = '';
-      let ccRecipients = [];
-      
-      if (lastMessage.type === 'REPLY') {
-        // If they replied, send back to the sender and CC everyone else who was involved
-        primaryRecipient = lastMessage.from;
-        
-        // Get all other participants for CC
-        const allParticipants = getAllParticipants();
-        ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
-      } else {
-        // If we sent last, use the same recipients as the last sent message
-        primaryRecipient = lastMessage.to || selectedLead.email;
-        if (lastMessage.cc && Array.isArray(lastMessage.cc)) {
-          ccRecipients = lastMessage.cc.map(cc => cc.address).filter(Boolean);
-        }
-      }
-      
-      // Prepare payload with updated recipients
+      // Prepare payload with editable recipients
       const sendPayload = {
-        // Draft message data with dynamic recipients
+        // Draft message data with user-editable recipients
         message: {
           content: draftResponse.trim(),
-          to: primaryRecipient,
-          cc: ccRecipients.map(email => ({ name: '', address: email })),
+          to: editableToEmail.trim(),
+          cc: ccEmails,
           subject: `Re: ${selectedLead.subject}`,
           type: 'SENT'
         },
@@ -1044,7 +1007,7 @@ const InboxManager = () => {
           campaign_id: selectedLead.campaign_id,
           lead_id: selectedLead.lead_id,
           email_stats_id: selectedLead.email_stats_id,
-          email: primaryRecipient, // Update primary email to current recipient
+          email: editableToEmail.trim(), // Use the editable primary email
           first_name: selectedLead.first_name,
           last_name: selectedLead.last_name,
           subject: selectedLead.subject,
@@ -1056,16 +1019,15 @@ const InboxManager = () => {
           conversation_history: selectedLead.conversation,
           reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
           last_activity: selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1].time : selectedLead.created_at,
-          // Add all participants info
-          all_participants: getAllParticipants(),
-          cc_recipients: ccRecipients
+          // Add recipient info
+          cc_recipients: ccEmails.map(cc => cc.address)
         }
       };
 
-      console.log('Sending message with dynamic recipients:', {
-        to: primaryRecipient,
-        cc: ccRecipients,
-        allParticipants: getAllParticipants()
+      console.log('Sending message with editable recipients:', {
+        to: editableToEmail.trim(),
+        cc: ccEmails,
+        payload: sendPayload
       });
 
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
@@ -1805,6 +1767,41 @@ const InboxManager = () => {
                             {tag}
                           </span>
                         ))}
+                      </div>
+                    </div>
+                    
+                    {/* Editable Email Recipients */}
+                    <div className="col-span-2 mt-4 pt-4 border-t border-white/10">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                        Email Recipients (for next response)
+                      </h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-gray-300 text-xs block mb-1">To:</label>
+                          <input
+                            type="email"
+                            value={editableToEmail}
+                            onChange={(e) => setEditableToEmail(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            placeholder="Primary recipient email"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
+                          <input
+                            type="text"
+                            value={editableCcEmails}
+                            onChange={(e) => setEditableCcEmails(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            placeholder="CC recipients (optional)"
+                          />
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Auto-populated based on conversation participants. Edit as needed before sending.
+                        </div>
                       </div>
                     </div>
                   </div>
