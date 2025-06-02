@@ -1028,9 +1028,9 @@ const InboxManager = () => {
   return (
     <div className="flex h-screen" style={{backgroundColor: '#1A1C1A'}}>
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A', border: '1px solid white', borderRadius: '12px', margin: '8px', marginRight: '4px'}}>
+      <div className="w-1/2 flex flex-col shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', borderRadius: '12px', margin: '8px', marginRight: '4px'}}>
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-white/20" style={{backgroundColor: '#1A1C1A', borderRadius: '12px 12px 0 0'}}>
+        <div className="p-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white">Inbox Manager</h1>
             <button
@@ -1051,7 +1051,7 @@ const InboxManager = () => {
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)', border: '1px solid white'}}
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <AlertCircle className="w-4 h-4 text-white" />
@@ -1066,7 +1066,7 @@ const InboxManager = () => {
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)', border: '1px solid white'}}
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="w-4 h-4 text-white" />
@@ -1081,7 +1081,7 @@ const InboxManager = () => {
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)', border: '1px solid white'}}
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Target className="w-4 h-4 text-white" />
@@ -1102,7 +1102,7 @@ const InboxManager = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2"
-              style={{backgroundColor: '#1A1C1A', border: '1px solid white', '--tw-ring-color': '#54FCFF'}}
+              style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
             />
           </div>
 
@@ -1112,13 +1112,13 @@ const InboxManager = () => {
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
-                style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}
+                style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
               >
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" style={{color: '#54FCFF'}} />
                   <span className="text-sm font-medium text-white">Sort</span>
                   {activeSorts.length > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF', border: '1px solid white'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF'}}>
                       {activeSorts.length}
                     </span>
                   )}
@@ -1208,13 +1208,13 @@ const InboxManager = () => {
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
-                style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}
+                style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
               >
                 <div className="flex items-center gap-2">
                   <Filter className="w-4 h-4" style={{color: '#54FCFF'}} />
                   <span className="text-sm font-medium text-white">Filter</span>
                   {Object.keys(activeFilters).length > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF', border: '1px solid white'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF'}}>
                       {Object.values(activeFilters).flat().length}
                     </span>
                   )}
@@ -1329,7 +1329,7 @@ const InboxManager = () => {
                   ? 'opacity-100' 
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid white'}}
+              style={{backgroundColor: activeTab === 'all' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
             >
               All Leads
             </button>
@@ -1340,11 +1340,11 @@ const InboxManager = () => {
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid white'}}
+              style={{backgroundColor: activeTab === 'need_response' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
             >
               Need Response
               {activeTab !== 'need_response' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return false;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -1360,11 +1360,11 @@ const InboxManager = () => {
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: '#1A1C1A', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid white'}}
+              style={{backgroundColor: activeTab === 'recently_sent' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
             >
               Recently Sent
               {activeTab !== 'recently_sent' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return true;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
