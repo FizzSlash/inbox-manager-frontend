@@ -1273,7 +1273,7 @@ const InboxManager = () => {
               )}
             </div>
 
-            <div className="relative flex-1">
+            <div className="relative">
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
@@ -1503,13 +1503,6 @@ const InboxManager = () => {
                 <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" 
                      style={{background: 'linear-gradient(45deg, rgba(84, 252, 255, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%)'}} />
                 
-                {/* Selected state ripple effect */}
-                {selectedLead?.id === lead.id && (
-                  <div className="absolute inset-0 rounded-lg pointer-events-none">
-                    <div className="absolute inset-0 rounded-lg animate-ping" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)'}} />
-                  </div>
-                )}
-
                 <div className="relative z-10">
                   {/* Response Badge at Top */}
                   {getResponseBadge()}
@@ -1719,19 +1712,28 @@ const InboxManager = () => {
                       <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
                         {selectedLead.engagement_score}%
                       </div>
-                      <div className="text-gray-300">Engagement Score</div>
+                      <div className="text-gray-300 mb-2">Engagement Score</div>
+                      <div className="text-xs text-gray-400 leading-tight">
+                        Reply rate (60pts max) + Response speed bonus (40pts max)
+                      </div>
                     </div>
                     <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                       <div className="text-2xl font-bold" style={{color: '#54FCFF'}}>
                         {formatResponseTime(selectedLead.response_time_avg)}
                       </div>
-                      <div className="text-gray-300">Avg Response Time</div>
+                      <div className="text-gray-300 mb-2">Avg Response Time</div>
+                      <div className="text-xs text-gray-400 leading-tight">
+                        Average time between your message and their reply
+                      </div>
                     </div>
                     <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                       <div className="text-2xl font-bold text-purple-400">
                         {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                       </div>
-                      <div className="text-gray-300">Reply Rate</div>
+                      <div className="text-gray-300 mb-2">Reply Rate</div>
+                      <div className="text-xs text-gray-400 leading-tight">
+                        Number of their replies vs messages you sent
+                      </div>
                     </div>
                   </div>
                 </div>
