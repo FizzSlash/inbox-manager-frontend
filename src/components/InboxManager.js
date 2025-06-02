@@ -551,9 +551,16 @@ const InboxManager = () => {
         }))
       };
 
+      // Start with minimal payload to isolate the issue
+      const minimalPayload = {
+        id: selectedLead.id,
+        first_name: cleanString(selectedLead.first_name),
+        last_name: cleanString(selectedLead.last_name),
+        intent: selectedLead.intent
+      };
+
       console.log('=== WEBHOOK DEBUG INFO ===');
-      console.log('Payload being sent:', JSON.stringify(payload, null, 2));
-      console.log('Payload size (characters):', JSON.stringify(payload).length);
+      console.log('Testing with minimal payload first:', JSON.stringify(minimalPayload, null, 2));
       console.log('URL:', 'https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b');
 
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
@@ -561,7 +568,7 @@ const InboxManager = () => {
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(minimalPayload)
       });
       
       console.log('=== RESPONSE DEBUG INFO ===');
