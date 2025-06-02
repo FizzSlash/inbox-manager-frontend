@@ -1182,7 +1182,14 @@ const InboxManager = () => {
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
                   <div className="space-y-6 max-h-96 overflow-y-auto">
-                    {selectedLead.conversation.map((message, index) => (
+                    {selectedLead.conversation
+                      .sort((a, b) => {
+                        // Handle null timestamps by treating them as "now" (most recent)
+                        const timeA = a.time ? new Date(a.time) : new Date();
+                        const timeB = b.time ? new Date(b.time) : new Date();
+                        return timeA - timeB; // Sort chronologically (oldest first)
+                      })
+                      .map((message, index) => (
                       <div key={index} className={`p-5 rounded-xl border-2 ${
                         message.type === 'SENT' ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-300'
                       } shadow-sm`}>
