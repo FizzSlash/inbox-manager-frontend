@@ -626,10 +626,19 @@ const InboxManager = () => {
       
       // Handle both array and object response formats
       if (data.text) {
-        setDraftResponse(data.text);
+        // Clean the response text of any problematic characters
+        const cleanResponseText = data.text
+          .replace(/\\n/g, '\n')  // Convert literal \n to actual line breaks
+          .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
+          .trim();
+        setDraftResponse(cleanResponseText);
         console.log('Draft set successfully from object format');
       } else if (data && data.length > 0 && data[0].text) {
-        setDraftResponse(data[0].text);
+        const cleanResponseText = data[0].text
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .trim();
+        setDraftResponse(cleanResponseText);
         console.log('Draft set successfully from array format');
       } else {
         console.error('No text found in response:', data);
