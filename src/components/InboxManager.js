@@ -246,7 +246,6 @@ const InboxManager = () => {
 
   // Available sort options
   const sortOptions = [
-    { field: 'recent', label: 'Most Recent Lead Created', getValue: (lead) => new Date(lead.created_at_best) },
     { field: 'last_reply', label: 'Most Recent Lead Reply', getValue: (lead) => {
       const lastReply = getLastResponseFromThem(lead.conversation);
       return lastReply ? new Date(lastReply) : new Date(0);
