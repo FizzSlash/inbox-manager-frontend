@@ -837,11 +837,123 @@ const InboxManager = () => {
   };
 
   const insertLink = () => {
-    const url = prompt('Enter URL:');
-    if (url) {
-      const selectedText = window.getSelection().toString();
-      const linkText = selectedText || url;
-      formatText('createLink', url);
+    // Create custom styled prompt modal instead of browser prompt
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: #1A1C1A;
+      border: 1px solid white;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+    `;
+    
+    dialog.innerHTML = `
+      <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
+      <input 
+        type="url" 
+        placeholder="Enter URL (https://example.com)"
+        style="
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.05);
+          color: white;
+          margin-bottom: 16px;
+        "
+        id="url-input"
+      />
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button 
+          id="cancel-link"
+          style="
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            cursor: pointer;
+          "
+        >Cancel</button>
+        <button 
+          id="insert-link"
+          style="
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #54FCFF;
+            color: #1A1C1A;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >Insert Link</button>
+      </div>
+    `;
+    
+    modal.appendChild(dialog);
+    document.body.appendChild(modal);
+    
+    const urlInput = dialog.querySelector('#url-input');
+    const insertBtn = dialog.querySelector('#insert-link');
+    const cancelBtn = dialog.querySelector('#cancel-link');
+    
+    urlInput.focus();
+    
+    const handleInsert = () => {
+      const url = urlInput.value.trim();
+      if (url) {
+        const selectedText = window.getSelection().toString();
+        const linkText = selectedText || url;
+        formatText('createLink', url);
+      }
+      document.body.removeChild(modal);
+    };
+    
+    const handleCancel = () => {
+      document.body.removeChild(modal);
+    };
+    
+    insertBtn.onclick = handleInsert;
+    cancelBtn.onclick = handleCancel;
+    modal.onclick = (e) => e.target === modal && handleCancel();
+    urlInput.onkeydown = (e) => e.key === 'Enter' && handleInsert();
+  };
+
+  const insertList = () => {
+    // Get current selection and editor
+    const editor = document.querySelector('[contenteditable]');
+    const selection = window.getSelection();
+    
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      
+      // Create list HTML
+      const listHtml = '<ul><li>List item 1</li><li>List item 2</li></ul>';
+      
+      // Insert the list
+      const listElement = document.createElement('div');
+      listElement.innerHTML = listHtml;
+      
+      range.deleteContents();
+      range.insertNode(listElement.firstChild);
+      
+      // Update the draft content
+      handleTextareaChange({ target: editor });
     }
   };
 
@@ -2067,7 +2179,7 @@ const InboxManager = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => formatText('insertUnorderedList')}
+                          onClick={insertList}
                           className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity"
                           style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
                           title="Bullet List"
