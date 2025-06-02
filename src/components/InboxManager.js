@@ -896,22 +896,7 @@ const InboxManager = () => {
             />
           </div>
 
-          {/* Enhanced Filters and Sort */}
-          <div className="space-y-3">
-            <div className="flex gap-3">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="recent">Most Recent</option>
-                <option value="intent">Intent Score</option>
-                <option value="engagement">Engagement</option>
-                <option value="response_time">Response Time</option>
-                <option value="name">Name</option>
-              </select>
-            </div>
-          </div>
+
         </div>
 
         {/* Lead List */}
