@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// Get engagement color
+  const getEngagementColor = (score) => {
+    if (score >= 90) return 'text-green-600';
+    if (score >= 75) return 'text-yellow-600';
+    return 'text-red-600';
+  };import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity } from 'lucide-react';
 
 const InboxManager = () => {
@@ -934,9 +939,9 @@ const InboxManager = () => {
                   {lead.subject}
                 </p>
                 
-                {/* Lead Category */}
+                {/* Lead Category and Stage */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full border border-indigo-200">
+                  <span className={`text-xs px-2 py-1 rounded-full border ${getCategoryStyle(lead.lead_category).bg} ${getCategoryStyle(lead.lead_category).text}`}>
                     {lead.lead_category}
                   </span>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStageStyle(lead.stage).bg} ${getStageStyle(lead.stage).text}`}>
