@@ -910,17 +910,6 @@ const InboxManager = () => {
                 <option value="response_time">Response Time</option>
                 <option value="name">Name</option>
               </select>
-              
-              <select
-                value={filterBy}
-                onChange={(e) => setFilterBy(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Intent</option>
-                <option value="high">High Intent (7-10)</option>
-                <option value="medium">Medium Intent (4-6)</option>
-                <option value="low">Low Intent (1-3)</option>
-              </select>
             </div>
           </div>
         </div>
@@ -1148,19 +1137,19 @@ const InboxManager = () => {
                     Engagement Metrics
                   </h3>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center bg-white p-8 rounded-2xl shadow-lg">
+                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
                       <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
                         {selectedLead.engagement_score}%
                       </div>
                       <div className="text-gray-500">Engagement Score</div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
                       <div className="text-2xl font-bold text-blue-600">
                         {formatResponseTime(selectedLead.response_time_avg)}
                       </div>
                       <div className="text-gray-500">Avg Response Time</div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
                       <div className="text-2xl font-bold text-purple-600">
                         {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                       </div>
