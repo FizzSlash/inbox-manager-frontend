@@ -1318,7 +1318,7 @@ const InboxManager = () => {
             >
               Need Response
               {activeTab !== 'need_response' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-orange-400/30" style={{backgroundColor: 'rgba(255, 165, 0, 0.1)', color: 'orange'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: '#1A1C1A', color: '#FFFFFF'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return false;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -1338,7 +1338,7 @@ const InboxManager = () => {
             >
               Recently Sent
               {activeTab !== 'recently_sent' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-green-400/30" style={{backgroundColor: 'rgba(0, 255, 0, 0.1)', color: 'lightgreen'}}>
+                <span className="ml-2 px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: '#1A1C1A', color: '#FFFFFF'}}>
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return true;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
