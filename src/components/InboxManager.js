@@ -1463,7 +1463,7 @@ const InboxManager = () => {
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group hover:shadow-xl ${
+                className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group hover:shadow-xl animate-slideIn ${
                   selectedLead?.id === lead.id ? 'shadow-2xl transform scale-105' : 'hover:scale-102 hover:-translate-y-1'
                 }`}
                 style={{
@@ -1471,7 +1471,7 @@ const InboxManager = () => {
                   border: selectedLead?.id === lead.id ? '2px solid rgba(84, 252, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.1)',
                   borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)',
                   boxShadow: selectedLead?.id === lead.id ? '0 0 30px rgba(84, 252, 255, 0.3)' : 'none',
-                  animation: `slideIn 0.5s ease-out ${index * 0.1}s both`,
+                  animationDelay: `${index * 0.1}s`,
                   backdropFilter: 'blur(5px)'
                 }}
               >
@@ -1907,6 +1907,10 @@ const InboxManager = () => {
         @keyframes slideIn {
           0% { opacity: 0; transform: translateX(-20px) scale(0.95); }
           100% { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        
+        .animate-slideIn {
+          animation: slideIn 0.5s ease-out both;
         }
         
         @keyframes tagFadeIn {
