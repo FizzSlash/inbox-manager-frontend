@@ -730,13 +730,68 @@ const InboxManager = () => {
     
     setIsSending(true);
     try {
-      // Simulate API call to send message
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Prepare payload with draft message data and lead data
+      const sendPayload = {
+        // Draft message data
+        message: {
+          content: draftResponse.trim(),
+          to: selectedLead.email,
+          subject: `Re: ${selectedLead.subject}`,
+          type: 'SENT'
+        },
+        
+        // Lead data
+        lead: {
+          id: selectedLead.id,
+          email: selectedLead.email,
+          first_name: selectedLead.first_name,
+          last_name: selectedLead.last_name,
+          subject: selectedLead.subject,
+          intent: selectedLead.intent,
+          engagement_score: selectedLead.engagement_score,
+          urgency: getResponseUrgency(selectedLead),
+          website: selectedLead.website || '',
+          tags: selectedLead.tags,
+          conversation_history: selectedLead.conversation,
+          reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
+          last_activity: selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1].time : selectedLead.created_at
+        }
+      };
+
+      console.log('Sending message via webhook:', sendPayload);
+
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sendPayload)
+      });
+
+      console.log('Send response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Send webhook error:', errorText);
+        throw new Error(`Failed to send message: ${response.status}`);
+      }
+
+      const responseData = await response.json();
+      console.log('Send response data:', responseData);
+
+      // Show success message
       alert('Message sent successfully!');
+      
+      // Clear draft and close lead
       setDraftResponse('');
       setSelectedLead(null);
+      
+      // Optionally refresh leads to get updated data
+      await fetchLeads();
+      
     } catch (error) {
       console.error('Error sending message:', error);
+      alert(`Error sending message: ${error.message}`);
     } finally {
       setIsSending(false);
     }
@@ -826,7 +881,7 @@ const InboxManager = () => {
             />
           </div>
 
-          {/* Filter and Sort Buttons */}
+          {/* Enhanced Filters and Sort */}
           <div className="space-y-3">
             <div className="flex gap-3">
               <select
