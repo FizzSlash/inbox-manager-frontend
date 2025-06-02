@@ -435,7 +435,7 @@ const InboxManager = () => {
       console.log('Deleting lead:', lead);
       
       // Send all lead data to delete webhook
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/bfffab96-188f-4a4a-9ae2-62aa9e0a02f4', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/bfffab96-188f-4a4a-9ae2-62aa9e0a02f4', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
