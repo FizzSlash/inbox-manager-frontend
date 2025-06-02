@@ -101,6 +101,8 @@ const InboxManager = () => {
 
         return {
           id: lead.id,
+          campaign_id: lead.campaign_ID || null,
+          lead_id: lead.lead_ID || null,
           created_at: lead.created_at,
           updated_at: lead.created_at,
           email: lead.lead_email,
@@ -743,6 +745,8 @@ const InboxManager = () => {
         // Lead data
         lead: {
           id: selectedLead.id,
+          campaign_id: selectedLead.campaign_id,
+          lead_id: selectedLead.lead_id,
           email: selectedLead.email,
           first_name: selectedLead.first_name,
           last_name: selectedLead.last_name,
