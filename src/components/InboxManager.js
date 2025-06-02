@@ -1086,13 +1086,13 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['urgent-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
                 style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-white animate-pulse" />
+                    <AlertCircle className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">🚨 URGENT</span>
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
@@ -1104,13 +1104,13 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['needs-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
                 style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-white animate-bounce" style={{animationDuration: '2s'}} />
+                    <Users className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
@@ -1122,13 +1122,13 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['needs-followup']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group animate-breathe-once"
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
                 style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-white animate-spin" style={{animationDuration: '4s'}} />
+                    <Target className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
