@@ -1557,7 +1557,7 @@ const InboxManager = () => {
             <div className="flex-1 overflow-y-auto p-8" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
               <div className="space-y-8">
                 {/* Lead Information */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                   <h3 className="font-bold text-white mb-4 flex items-center text-lg">
                     <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Lead Information
@@ -1600,7 +1600,7 @@ const InboxManager = () => {
                       <span className="text-gray-300">Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {selectedLead.tags.map(tag => (
-                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
                             {tag}
                           </span>
                         ))}
@@ -1610,25 +1610,25 @@ const InboxManager = () => {
                 </div>
 
                 {/* Engagement Metrics */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                   <h3 className="font-bold text-white mb-4 flex items-center text-lg">
                     <BarChart3 className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Engagement Metrics
                   </h3>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                       <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
                         {selectedLead.engagement_score}%
                       </div>
                       <div className="text-gray-300">Engagement Score</div>
                     </div>
-                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                       <div className="text-2xl font-bold" style={{color: '#54FCFF'}}>
                         {formatResponseTime(selectedLead.response_time_avg)}
                       </div>
                       <div className="text-gray-300">Avg Response Time</div>
                     </div>
-                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                       <div className="text-2xl font-bold text-purple-400">
                         {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                       </div>
@@ -1638,21 +1638,24 @@ const InboxManager = () => {
                 </div>
 
                 {/* Conversation History */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                   <h3 className="font-bold text-white mb-4 flex items-center text-lg">
                     <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
                   <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
                     {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-5 rounded-xl border-2 shadow-sm ${
+                      <div key={index} className={`p-5 rounded-xl border shadow-sm ${
                         message.type === 'SENT' 
                           ? 'border-blue-400' 
                           : 'border-gray-400'
                       }`} style={{
                         backgroundColor: message.type === 'SENT' 
-                          ? 'rgba(84, 252, 255, 0.1)' 
-                          : 'rgba(255, 255, 255, 0.05)'
+                          ? 'rgba(84, 252, 255, 0.08)' 
+                          : 'rgba(255, 255, 255, 0.03)',
+                        borderColor: message.type === 'SENT' 
+                          ? 'rgba(84, 252, 255, 0.3)' 
+                          : 'rgba(255, 255, 255, 0.2)'
                       }}>
                         <div className="flex justify-between items-start mb-2">
                           <div className="text-sm">
@@ -1675,9 +1678,9 @@ const InboxManager = () => {
                                 : 'text-white'
                             }`} style={{
                               backgroundColor: message.type === 'SENT' 
-                                ? 'rgba(84, 252, 255, 0.2)' 
-                                : 'rgba(255, 255, 255, 0.1)',
-                              border: '1px solid rgba(255, 255, 255, 0.3)'
+                                ? 'rgba(84, 252, 255, 0.15)' 
+                                : 'rgba(255, 255, 255, 0.08)',
+                              border: '1px solid rgba(255, 255, 255, 0.2)'
                             }}>
                               {message.type}
                             </span>
@@ -1692,7 +1695,7 @@ const InboxManager = () => {
                 </div>
 
                 {/* Response Section */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                   <h3 className="font-bold text-white mb-4 flex items-center text-lg">
                     <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Compose Response
@@ -1716,7 +1719,7 @@ const InboxManager = () => {
                       onChange={(e) => setDraftResponse(e.target.value)}
                       placeholder="Generated draft will appear here, or write your own response..."
                       className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2"
-                      style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', border: '1px solid white', '--tw-ring-color': '#54FCFF'}}
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
                     />
 
                     <div className="flex justify-end">
