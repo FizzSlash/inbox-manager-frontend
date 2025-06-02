@@ -556,7 +556,8 @@ const InboxManager = () => {
         id: selectedLead.id,
         first_name: cleanString(selectedLead.first_name),
         last_name: cleanString(selectedLead.last_name),
-        intent: selectedLead.intent
+        intent: selectedLead.intent,
+        email_message_body: selectedLead.email_message_body || ''
       };
 
       console.log('=== WEBHOOK DEBUG INFO ===');
