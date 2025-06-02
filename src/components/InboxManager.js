@@ -652,23 +652,34 @@ const InboxManager = () => {
     if (selectedLead && selectedLead.conversation.length > 0) {
       const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
       
-      // Get all unique email participants from the conversation
+      // Dynamically detect our email addresses from SENT messages
+      const getOurEmails = () => {
+        const ourEmails = new Set();
+        selectedLead.conversation.forEach(msg => {
+          if (msg.type === 'SENT' && msg.from) {
+            ourEmails.add(msg.from);
+          }
+        });
+        return Array.from(ourEmails);
+      };
+      
+      // Get all unique email participants from the conversation (excluding our emails)
       const getAllParticipants = () => {
         const participants = new Set();
+        const ourEmails = getOurEmails();
         
         // Go through conversation to find all unique email addresses
         selectedLead.conversation.forEach(msg => {
           if (msg.from) participants.add(msg.from);
           if (msg.to) participants.add(msg.to);
-          if (msg.cc && Array.isArray(msg.cc)) {
+          if (msg.cc && Array.isArray(msg.cc) && msg.cc.length > 0) {
             msg.cc.forEach(ccEntry => {
               if (ccEntry.address) participants.add(ccEntry.address);
             });
           }
         });
         
-        // Remove our own email (assuming it's connor@campaignretain.com or similar)
-        const ourEmails = ['connor@campaignretain.com', 'connor@retentionharbor.com']; // Add your emails here
+        // Remove our own emails dynamically
         ourEmails.forEach(email => participants.delete(email));
         
         return Array.from(participants);
@@ -682,18 +693,22 @@ const InboxManager = () => {
         // If they replied, send back to the sender and CC everyone else who was involved
         primaryRecipient = lastMessage.from;
         
-        // Get all other participants for CC
+        // Get all other participants for CC (excluding the primary recipient)
         const allParticipants = getAllParticipants();
         ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
       } else {
         // If we sent last, use the same recipients as the last sent message
         primaryRecipient = lastMessage.to || selectedLead.email;
-        if (lastMessage.cc && Array.isArray(lastMessage.cc)) {
-          ccRecipients = lastMessage.cc.map(cc => cc.address).filter(Boolean);
+        
+        // Only add CC if the last message actually had CC recipients
+        if (lastMessage.cc && Array.isArray(lastMessage.cc) && lastMessage.cc.length > 0) {
+          ccRecipients = lastMessage.cc
+            .map(cc => cc.address)
+            .filter(email => email && email.trim() !== '');
         }
       }
       
-      setEditableToEmail(primaryRecipient);
+      setEditableToEmail(primaryRecipient || selectedLead.email);
       setEditableCcEmails(ccRecipients.join(', '));
     } else if (selectedLead) {
       // Fallback to original lead email if no conversation
