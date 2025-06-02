@@ -297,6 +297,7 @@ const InboxManager = () => {
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
   const [activeFilters, setActiveFilters] = useState({});
+  const [activeTab, setActiveTab] = useState('all'); // 'all', 'need_response', 'recently_sent'
 
   // Available filter options
   const filterOptions = {
@@ -469,6 +470,22 @@ const InboxManager = () => {
   const filteredAndSortedLeads = useMemo(() => {
     let filtered = leads;
 
+    // Apply tab filter first (who sent last message)
+    if (activeTab === 'need_response') {
+      filtered = filtered.filter(lead => {
+        if (lead.conversation.length === 0) return false;
+        const lastMessage = lead.conversation[lead.conversation.length - 1];
+        return lastMessage.type === 'REPLY'; // They replied last, so we need to respond
+      });
+    } else if (activeTab === 'recently_sent') {
+      filtered = filtered.filter(lead => {
+        if (lead.conversation.length === 0) return true; // No conversation means we might have sent initial message
+        const lastMessage = lead.conversation[lead.conversation.length - 1];
+        return lastMessage.type === 'SENT'; // We sent last message
+      });
+    }
+    // 'all' tab shows everything, so no additional filtering needed
+
     // Apply search filter (keep existing)
     if (searchQuery) {
       filtered = filtered.filter(lead => 
@@ -553,7 +570,7 @@ const InboxManager = () => {
     });
 
     return filtered;
-  }, [leads, searchQuery, activeFilters, activeSorts]);
+  }, [leads, searchQuery, activeFilters, activeSorts, activeTab]);
 
   // Auto-calculate engagement score
   const calculateEngagementScore = (conversation) => {
@@ -993,7 +1010,7 @@ const InboxManager = () => {
           </div>
 
           {/* Sort and Filter Buttons */}
-          <div className="flex gap-3 mb-6">
+          <div className="flex gap-3 mb-4">
             <div className="relative flex-1">
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
@@ -1199,6 +1216,58 @@ const InboxManager = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Response Status Tabs */}
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'all'
+                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              All Leads
+            </button>
+            <button
+              onClick={() => setActiveTab('need_response')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'need_response'
+                  ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Need Response
+              {activeTab !== 'need_response' && (
+                <span className="ml-2 bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                  {leads.filter(lead => {
+                    if (lead.conversation.length === 0) return false;
+                    const lastMessage = lead.conversation[lead.conversation.length - 1];
+                    return lastMessage.type === 'REPLY';
+                  }).length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('recently_sent')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'recently_sent'
+                  ? 'bg-green-100 text-green-800 border border-green-300'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Recently Sent
+              {activeTab !== 'recently_sent' && (
+                <span className="ml-2 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                  {leads.filter(lead => {
+                    if (lead.conversation.length === 0) return true;
+                    const lastMessage = lead.conversation[lead.conversation.length - 1];
+                    return lastMessage.type === 'SENT';
+                  }).length}
+                </span>
+              )}
+            </button>
           </div>
 
 
