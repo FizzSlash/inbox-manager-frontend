@@ -80,6 +80,7 @@ const InboxManager = () => {
               return {
                 from: msg.from || '',
                 to: msg.to || '',
+                cc: msg.cc || null, // Make sure CC data is preserved
                 type: msg.type || 'SENT',
                 time: msg.time || new Date().toISOString(),
                 content: extractTextFromHTML(msg.email_body || ''),
