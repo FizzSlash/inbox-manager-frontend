@@ -1,4 +1,104 @@
-import React, { useState, useEffect, useMemo } from 'react';
+{/* Content */}
+            <div className="flex-1 overflow-y-auto p-8 bg-gray-800/20 backdrop-blur-sm">
+              <div className="space-y-8">
+                {/* Lead Information */}
+                <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6 shadow-xl backdrop-blur-sm">
+                  <h3 className="font-bold text-gray-200 mb-4 flex items-center text-lg">
+                    <User className="w-4 h-4 mr-2 text-blue-400" />
+                    Lead Information
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400">Subject:</span>
+                      <p className="font-medium text-gray-200">{selectedLead.subject}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Website:</span>
+                      <p className="font-medium">
+                        {selectedLead.website ? (
+                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors duration-200">
+                            {selectedLead.website}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : <span className="text-gray-500">N/A</span>}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Reply Count:</span>
+                      <p className="font-medium text-gray-200">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Last Followup:</span>
+                      <p className="font-medium text-gray-200">{(() => {
+                        const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
+                        return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
+                      })()}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Last Reply from Lead:</span>
+                      <p className="font-medium text-gray-200">{(() => {
+                        const lastReply = getLastResponseFromThem(selectedLead.conversation);
+                        return lastReply ? formatTime(lastReply) : 'No replies yet';
+                      })()}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-400">Tags:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedLead.tags.map(tag => (
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Engagement Metrics */}
+                <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6 shadow-xl backdrop-blur-sm">
+                  <h3 className="font-bold text-gray-200 mb-4 flex items-center text-lg">
+                    <BarChart3 className="w-4 h-4 mr-2 text-blue-400" />
+                    Engagement Metrics
+                  </h3>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="text-center bg-gray-700/30 p-6 rounded-xl border border-gray-600/50 backdrop-blur-sm hover:bg-gray-700/50 transition-all duration-300">
+                      <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)} drop-shadow-lg`}>
+                        {selectedLead.engagement_score}%
+                      </div>
+                      <div className="text-gray-400">Engagement Score</div>
+                    </div>
+                    <div className="text-center bg-gray-700/30 p-6 rounded-xl border border-gray-600/50 backdrop-blur-sm hover:bg-gray-700/50 transition-all duration-300">
+                      <div className="text-2xl font-bold text-blue-400 drop-shadow-lg">
+                        {formatResponseTime(selectedLead.response_time_avg)}
+                      </div>
+                      <div className="text-gray-400">Avg Response Time</div>
+                    </div>
+                    <div className="text-center bg-gray-700/30 p-6 rounded-xl border border-gray-600/50 backdrop-blur-sm hover:bg-gray-700/50 transition-all duration-300">
+                      <div className="text-2xl font-bold text-purple-400 drop-shadow-lg">
+                        {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
+                      </div>
+                      <div className="text-gray-400">Reply Rate</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conversation History */}
+                <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6 shadow-xl backdrop-blur-sm">
+                  <h3 className="font-bold text-gray-200 mb-4 flex items-center text-lg">
+                    <MessageSquare className="w-4 h-4 mr-2 text-blue-400" />
+                    Conversation History ({selectedLead.conversation.length} messages)
+                  </h3>
+                  <div className="space-y-6 max-h-96 overflow-y-auto">
+                    {selectedLead.conversation.map((message, index) => (
+                      <div key={index} className={`p-5 rounded-xl border-2 backdrop-blur-sm transition-all duration-300 hover:shadow-lg ${
+                        message.type === 'SENT' 
+                          ? 'bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20' 
+                          : 'bg-gray-700/30 border-gray-600/50 hover:bg-gray-700/50'
+                      } shadow-lg`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="text-sm">
+                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-gray-300'}`}>
+                              {message.type === 'SENT' ? 'Outbound' : 'Reply'} import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity } from 'lucide-react';
 
 const InboxManager = () => {
@@ -146,7 +246,7 @@ const InboxManager = () => {
           email: lead.lead_email,
           first_name: lead.first_name || 'Unknown',
           last_name: lead.last_name || '',
-          website: lead.website || lead.lead_email?.split('@')[1] || '',
+          website: lead.website || (lead.lead_email ? lead.lead_email.split('@')[1] : ''),
           content_brief: `Email marketing campaign for ${lead.lead_category || 'business'}`,
           subject: extractedSubject,
           email_message_body: lead.email_message_body,
@@ -155,7 +255,7 @@ const InboxManager = () => {
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           lead_category: lead.lead_category,
-          tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
+          tags: [lead.lead_category ? (leadCategoryMap[lead.lead_category] || 'Uncategorized') : 'Uncategorized'],
           conversation: conversation
         };
       });
@@ -527,16 +627,16 @@ const InboxManager = () => {
 
   // Get intent color and label
   const getIntentStyle = (intent) => {
-    if (intent >= 7) return { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-800', label: 'High Intent' };
-    if (intent >= 4) return { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800', label: 'Medium Intent' };
-    return { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', label: 'Low Intent' };
+    if (intent >= 7) return { bg: 'bg-green-500/20', border: 'border-green-500/30', text: 'text-green-300', label: 'High Intent' };
+    if (intent >= 4) return { bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', text: 'text-yellow-300', label: 'Medium Intent' };
+    return { bg: 'bg-red-500/20', border: 'border-red-500/30', text: 'text-red-300', label: 'Low Intent' };
   };
 
   // Get engagement color
   const getEngagementColor = (score) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 90) return 'text-green-400';
+    if (score >= 75) return 'text-yellow-400';
+    return 'text-red-400';
   };
 
   // Enhanced filter and sort leads
@@ -1000,10 +1100,13 @@ const InboxManager = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-800">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-xl">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading leads...</p>
+      <div className="flex h-screen items-center justify-center bg-gray-900">
+        <div className="text-center bg-gray-800/80 backdrop-blur-sm p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-600 border-t-blue-500 mx-auto mb-4"></div>
+            <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-pulse"></div>
+          </div>
+          <p className="text-gray-300">Loading leads...</p>
         </div>
       </div>
     );
@@ -1012,12 +1115,12 @@ const InboxManager = () => {
   // Error state
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p className="text-red-600 mb-6 font-medium">Error loading leads: {error}</p>
+      <div className="flex h-screen items-center justify-center bg-gray-900">
+        <div className="text-center bg-gray-800/80 backdrop-blur-sm p-8 rounded-2xl shadow-2xl border border-gray-700">
+          <p className="text-red-400 mb-6 font-medium">Error loading leads: {error}</p>
           <button 
             onClick={fetchLeads}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
           >
             Retry
           </button>
@@ -1027,16 +1130,18 @@ const InboxManager = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-800">
+    <div className="flex h-screen bg-gray-900 text-white">
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 bg-white border-r border-gray-300 flex flex-col shadow-lg">
+      <div className="w-1/2 bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 flex flex-col shadow-2xl">
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-gray-300 bg-gradient-to-r from-blue-50 to-white">
+        <div className="p-6 border-b border-gray-700/50 bg-gradient-to-r from-gray-800/80 to-gray-800/40 backdrop-blur-sm">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">Inbox Manager</h1>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+              Inbox Manager
+            </h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors duration-200"
             >
               {showMetrics ? 'Hide' : 'Show'} Metrics
             </button>
@@ -1045,26 +1150,26 @@ const InboxManager = () => {
           {/* Dashboard Metrics */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-              <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
+              <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20 shadow-lg backdrop-blur-sm hover:bg-red-500/20 transition-all duration-300">
                 <div className="flex items-center gap-1 mb-1">
-                  <AlertCircle className="w-3 h-3 text-red-600" />
-                  <span className="text-red-600 font-medium">🚨 URGENT</span>
+                  <AlertCircle className="w-3 h-3 text-red-400" />
+                  <span className="text-red-400 font-medium">🚨 URGENT</span>
                 </div>
-                <div className="text-lg font-bold text-red-900">{dashboardMetrics.urgentResponse}</div>
+                <div className="text-lg font-bold text-red-300">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 shadow-sm">
+              <div className="bg-orange-500/10 p-4 rounded-xl border border-orange-500/20 shadow-lg backdrop-blur-sm hover:bg-orange-500/20 transition-all duration-300">
                 <div className="flex items-center gap-1 mb-1">
-                  <Users className="w-3 h-3 text-orange-600" />
-                  <span className="text-orange-600 font-medium">⚡ NEEDS RESPONSE</span>
+                  <Users className="w-3 h-3 text-orange-400" />
+                  <span className="text-orange-400 font-medium">⚡ NEEDS RESPONSE</span>
                 </div>
-                <div className="text-lg font-bold text-orange-900">{dashboardMetrics.needsResponse}</div>
+                <div className="text-lg font-bold text-orange-300">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 shadow-sm">
+              <div className="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/20 shadow-lg backdrop-blur-sm hover:bg-yellow-500/20 transition-all duration-300">
                 <div className="flex items-center gap-1 mb-1">
-                  <Target className="w-3 h-3 text-yellow-600" />
-                  <span className="text-yellow-600 font-medium">📞 NEEDS FOLLOWUP</span>
+                  <Target className="w-3 h-3 text-yellow-400" />
+                  <span className="text-yellow-400 font-medium">📞 NEEDS FOLLOWUP</span>
                 </div>
-                <div className="text-lg font-bold text-yellow-900">{dashboardMetrics.needsFollowup}</div>
+                <div className="text-lg font-bold text-yellow-300">{dashboardMetrics.needsFollowup}</div>
               </div>
             </div>
           )}
@@ -1077,7 +1182,7 @@ const InboxManager = () => {
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 backdrop-blur-sm text-white placeholder-gray-400 transition-all duration-200"
             />
           </div>
 
@@ -1086,29 +1191,29 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg hover:bg-gray-600/50 focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm transition-all duration-200"
               >
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium">Sort</span>
+                  <BarChart3 className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-gray-200">Sort</span>
                   {activeSorts.length > 0 && (
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs border border-blue-500/30">
                       {activeSorts.length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
 
               {/* Sort Popup */}
               {showSortPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800/95 border border-gray-700/50 rounded-lg shadow-2xl z-50 max-h-96 overflow-y-auto backdrop-blur-sm">
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-gray-900">Sort Options</h4>
+                      <h4 className="font-medium text-gray-200">Sort Options</h4>
                       <button
                         onClick={() => setShowSortPopup(false)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-gray-400 hover:text-gray-200 transition-colors duration-200"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1117,27 +1222,27 @@ const InboxManager = () => {
                     {/* Active Sorts */}
                     {activeSorts.length > 0 && (
                       <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE SORTS</h5>
+                        <h5 className="text-xs font-medium text-gray-400 mb-2">ACTIVE SORTS</h5>
                         <div className="space-y-2">
                           {activeSorts.map((sort, index) => {
                             const option = sortOptions.find(opt => opt.field === sort.field);
                             return (
-                              <div key={sort.field} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+                              <div key={sort.field} className="flex items-center justify-between bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded border border-blue-500/30">
                                     {index + 1}
                                   </span>
-                                  <span className="text-sm">{option?.label}</span>
+                                  <span className="text-sm text-gray-200">{option?.label}</span>
                                   <button
                                     onClick={() => handleAddSort(sort.field, sort.direction === 'desc' ? 'asc' : 'desc')}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors duration-200"
                                   >
                                     {sort.direction === 'desc' ? '↓' : '↑'}
                                   </button>
                                 </div>
                                 <button
                                   onClick={() => handleRemoveSort(sort.field)}
-                                  className="text-gray-400 hover:text-red-600"
+                                  className="text-gray-400 hover:text-red-400 transition-colors duration-200"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -1150,7 +1255,7 @@ const InboxManager = () => {
 
                     {/* Available Sort Options */}
                     <div>
-                      <h5 className="text-xs font-medium text-gray-500 mb-2">ADD SORT</h5>
+                      <h5 className="text-xs font-medium text-gray-400 mb-2">ADD SORT</h5>
                       <div className="space-y-1">
                         {sortOptions.map((option) => {
                           const isActive = activeSorts.some(s => s.field === option.field);
@@ -1159,14 +1264,14 @@ const InboxManager = () => {
                               key={option.field}
                               onClick={() => !isActive && handleAddSort(option.field)}
                               disabled={isActive}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                                 isActive 
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                                  : 'hover:bg-gray-100 text-gray-700'
+                                  ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed' 
+                                  : 'hover:bg-gray-700/50 text-gray-300 hover:text-white'
                               }`}
                             >
                               {option.label}
-                              {isActive && <span className="text-xs ml-2">(active)</span>}
+                              {isActive && <span className="text-xs ml-2 text-gray-500">(active)</span>}
                             </button>
                           );
                         })}
@@ -1180,38 +1285,38 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg hover:bg-gray-600/50 focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm transition-all duration-200"
               >
                 <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium">Filter</span>
+                  <Filter className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-gray-200">Filter</span>
                   {Object.keys(activeFilters).length > 0 && (
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs border border-blue-500/30">
                       {Object.values(activeFilters).flat().length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
 
               {/* Filter Popup */}
               {showFilterPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800/95 border border-gray-700/50 rounded-lg shadow-2xl z-50 max-h-96 overflow-y-auto backdrop-blur-sm">
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-gray-900">Filter Options</h4>
+                      <h4 className="font-medium text-gray-200">Filter Options</h4>
                       <div className="flex gap-2">
                         {Object.keys(activeFilters).length > 0 && (
                           <button
                             onClick={handleClearAllFilters}
-                            className="text-xs text-red-600 hover:text-red-800"
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors duration-200"
                           >
                             Clear All
                           </button>
                         )}
                         <button
                           onClick={() => setShowFilterPopup(false)}
-                          className="text-gray-400 hover:text-gray-600"
+                          className="text-gray-400 hover:text-gray-200 transition-colors duration-200"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1221,7 +1326,7 @@ const InboxManager = () => {
                     {/* Active Filters */}
                     {Object.keys(activeFilters).length > 0 && (
                       <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE FILTERS</h5>
+                        <h5 className="text-xs font-medium text-gray-400 mb-2">ACTIVE FILTERS</h5>
                         <div className="flex flex-wrap gap-2">
                           {Object.entries(activeFilters).map(([category, values]) =>
                             values.map((value) => {
@@ -1230,12 +1335,12 @@ const InboxManager = () => {
                               return (
                                 <span
                                   key={`${category}-${value}`}
-                                  className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
+                                  className="inline-flex items-center gap-1 bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs border border-blue-500/30"
                                 >
                                   {valueOption?.label || value}
                                   <button
                                     onClick={() => handleRemoveFilter(category, value)}
-                                    className="hover:text-blue-900"
+                                    className="hover:text-blue-200 transition-colors duration-200"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
@@ -1251,7 +1356,7 @@ const InboxManager = () => {
                     <div className="space-y-4">
                       {Object.entries(filterOptions).map(([category, config]) => (
                         <div key={category}>
-                          <h5 className="text-xs font-medium text-gray-500 mb-2 uppercase">
+                          <h5 className="text-xs font-medium text-gray-400 mb-2 uppercase">
                             {config.label}
                           </h5>
                           <div className="space-y-1">
@@ -1267,15 +1372,15 @@ const InboxManager = () => {
                                       handleAddFilter(category, option.value);
                                     }
                                   }}
-                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                                     isActive
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'hover:bg-gray-100 text-gray-700'
+                                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                      : 'hover:bg-gray-700/50 text-gray-300 hover:text-white'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
                                     {option.label}
-                                    {isActive && <span className="text-blue-600">✓</span>}
+                                    {isActive && <span className="text-blue-400">✓</span>}
                                   </div>
                                 </button>
                               );
@@ -1513,124 +1618,27 @@ const InboxManager = () => {
               </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
-              <div className="space-y-8">
-                {/* Lead Information */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <User className="w-4 h-4 mr-2" />
-                    Lead Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Subject:</span>
-                      <p className="font-medium">{selectedLead.subject}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Website:</span>
-                      <p className="font-medium">
-                        {selectedLead.website ? (
-                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                            {selectedLead.website}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Reply Count:</span>
-                      <p className="font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Last Followup:</span>
-                      <p className="font-medium">{(() => {
-                        const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
-                        return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
-                      })()}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Last Reply from Lead:</span>
-                      <p className="font-medium">{(() => {
-                        const lastReply = getLastResponseFromThem(selectedLead.conversation);
-                        return lastReply ? formatTime(lastReply) : 'No replies yet';
-                      })()}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-500">Tags:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedLead.tags.map(tag => (
-                          <span key={tag} className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Engagement Metrics */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Engagement Metrics
-                  </h3>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
-                      <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
-                        {selectedLead.engagement_score}%
-                      </div>
-                      <div className="text-gray-500">Engagement Score</div>
-                    </div>
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {formatResponseTime(selectedLead.response_time_avg)}
-                      </div>
-                      <div className="text-gray-500">Avg Response Time</div>
-                    </div>
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
-                      </div>
-                      <div className="text-gray-500">Reply Rate</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Conversation History */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Conversation History ({selectedLead.conversation.length} messages)
-                  </h3>
-                  <div className="space-y-6 max-h-96 overflow-y-auto">
-                    {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-5 rounded-xl border-2 ${
-                        message.type === 'SENT' ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-300'
-                      } shadow-sm`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="text-sm">
-                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-800' : 'text-gray-800'}`}>
-                              {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
                             </span>
-                            <span className="text-gray-500 ml-2">
+                            <span className="text-gray-400 ml-2">
                               {formatTime(message.time)}
                             </span>
                             {message.response_time && (
-                              <span className="text-green-600 ml-2 text-xs">
+                              <span className="text-green-400 ml-2 text-xs">
                                 • {formatResponseTime(message.response_time)} response
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              message.type === 'SENT' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                            <span className={`px-2 py-1 text-xs rounded-full border ${
+                              message.type === 'SENT' 
+                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' 
+                                : 'bg-gray-600/50 text-gray-300 border-gray-500/50'
                             }`}>
                               {message.type}
                             </span>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        <div className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">
                           {message.content}
                         </div>
                       </div>
@@ -1639,9 +1647,9 @@ const InboxManager = () => {
                 </div>
 
                 {/* Response Section */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <Mail className="w-4 h-4 mr-2" />
+                <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6 shadow-xl backdrop-blur-sm">
+                  <h3 className="font-bold text-gray-200 mb-4 flex items-center text-lg">
+                    <Mail className="w-4 h-4 mr-2 text-blue-400" />
                     Compose Response
                   </h3>
                   
@@ -1650,7 +1658,7 @@ const InboxManager = () => {
                       <button
                         onClick={generateDraft}
                         disabled={isGeneratingDraft}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
                       >
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
@@ -1661,14 +1669,14 @@ const InboxManager = () => {
                       value={draftResponse}
                       onChange={(e) => setDraftResponse(e.target.value)}
                       placeholder="Generated draft will appear here, or write your own response..."
-                      className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full h-40 p-3 bg-gray-700/50 border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none text-white placeholder-gray-400 backdrop-blur-sm transition-all duration-200"
                     />
 
                     <div className="flex justify-end">
                       <button
                         onClick={sendMessage}
                         disabled={!draftResponse.trim() || isSending}
-                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-green-500/25"
                       >
                         <Send className="w-4 h-4" />
                         {isSending ? 'Sending...' : 'Send Message'}
@@ -1680,11 +1688,14 @@ const InboxManager = () => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-600 bg-gray-50">
+          <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-800/20 backdrop-blur-sm">
             <div className="text-center">
-              <Mail className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium">Select a lead to view details</p>
-              <p className="text-sm">Choose a lead from the inbox to see their conversation history and respond</p>
+              <div className="relative mb-6">
+                <Mail className="w-16 h-16 mx-auto text-gray-600 drop-shadow-lg" />
+                <div className="absolute inset-0 bg-blue-500/10 rounded-full animate-pulse"></div>
+              </div>
+              <p className="text-lg font-medium text-gray-300">Select a lead to view details</p>
+              <p className="text-sm text-gray-500">Choose a lead from the inbox to see their conversation history and respond</p>
             </div>
           </div>
         )}
@@ -1692,11 +1703,11 @@ const InboxManager = () => {
 
       {/* Delete Confirmation Popup */}
       {showDeleteConfirm && leadToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Lead</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete <strong>{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-800/95 backdrop-blur-sm rounded-lg p-6 max-w-md w-mx mx-4 shadow-2xl border border-gray-700/50">
+            <h3 className="text-lg font-semibold text-gray-200 mb-2">Delete Lead</h3>
+            <p className="text-gray-400 mb-6">
+              Are you sure you want to delete <strong className="text-white">{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
               This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
@@ -1705,13 +1716,13 @@ const InboxManager = () => {
                   setShowDeleteConfirm(false);
                   setLeadToDelete(null);
                 }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-lg transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDeleteLead(leadToDelete)}
-                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-all duration-200 shadow-lg hover:shadow-red-500/25"
               >
                 Delete Lead
               </button>
@@ -1722,10 +1733,10 @@ const InboxManager = () => {
 
       {/* Message Sent Confirmation Popup */}
       {showSentConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-green-700 mb-2">Message Sent Successfully!</h3>
-            <p className="text-gray-600 mb-6">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-800/95 backdrop-blur-sm rounded-lg p-6 max-w-md w-mx mx-4 shadow-2xl border border-gray-700/50">
+            <h3 className="text-lg font-semibold text-green-400 mb-2">Message Sent Successfully!</h3>
+            <p className="text-gray-400 mb-6">
               Your message has been sent and the conversation has been updated.
             </p>
             <div className="flex gap-3 justify-end">
@@ -1734,7 +1745,7 @@ const InboxManager = () => {
                   setShowSentConfirm(false);
                   setSelectedLead(null);
                 }}
-                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors"
+                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-all duration-200 shadow-lg hover:shadow-green-500/25"
               >
                 Close
               </button>
