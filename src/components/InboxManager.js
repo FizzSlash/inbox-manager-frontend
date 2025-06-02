@@ -510,34 +510,11 @@ const InboxManager = () => {
     console.log('Generating draft for lead:', selectedLead);
     
     try {
-      // Convert only essential data to URL parameters for GET request
-      const params = new URLSearchParams();
-      
-      // Essential lead data only (to avoid URL length limits)
-      params.append('id', selectedLead.id);
-      params.append('email', selectedLead.email);
-      params.append('first_name', selectedLead.first_name);
-      params.append('last_name', selectedLead.last_name);
-      params.append('subject', selectedLead.subject);
-      params.append('intent', selectedLead.intent);
-      params.append('engagement_score', selectedLead.engagement_score);
-      params.append('urgency', getResponseUrgency(selectedLead));
-      
-      // Last message info (most important for context)
       const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
-      params.append('last_message_type', lastMessage?.type || '');
-      params.append('last_message_content', (lastMessage?.content || '').substring(0, 200)); // Limit to 200 chars
-      params.append('reply_count', selectedLead.conversation.filter(msg => msg.type === 'REPLY').length);
-      params.append('days_since_last_message', Math.floor((new Date() - new Date(lastMessage?.time)) / (1000 * 60 * 60 * 24)));
+      const urgency = getResponseUrgency(selectedLead);
       
-      // Optional fields (if available)
-      if (selectedLead.website) params.append('website', selectedLead.website);
-      if (selectedLead.campaign_id) params.append('campaign_id', selectedLead.campaign_id);
-
-      console.log('Sending data to local API endpoint');
-
+      // Debug: Log the full payload we're sending
       const payload = {
-        // Essential lead data
         id: selectedLead.id,
         email: selectedLead.email,
         first_name: selectedLead.first_name,
@@ -545,54 +522,83 @@ const InboxManager = () => {
         subject: selectedLead.subject,
         intent: selectedLead.intent,
         engagement_score: selectedLead.engagement_score,
-        urgency: getResponseUrgency(selectedLead),
-        
-        // Last message info
-        last_message_type: selectedLead.conversation[selectedLead.conversation.length - 1]?.type || '',
-        last_message_content: selectedLead.conversation[selectedLead.conversation.length - 1]?.content || '',
+        urgency: urgency,
+        last_message_type: lastMessage?.type || 'SENT',
+        last_message_content: (lastMessage?.content || '').substring(0, 300),
         reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
-        days_since_last_message: Math.floor((new Date() - new Date(selectedLead.conversation[selectedLead.conversation.length - 1]?.time)) / (1000 * 60 * 60 * 24)),
-        
-        // Full conversation for complete context
-        conversation: selectedLead.conversation,
-        
-        // Optional fields
-        website: selectedLead.website,
-        campaign_id: selectedLead.campaign_id,
-        content_brief: selectedLead.content_brief
+        days_since_last_message: Math.floor((new Date() - new Date(lastMessage?.time || new Date())) / (1000 * 60 * 60 * 24)),
+        website: selectedLead.website || '',
+        content_brief: selectedLead.content_brief || '',
+        conversation: selectedLead.conversation // Include full conversation for debugging
       };
 
-                    const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
+      console.log('=== WEBHOOK DEBUG INFO ===');
+      console.log('Payload being sent:', JSON.stringify(payload, null, 2));
+      console.log('Payload size (characters):', JSON.stringify(payload).length);
+      console.log('URL:', 'https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b');
+
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(payload)
       });
       
+      console.log('=== RESPONSE DEBUG INFO ===');
       console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // Try to get response text even if it's an error
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error('=== ERROR DETAILS ===');
+        console.error('Status:', response.status);
+        console.error('Status Text:', response.statusText);
+        console.error('Response Body:', responseText);
+        
+        // Try to parse error response if it's JSON
+        try {
+          const errorData = JSON.parse(responseText);
+          console.error('Parsed error data:', errorData);
+        } catch (e) {
+          console.error('Response is not valid JSON');
+        }
+        
+        throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
       }
       
-      const data = await response.json();
-      console.log('Response data:', data);
+      // Try to parse successful response
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed response data:', data);
+      } catch (e) {
+        console.error('Success response is not valid JSON:', responseText);
+        throw new Error('Invalid JSON response from webhook');
+      }
       
-      if (data && data.length > 0 && data[0].text) {
-        setDraftResponse(data[0].text);
-        console.log('Draft set successfully');
-      } else if (data.text) {
+      // Handle both array and object response formats
+      if (data.text) {
         setDraftResponse(data.text);
-        console.log('Draft set successfully');
+        console.log('Draft set successfully from object format');
+      } else if (data && data.length > 0 && data[0].text) {
+        setDraftResponse(data[0].text);
+        console.log('Draft set successfully from array format');
       } else {
-        console.log('No text in response, using fallback');
-        setDraftResponse(`Hi ${selectedLead.first_name},\n\nThank you for your message.\n\nBest regards`);
+        console.error('No text found in response:', data);
+        throw new Error('No text content in webhook response');
       }
     } catch (error) {
-      console.error('Error generating draft:', error);
-      console.error(`Error generating draft: ${error.message}`);
-      // Fallback draft
+      console.error('=== FULL ERROR DETAILS ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Selected lead data:', selectedLead);
+      
+      // Simple fallback for debugging
       setDraftResponse(`Hi ${selectedLead.first_name},\n\nThank you for your message.\n\nBest regards`);
     } finally {
       setIsGeneratingDraft(false);
