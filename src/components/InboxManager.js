@@ -1036,7 +1036,8 @@ const InboxManager = () => {
             <h1 className="text-2xl font-bold text-white">Inbox Manager</h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm text-blue-300 hover:text-blue-200 transition-colors"
+              className="text-sm transition-colors"
+              style={{color: '#54FCFF'}}
             >
               {showMetrics ? 'Hide' : 'Show'} Metrics
             </button>
@@ -1045,23 +1046,23 @@ const InboxManager = () => {
           {/* Dashboard Metrics */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
+              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
                 <div className="flex items-center gap-1 mb-1">
                   <AlertCircle className="w-3 h-3 text-red-400" />
                   <span className="text-white font-medium">🚨 URGENT</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
+              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
                 <div className="flex items-center gap-1 mb-1">
-                  <Users className="w-3 h-3 text-blue-300" />
+                  <Users className="w-3 h-3" style={{color: '#54FCFF'}} />
                   <span className="text-white font-medium">⚡ NEEDS RESPONSE</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
+              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
                 <div className="flex items-center gap-1 mb-1">
-                  <Target className="w-3 h-3 text-blue-300" />
+                  <Target className="w-3 h-3" style={{color: '#54FCFF'}} />
                   <span className="text-white font-medium">📞 NEEDS FOLLOWUP</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.needsFollowup}</div>
@@ -1071,13 +1072,14 @@ const InboxManager = () => {
           
           {/* Search */}
           <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{color: '#54FCFF'}} />
             <input
               type="text"
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-700/30 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 text-white placeholder-gray-400 backdrop-blur-sm"
+              className="w-full pl-10 pr-4 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2 focus:border-white/40"
+              style={{backgroundColor: '#1A1C1A', '--tw-ring-color': '#54FCFF'}}
             />
           </div>
 
@@ -1466,20 +1468,20 @@ const InboxManager = () => {
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col bg-slate-800 shadow-lg">
+      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A'}}>
         {selectedLead ? (
           <>
             {/* Lead Header */}
-            <div className="p-8 bg-gradient-to-r from-slate-800 to-slate-700 border-b border-blue-500/20">
+            <div className="p-8 border-b border-white/20">
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-3xl font-bold text-white">
                     {selectedLead.first_name} {selectedLead.last_name}
                   </h2>
-                  <p className="text-slate-300 mt-2 font-medium">{selectedLead.email}</p>
+                  <p className="text-gray-300 mt-2 font-medium">{selectedLead.email}</p>
                   {selectedLead.website && (
-                    <p className="text-blue-400 text-sm mt-2">
-                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-blue-300 transition-colors">
+                    <p className="text-sm mt-2">
+                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{color: '#54FCFF'}}>
                         {selectedLead.website}
                         <ExternalLink className="w-3 h-3" />
                       </a>
@@ -1497,7 +1499,7 @@ const InboxManager = () => {
                   })()}
                   <button
                     onClick={() => showDeleteConfirmation(selectedLead)}
-                    className="px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-2 text-sm border border-red-500/30"
+                    className="px-3 py-2 text-red-400 hover:text-red-300 rounded-lg transition-colors flex items-center gap-2 text-sm border border-red-500/30 hover:bg-red-500/10"
                     title="Delete lead"
                   >
                     <X className="w-4 h-4" />
@@ -1505,7 +1507,7 @@ const InboxManager = () => {
                   </button>
                   <button
                     onClick={() => setSelectedLead(null)}
-                    className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 border border-slate-600/50"
+                    className="p-2 text-gray-400 hover:text-white rounded-lg border border-white/20 hover:bg-white/5"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1514,7 +1516,7 @@ const InboxManager = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-900">
+            <div className="flex-1 overflow-y-auto p-8">
               <div className="space-y-8">
                 {/* Lead Information */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
@@ -1680,11 +1682,11 @@ const InboxManager = () => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400 bg-slate-900">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             <div className="text-center">
-              <Mail className="w-12 h-12 mx-auto mb-4 text-slate-500" />
-              <p className="text-lg font-medium text-slate-300">Select a lead to view details</p>
-              <p className="text-sm text-slate-500">Choose a lead from the inbox to see their conversation history and respond</p>
+              <Mail className="w-12 h-12 mx-auto mb-4 text-gray-500" />
+              <p className="text-lg font-medium text-gray-300">Select a lead to view details</p>
+              <p className="text-sm text-gray-500">Choose a lead from the inbox to see their conversation history and respond</p>
             </div>
           </div>
         )}
