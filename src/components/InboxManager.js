@@ -237,8 +237,143 @@ const InboxManager = () => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
+  
+  // New state for advanced sort/filter popups
+  const [showSortPopup, setShowSortPopup] = useState(false);
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [activeSorts, setActiveSorts] = useState([{ field: 'recent', direction: 'desc' }]);
+  const [activeFilters, setActiveFilters] = useState({});
 
-  // Available stages for dropdown
+  // Available sort options
+  const sortOptions = [
+    { field: 'recent', label: 'Most Recent Lead Created', getValue: (lead) => new Date(lead.created_at_best) },
+    { field: 'last_reply', label: 'Most Recent Lead Reply', getValue: (lead) => {
+      const lastReply = getLastResponseFromThem(lead.conversation);
+      return lastReply ? new Date(lastReply) : new Date(0);
+    }},
+    { field: 'last_sent', label: 'Most Recent Sent Message', getValue: (lead) => {
+      const lastSent = lead.conversation.filter(m => m.type === 'SENT');
+      return lastSent.length > 0 ? new Date(lastSent[lastSent.length - 1].time) : new Date(0);
+    }},
+    { field: 'intent', label: 'Intent Score', getValue: (lead) => lead.intent },
+    { field: 'engagement', label: 'Engagement Score', getValue: (lead) => lead.engagement_score },
+    { field: 'response_time', label: 'Response Time', getValue: (lead) => lead.response_time_avg },
+    { field: 'name', label: 'Name (A-Z)', getValue: (lead) => `${lead.first_name} ${lead.last_name}`.toLowerCase() },
+    { field: 'deal_value', label: 'Deal Value', getValue: (lead) => lead.deal_value_estimate },
+    { field: 'urgency', label: 'Urgency Level', getValue: (lead) => {
+      const urgency = getResponseUrgency(lead);
+      const urgencyOrder = { 'urgent-response': 4, 'needs-response': 3, 'needs-followup': 2, 'none': 1 };
+      return urgencyOrder[urgency] || 0;
+    }}
+  ];
+
+  // Available filter options
+  const filterOptions = {
+    intent: {
+      label: 'Intent Score',
+      options: [
+        { value: 'high', label: 'High Intent (7-10)' },
+        { value: 'medium', label: 'Medium Intent (4-6)' },
+        { value: 'low', label: 'Low Intent (1-3)' }
+      ]
+    },
+    urgency: {
+      label: 'Urgency Status',
+      options: [
+        { value: 'urgent-response', label: '🚨 Urgent Response Needed' },
+        { value: 'needs-response', label: '⚡ Needs Response' },
+        { value: 'needs-followup', label: '📞 Needs Followup' },
+        { value: 'none', label: 'No Action Needed' }
+      ]
+    },
+    category: {
+      label: 'Lead Category',
+      options: [
+        { value: '1', label: 'Interested' },
+        { value: '2', label: 'Meeting Request' },
+        { value: '3', label: 'Not Interested' },
+        { value: '4', label: 'Do Not Contact' },
+        { value: '5', label: 'Information Request' },
+        { value: '6', label: 'Out Of Office' },
+        { value: '7', label: 'Wrong Person' },
+        { value: '8', label: 'Uncategorizable by AI' },
+        { value: '9', label: 'Sender Originated Bounce' }
+      ]
+    },
+    engagement: {
+      label: 'Engagement Level',
+      options: [
+        { value: 'high', label: 'High Engagement (80%+)' },
+        { value: 'medium', label: 'Medium Engagement (50-79%)' },
+        { value: 'low', label: 'Low Engagement (0-49%)' }
+      ]
+    },
+    replies: {
+      label: 'Reply Status',
+      options: [
+        { value: 'has_replies', label: 'Has Replies' },
+        { value: 'no_replies', label: 'No Replies Yet' },
+        { value: 'multiple_replies', label: 'Multiple Replies (2+)' }
+      ]
+    },
+    timeframe: {
+      label: 'Last Activity',
+      options: [
+        { value: 'today', label: 'Today' },
+        { value: 'yesterday', label: 'Yesterday' },
+        { value: 'this_week', label: 'This Week' },
+        { value: 'last_week', label: 'Last Week' },
+        { value: 'this_month', label: 'This Month' },
+        { value: 'older', label: 'Older than 1 Month' }
+      ]
+    }
+  };
+
+  // Handle adding sort
+  const handleAddSort = (field, direction = 'desc') => {
+    setActiveSorts(prev => {
+      const existing = prev.find(s => s.field === field);
+      if (existing) {
+        return prev.map(s => s.field === field ? { ...s, direction } : s);
+      }
+      return [...prev, { field, direction }];
+    });
+  };
+
+  // Handle removing sort
+  const handleRemoveSort = (field) => {
+    setActiveSorts(prev => prev.filter(s => s.field !== field));
+    if (activeSorts.length === 1) {
+      setActiveSorts([{ field: 'recent', direction: 'desc' }]); // Always have at least one sort
+    }
+  };
+
+  // Handle adding filter
+  const handleAddFilter = (category, value) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [category]: [...(prev[category] || []), value]
+    }));
+  };
+
+  // Handle removing filter
+  const handleRemoveFilter = (category, value) => {
+    setActiveFilters(prev => {
+      const updated = { ...prev };
+      if (updated[category]) {
+        updated[category] = updated[category].filter(v => v !== value);
+        if (updated[category].length === 0) {
+          delete updated[category];
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Clear all filters
+  const handleClearAllFilters = () => {
+    setActiveFilters({});
+  };
   const availableStages = [
     'initial-outreach',
     'engaged', 
@@ -321,11 +456,11 @@ const InboxManager = () => {
     return 'text-red-600';
   };
 
-  // Filter and sort leads
+  // Enhanced filter and sort leads
   const filteredAndSortedLeads = useMemo(() => {
     let filtered = leads;
 
-    // Apply search filter
+    // Apply search filter (keep existing)
     if (searchQuery) {
       filtered = filtered.filter(lead => 
         lead.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -336,103 +471,79 @@ const InboxManager = () => {
       );
     }
 
-    // Apply intent filter
-    if (filterBy !== 'all') {
-      const intentRange = {
-        'high': (intent) => intent >= 7,
-        'medium': (intent) => intent >= 4 && intent <= 6,
-        'low': (intent) => intent <= 3
-      };
-      filtered = filtered.filter(lead => intentRange[filterBy](lead.intent));
-    }
-
-    // Apply industry/category filter
-    if (industryFilter !== 'all') {
-      filtered = filtered.filter(lead => {
-        const leadCategory = lead.lead_category?.toString();
-        return leadCategory === industryFilter;
-      });
-    }
-    // Apply date filter (based on last response from them)
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Apply advanced filters
+    Object.entries(activeFilters).forEach(([category, values]) => {
+      if (values.length === 0) return;
       
       filtered = filtered.filter(lead => {
-        const lastResponseDate = getLastResponseFromThem(lead.conversation);
-        if (!lastResponseDate) return dateFilter === 'no-response'; // Show in "no response" filter
-        
-        const responseDate = new Date(lastResponseDate);
-        const responseDateOnly = new Date(responseDate.getFullYear(), responseDate.getMonth(), responseDate.getDate());
-        
-        switch (dateFilter) {
-          case 'today':
-            return responseDateOnly.getTime() === today.getTime();
-          case 'yesterday':
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            return responseDateOnly.getTime() === yesterday.getTime();
-          case 'this-week':
-            const weekAgo = new Date(today);
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            return responseDate >= weekAgo;
-          case 'this-month':
-            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-            return responseDate >= monthStart;
-          case 'last-30-days':
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            return responseDate >= thirtyDaysAgo;
-          case 'no-response':
-            return false; // Already handled above
-          case 'custom':
-            if (!customStartDate && !customEndDate) return true;
-            const start = customStartDate ? new Date(customStartDate + 'T00:00:00') : new Date('1970-01-01');
-            const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date();
-            return responseDate >= start && responseDate <= end;
-          default:
-            return true;
-        }
+        return values.some(value => {
+          switch (category) {
+            case 'intent':
+              if (value === 'high') return lead.intent >= 7;
+              if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
+              if (value === 'low') return lead.intent <= 3;
+              return false;
+            
+            case 'urgency':
+              return getResponseUrgency(lead) === value;
+            
+            case 'category':
+              return lead.lead_category?.toString() === value;
+            
+            case 'engagement':
+              if (value === 'high') return lead.engagement_score >= 80;
+              if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
+              if (value === 'low') return lead.engagement_score < 50;
+              return false;
+            
+            case 'replies':
+              const replyCount = lead.conversation.filter(m => m.type === 'REPLY').length;
+              if (value === 'has_replies') return replyCount > 0;
+              if (value === 'no_replies') return replyCount === 0;
+              if (value === 'multiple_replies') return replyCount >= 2;
+              return false;
+            
+            case 'timeframe':
+              const now = new Date();
+              const lastActivity = lead.conversation.length > 0 
+                ? new Date(lead.conversation[lead.conversation.length - 1].time)
+                : new Date(lead.created_at);
+              const daysDiff = Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24));
+              
+              if (value === 'today') return daysDiff === 0;
+              if (value === 'yesterday') return daysDiff === 1;
+              if (value === 'this_week') return daysDiff <= 7;
+              if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
+              if (value === 'this_month') return daysDiff <= 30;
+              if (value === 'older') return daysDiff > 30;
+              return false;
+            
+            default:
+              return false;
+          }
+        });
       });
-    }
+    });
 
-    // Apply response filter
-    if (responseFilter !== 'all') {
-      filtered = filtered.filter(lead => getResponseUrgency(lead) === responseFilter);
-    }
-
-    // Apply sorting
-    if (sortBy === 'recent') {
-      filtered.sort((a, b) => new Date(b.created_at_best) - new Date(a.created_at_best));
-    } else if (sortBy === 'intent') {
-      filtered.sort((a, b) => b.intent - a.intent);
-    } else if (sortBy === 'name') {
-      filtered.sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
-    } else if (sortBy === 'engagement') {
-      filtered.sort((a, b) => b.engagement_score - a.engagement_score);
-    } else if (sortBy === 'deal_value') {
-      filtered.sort((a, b) => b.deal_value_estimate - a.deal_value_estimate);
-    } else if (sortBy === 'response_time') {
-      filtered.sort((a, b) => a.response_time_avg - b.response_time_avg);
-    } else if (sortBy === 'urgent_replies') {
-      // Sort by urgency: urgent first, then needs-response, then needs-followup, then others
+    // Apply advanced sorting
+    activeSorts.forEach(({ field, direction }) => {
+      const sortOption = sortOptions.find(opt => opt.field === field);
+      if (!sortOption) return;
+      
       filtered.sort((a, b) => {
-        const urgencyA = getResponseUrgency(a);
-        const urgencyB = getResponseUrgency(b);
+        const aVal = sortOption.getValue(a);
+        const bVal = sortOption.getValue(b);
         
-        const urgencyOrder = { 'urgent-response': 4, 'needs-response': 3, 'needs-followup': 2, 'none': 1 };
-        const scoreA = urgencyOrder[urgencyA] || 0;
-        const scoreB = urgencyOrder[urgencyB] || 0;
+        let comparison = 0;
+        if (aVal > bVal) comparison = 1;
+        if (aVal < bVal) comparison = -1;
         
-        if (scoreA !== scoreB) return scoreB - scoreA; // Urgent first
-        
-        // Secondary sort by intent for same urgency level
-        return b.intent - a.intent;
+        return direction === 'desc' ? -comparison : comparison;
       });
-    }
+    });
 
     return filtered;
-  }, [leads, searchQuery, filterBy, responseFilter, dateFilter, customStartDate, customEndDate, sortBy]);
+  }, [leads, searchQuery, activeFilters, activeSorts]);
 
   // Auto-calculate engagement score
   const calculateEngagementScore = (conversation) => {
@@ -894,6 +1005,215 @@ const InboxManager = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Sort and Filter Buttons */}
+          <div className="flex gap-3 mb-6">
+            <div className="relative flex-1">
+              <button
+                onClick={() => setShowSortPopup(!showSortPopup)}
+                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+              >
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium">Sort</span>
+                  {activeSorts.length > 0 && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      {activeSorts.length}
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+
+              {/* Sort Popup */}
+              {showSortPopup && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-gray-900">Sort Options</h4>
+                      <button
+                        onClick={() => setShowSortPopup(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    {/* Active Sorts */}
+                    {activeSorts.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE SORTS</h5>
+                        <div className="space-y-2">
+                          {activeSorts.map((sort, index) => {
+                            const option = sortOptions.find(opt => opt.field === sort.field);
+                            return (
+                              <div key={sort.field} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                    {index + 1}
+                                  </span>
+                                  <span className="text-sm">{option?.label}</span>
+                                  <button
+                                    onClick={() => handleAddSort(sort.field, sort.direction === 'desc' ? 'asc' : 'desc')}
+                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                  >
+                                    {sort.direction === 'desc' ? '↓' : '↑'}
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveSort(sort.field)}
+                                  className="text-gray-400 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Available Sort Options */}
+                    <div>
+                      <h5 className="text-xs font-medium text-gray-500 mb-2">ADD SORT</h5>
+                      <div className="space-y-1">
+                        {sortOptions.map((option) => {
+                          const isActive = activeSorts.some(s => s.field === option.field);
+                          return (
+                            <button
+                              key={option.field}
+                              onClick={() => !isActive && handleAddSort(option.field)}
+                              disabled={isActive}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                isActive 
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                  : 'hover:bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {option.label}
+                              {isActive && <span className="text-xs ml-2">(active)</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="relative flex-1">
+              <button
+                onClick={() => setShowFilterPopup(!showFilterPopup)}
+                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+              >
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium">Filter</span>
+                  {Object.keys(activeFilters).length > 0 && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      {Object.values(activeFilters).flat().length}
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+
+              {/* Filter Popup */}
+              {showFilterPopup && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-gray-900">Filter Options</h4>
+                      <div className="flex gap-2">
+                        {Object.keys(activeFilters).length > 0 && (
+                          <button
+                            onClick={handleClearAllFilters}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowFilterPopup(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active Filters */}
+                    {Object.keys(activeFilters).length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-xs font-medium text-gray-500 mb-2">ACTIVE FILTERS</h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(activeFilters).map(([category, values]) =>
+                            values.map((value) => {
+                              const categoryOption = filterOptions[category];
+                              const valueOption = categoryOption?.options.find(opt => opt.value === value);
+                              return (
+                                <span
+                                  key={`${category}-${value}`}
+                                  className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
+                                >
+                                  {valueOption?.label || value}
+                                  <button
+                                    onClick={() => handleRemoveFilter(category, value)}
+                                    className="hover:text-blue-900"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filter Categories */}
+                    <div className="space-y-4">
+                      {Object.entries(filterOptions).map(([category, config]) => (
+                        <div key={category}>
+                          <h5 className="text-xs font-medium text-gray-500 mb-2 uppercase">
+                            {config.label}
+                          </h5>
+                          <div className="space-y-1">
+                            {config.options.map((option) => {
+                              const isActive = activeFilters[category]?.includes(option.value);
+                              return (
+                                <button
+                                  key={option.value}
+                                  onClick={() => {
+                                    if (isActive) {
+                                      handleRemoveFilter(category, option.value);
+                                    } else {
+                                      handleAddFilter(category, option.value);
+                                    }
+                                  }}
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                    isActive
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'hover:bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    {option.label}
+                                    {isActive && <span className="text-blue-600">✓</span>}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
 
