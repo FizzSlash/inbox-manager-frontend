@@ -27,10 +27,17 @@ const InboxManager = () => {
         // Parse conversation data from email_message_body and extract subject
         let conversation = [];
         let extractedSubject = `Campaign for ${lead.first_name || 'Lead'}`;
+        let emailStatsId = null;
         
         try {
           if (lead.email_message_body) {
             const parsedConversation = JSON.parse(lead.email_message_body);
+            
+            // Extract stats_id from the first message
+            if (parsedConversation.length > 0 && parsedConversation[0].stats_id) {
+              emailStatsId = parsedConversation[0].stats_id;
+            }
+            
             conversation = parsedConversation.map((msg, index) => {
               const prevMsg = parsedConversation[index - 1];
               let responseTime = undefined;
@@ -103,6 +110,7 @@ const InboxManager = () => {
           id: lead.id,
           campaign_id: lead.campaign_ID || null,
           lead_id: lead.lead_ID || null,
+          email_stats_id: emailStatsId,
           created_at: lead.created_at,
           updated_at: lead.created_at,
           email: lead.lead_email,
@@ -747,6 +755,7 @@ const InboxManager = () => {
           id: selectedLead.id,
           campaign_id: selectedLead.campaign_id,
           lead_id: selectedLead.lead_id,
+          email_stats_id: selectedLead.email_stats_id,
           email: selectedLead.email,
           first_name: selectedLead.first_name,
           last_name: selectedLead.last_name,
