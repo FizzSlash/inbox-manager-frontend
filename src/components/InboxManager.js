@@ -1881,37 +1881,16 @@ const InboxManager = () => {
                             <span><strong>From:</strong> {message.from || 'N/A'}</span>
                             <span><strong>To:</strong> {message.to || 'N/A'}</span>
                           </div>
-                          {(() => {
-                            // Handle different CC formats from the API
-                            let ccList = [];
-                            
-                            // Debug: Always log the raw CC data
-                            console.log(`Message ${index + 1} CC data:`, JSON.stringify(message.cc, null, 2));
-                            
-                            if (message.cc) {
-                              if (Array.isArray(message.cc)) {
-                                ccList = message.cc
-                                  .map(cc => {
-                                    console.log('Processing CC item:', cc);
-                                    if (typeof cc === 'string') return cc;
-                                    if (cc && cc.address) return cc.address;
-                                    if (cc && cc.name && cc.name.trim() !== '') return cc.name;
-                                    return null;
-                                  })
-                                  .filter(Boolean);
-                              } else if (typeof message.cc === 'string') {
-                                ccList = [message.cc];
-                              }
-                            }
-                            
-                            console.log(`Message ${index + 1} final CC list:`, ccList);
-                            
-                            return ccList.length > 0 ? (
-                              <div>
-                                <strong>CC:</strong> {ccList.join(', ')}
-                              </div>
-                            ) : null;
-                          })()}
+                          {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
+                            <div>
+                              <strong>CC:</strong> {message.cc.map(cc => {
+                                if (typeof cc === 'string') return cc;
+                                if (cc && cc.address) return cc.address;
+                                if (cc && cc.name && cc.name.trim() !== '') return cc.name;
+                                return '';
+                              }).filter(Boolean).join(', ')}
+                            </div>
+                          )}
                           {message.subject && (
                             <div>
                               <strong>Subject:</strong> {message.subject}
