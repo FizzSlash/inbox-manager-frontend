@@ -1883,13 +1883,18 @@ const InboxManager = () => {
                           {(() => {
                             // Handle different CC formats from the API
                             let ccList = [];
+                            
+                            // Debug: Always log the raw CC data
+                            console.log(`Message ${index + 1} CC data:`, JSON.stringify(message.cc, null, 2));
+                            
                             if (message.cc) {
                               if (Array.isArray(message.cc)) {
                                 ccList = message.cc
                                   .map(cc => {
+                                    console.log('Processing CC item:', cc);
                                     if (typeof cc === 'string') return cc;
                                     if (cc && cc.address) return cc.address;
-                                    if (cc && cc.name) return cc.name;
+                                    if (cc && cc.name && cc.name.trim() !== '') return cc.name;
                                     return null;
                                   })
                                   .filter(Boolean);
@@ -1898,8 +1903,7 @@ const InboxManager = () => {
                               }
                             }
                             
-                            // Debug: Log CC data for troubleshooting
-                            console.log('Message CC data:', message.cc, 'Parsed CC list:', ccList);
+                            console.log(`Message ${index + 1} final CC list:`, ccList);
                             
                             return ccList.length > 0 ? (
                               <div>
