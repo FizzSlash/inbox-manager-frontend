@@ -318,6 +318,8 @@ const InboxManager = () => {
   const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
   const [activeFilters, setActiveFilters] = useState({});
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'need_response', 'recently_sent'
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState(null);
 
   // Available filter options
   const filterOptions = {
@@ -428,15 +430,7 @@ const InboxManager = () => {
   };
 
   // Handle delete lead
-  const handleDeleteLead = async (lead, event) => {
-    // Prevent the lead card click event from firing
-    event.stopPropagation();
-    
-    // Confirm deletion
-    if (!confirm(`Are you sure you want to delete lead: ${lead.first_name} ${lead.last_name}?`)) {
-      return;
-    }
-
+  const handleDeleteLead = async (lead) => {
     try {
       console.log('Deleting lead:', lead);
       
@@ -467,13 +461,22 @@ const InboxManager = () => {
         setSelectedLead(null);
       }
       
-      // Optionally refresh leads from server
-      // await fetchLeads();
+      // Close confirmation popup
+      setShowDeleteConfirm(false);
+      setLeadToDelete(null);
       
     } catch (error) {
       console.error('Error deleting lead:', error);
       alert(`Error deleting lead: ${error.message}`);
+      setShowDeleteConfirm(false);
+      setLeadToDelete(null);
     }
+  };
+
+  // Show delete confirmation
+  const showDeleteConfirmation = (lead) => {
+    setLeadToDelete(lead);
+    setShowDeleteConfirm(true);
   };
   const availableStages = [
     'initial-outreach',
@@ -1380,17 +1383,8 @@ const InboxManager = () => {
                 onClick={() => setSelectedLead(lead)}
                 className={`p-5 border-b border-gray-200 cursor-pointer hover:bg-blue-50 transition-all duration-200 ${
                   selectedLead?.id === lead.id ? 'bg-blue-100 border-blue-300 shadow-md' : ''
-                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative group`}
+                } ${intentStyle.bg} ${intentStyle.border} border-l-4 relative`}
               >
-                {/* Delete Button */}
-                <button
-                  onClick={(e) => handleDeleteLead(lead, e)}
-                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                  title="Delete lead"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
                 {/* Response Badge at Top */}
                 {getResponseBadge()}
                 
@@ -1501,6 +1495,14 @@ const InboxManager = () => {
                       </span>
                     );
                   })()}
+                  <button
+                    onClick={() => showDeleteConfirmation(selectedLead)}
+                    className="px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                    title="Delete lead"
+                  >
+                    <X className="w-4 h-4" />
+                    Delete
+                  </button>
                   <button
                     onClick={() => setSelectedLead(null)}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
@@ -1687,6 +1689,36 @@ const InboxManager = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Popup */}
+      {showDeleteConfirm && leadToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Lead</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setLeadToDelete(null);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteLead(leadToDelete)}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete Lead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
