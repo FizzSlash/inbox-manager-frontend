@@ -132,6 +132,11 @@ const InboxManager = () => {
   };
 
   const [selectedLead, setSelectedLead] = useState(null);
+
+  // Clear draft when switching leads
+  useEffect(() => {
+    setDraftResponse('');
+  }, [selectedLead]);
   const [sortBy, setSortBy] = useState('recent');
   const [filterBy, setFilterBy] = useState('all');
   const [responseFilter, setResponseFilter] = useState('all');
@@ -557,7 +562,7 @@ const InboxManager = () => {
         content_brief: selectedLead.content_brief
       };
 
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
+                    const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
