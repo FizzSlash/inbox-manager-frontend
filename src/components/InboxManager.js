@@ -1025,11 +1025,11 @@ const InboxManager = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-900">
+    <div className="flex h-screen" style={{backgroundColor: '#1A1C1A'}}>
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 bg-gray-800 border-r border-white/10 flex flex-col shadow-lg">
+      <div className="w-1/2 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A', border: '1px solid white', borderRadius: '12px', margin: '8px', marginRight: '4px'}}>
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-white/10 bg-gradient-to-r from-gray-800 to-gray-750">
+        <div className="p-6 border-b border-white/20" style={{backgroundColor: '#1A1C1A', borderRadius: '12px 12px 0 0'}}>
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white">Inbox Manager</h1>
             <button
@@ -1044,21 +1044,21 @@ const InboxManager = () => {
           {/* Dashboard Metrics */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
+              <div className="p-4 rounded-xl shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
                 <div className="flex items-center gap-1 mb-1">
                   <AlertCircle className="w-3 h-3 text-white" />
                   <span className="text-white font-medium">🚨 URGENT</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
+              <div className="p-4 rounded-xl shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
                 <div className="flex items-center gap-1 mb-1">
                   <Users className="w-3 h-3" style={{color: '#54FCFF'}} />
                   <span className="text-white font-medium">⚡ NEEDS RESPONSE</span>
                 </div>
                 <div className="text-lg font-bold text-white">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="p-4 rounded-xl border border-white/20 shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A'}}>
+              <div className="p-4 rounded-xl shadow-sm backdrop-blur-sm" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
                 <div className="flex items-center gap-1 mb-1">
                   <Target className="w-3 h-3" style={{color: '#54FCFF'}} />
                   <span className="text-white font-medium">📞 NEEDS FOLLOWUP</span>
@@ -1076,8 +1076,8 @@ const InboxManager = () => {
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2 focus:border-white/40"
-              style={{backgroundColor: '#1A1C1A', '--tw-ring-color': '#54FCFF'}}
+              className="w-full pl-10 pr-4 py-2 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2"
+              style={{backgroundColor: '#1A1C1A', border: '1px solid white', '--tw-ring-color': '#54FCFF'}}
             />
           </div>
 
@@ -1086,14 +1086,14 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 border border-white/20 rounded-lg hover:border-white/30 backdrop-blur-sm transition-all"
-                style={{backgroundColor: '#1A1C1A'}}
+                className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
+                style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}
               >
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" style={{color: '#54FCFF'}} />
                   <span className="text-sm font-medium text-white">Sort</span>
                   {activeSorts.length > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF', border: '1px solid white'}}>
                       {activeSorts.length}
                     </span>
                   )}
@@ -1181,14 +1181,14 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 border border-white/20 rounded-lg hover:border-white/30 backdrop-blur-sm transition-all"
-                style={{backgroundColor: '#1A1C1A'}}
+                className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
+                style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}
               >
                 <div className="flex items-center gap-2">
                   <Filter className="w-4 h-4" style={{color: '#54FCFF'}} />
                   <span className="text-sm font-medium text-white">Filter</span>
                   {Object.keys(activeFilters).length > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs border border-white/30" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', color: '#54FCFF', border: '1px solid white'}}>
                       {Object.values(activeFilters).flat().length}
                     </span>
                   )}
