@@ -1873,6 +1873,25 @@ const InboxManager = () => {
                             </span>
                           </div>
                         </div>
+
+                        {/* Email routing information */}
+                        <div className="mb-3 text-xs text-gray-400 space-y-1">
+                          <div className="flex flex-wrap gap-4">
+                            <span><strong>From:</strong> {message.from || 'N/A'}</span>
+                            <span><strong>To:</strong> {message.to || 'N/A'}</span>
+                          </div>
+                          {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
+                            <div>
+                              <strong>CC:</strong> {message.cc.map(cc => cc.address || cc.name || cc).join(', ')}
+                            </div>
+                          )}
+                          {message.subject && (
+                            <div>
+                              <strong>Subject:</strong> {message.subject}
+                            </div>
+                          )}
+                        </div>
+
                         <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">
                           {message.content}
                         </div>
