@@ -1026,23 +1026,59 @@ const InboxManager = () => {
   }
 
   return (
-    <div className="flex h-screen" style={{backgroundColor: '#1A1C1A'}}>
+    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+      {/* Animated Background Gradient */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <div 
+          className="absolute inset-0 animate-pulse" 
+          style={{
+            background: `radial-gradient(circle at 20% 50%, rgba(84, 252, 255, 0.1) 0%, transparent 50%), 
+                        radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.08) 0%, transparent 50%), 
+                        radial-gradient(circle at 40% 80%, rgba(168, 85, 247, 0.06) 0%, transparent 50%)`,
+            animation: 'gradientShift 8s ease-in-out infinite'
+          }}
+        />
+      </div>
+
+      {/* Floating Particles */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 rounded-full opacity-20"
+            style={{
+              backgroundColor: '#54FCFF',
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animation: `float ${4 + Math.random() * 4}s ease-in-out infinite`,
+              animationDelay: `${Math.random() * 4}s`
+            }}
+          />
+        ))}
+      </div>
+
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', borderRadius: '12px', margin: '8px', marginRight: '4px'}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
+        <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
+          {/* Glowing accent line */}
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />>
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-white">Inbox Manager</h1>
+            <h1 className="text-2xl font-bold text-white relative">
+              Inbox Manager
+              <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-50" />
+            </h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm transition-colors"
+              className="text-sm transition-all duration-300 hover:scale-105 relative group"
               style={{color: '#54FCFF'}}
             >
-              {showMetrics ? 'Hide' : 'Show'} Metrics
+              <span className="relative z-10">{showMetrics ? 'Hide' : 'Show'} Metrics</span>
+              <div className="absolute inset-0 bg-blue-400 rounded opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
             </button>
           </div>
 
-          {/* Dashboard Metrics */}
+          {/* Dashboard Metrics with breathing animation */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6">
               <button
@@ -1050,45 +1086,54 @@ const InboxManager = () => {
                   setActiveFilters({urgency: ['urgent-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)', animation: 'breathe 3s ease-in-out infinite'}}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-white" />
-                  <span className="text-white font-bold text-sm">🚨 URGENT</span>
+                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-4 h-4 text-white animate-pulse" />
+                    <span className="text-white font-bold text-sm">🚨 URGENT</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
+                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response</div>
                 </div>
-                <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
-                <div className="text-xs text-white opacity-80 mt-1">Needs immediate response</div>
               </button>
               <button
                 onClick={() => {
                   setActiveFilters({urgency: ['needs-response']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)', animation: 'breathe 3s ease-in-out infinite', animationDelay: '0.5s'}}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4 text-white" />
-                  <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
+                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-white animate-bounce" style={{animationDuration: '2s'}} />
+                    <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
+                  <div className="text-xs text-white opacity-80 mt-1">Awaiting your reply</div>
                 </div>
-                <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
-                <div className="text-xs text-white opacity-80 mt-1">Awaiting your reply</div>
               </button>
               <button
                 onClick={() => {
                   setActiveFilters({urgency: ['needs-followup']});
                   setActiveTab('all');
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:opacity-80 transition-all cursor-pointer"
-                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group"
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)', animation: 'breathe 3s ease-in-out infinite', animationDelay: '1s'}}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <Target className="w-4 h-4 text-white" />
-                  <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-4 h-4 text-white animate-spin" style={{animationDuration: '4s'}} />
+                    <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
+                  <div className="text-xs text-white opacity-80 mt-1">Time for follow-up</div>
                 </div>
-                <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
-                <div className="text-xs text-white opacity-80 mt-1">Time for follow-up</div>
               </button>
             </div>
           )}
@@ -1803,8 +1848,38 @@ const InboxManager = () => {
         </div>
       )}
 
-      {/* Loading and Error States */}
+      {/* CSS Animations */}
       <style jsx>{`
+        @keyframes gradientShift {
+          0%, 100% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.1); }
+        }
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        @keyframes glow {
+          0% { opacity: 0.4; transform: scaleX(0.5); }
+          100% { opacity: 1; transform: scaleX(1); }
+        }
+        
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+        }
+        
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        
+        @keyframes ripple {
+          0% { transform: scale(0); opacity: 1; }
+          100% { transform: scale(4); opacity: 0; }
+        }
+        
         ::-webkit-scrollbar {
           width: 8px;
         }
@@ -1813,11 +1888,13 @@ const InboxManager = () => {
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb {
-          background: #54FCFF;
+          background: linear-gradient(45deg, #54FCFF, rgba(84, 252, 255, 0.5));
           border-radius: 4px;
+          box-shadow: 0 0 10px rgba(84, 252, 255, 0.3);
         }
         ::-webkit-scrollbar-thumb:hover {
-          background: rgba(84, 252, 255, 0.8);
+          background: linear-gradient(45deg, rgba(84, 252, 255, 0.8), #54FCFF);
+          box-shadow: 0 0 15px rgba(84, 252, 255, 0.5);
         }
       `}</style>
     </div>
