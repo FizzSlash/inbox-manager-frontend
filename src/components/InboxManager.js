@@ -1027,16 +1027,16 @@ const InboxManager = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-900">
+    <div className="flex h-screen bg-gray-900">
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 bg-slate-800 border-r border-blue-500/20 flex flex-col shadow-lg">
+      <div className="w-1/2 bg-gray-800 border-r border-white/10 flex flex-col shadow-lg">
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-blue-500/20 bg-gradient-to-r from-slate-800 to-slate-700">
+        <div className="p-6 border-b border-white/10 bg-gradient-to-r from-gray-800 to-gray-750">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white">Inbox Manager</h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-sm text-blue-300 hover:text-blue-200 transition-colors"
             >
               {showMetrics ? 'Hide' : 'Show'} Metrics
             </button>
@@ -1045,39 +1045,39 @@ const InboxManager = () => {
           {/* Dashboard Metrics */}
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6 text-xs">
-              <div className="bg-slate-700/50 p-4 rounded-xl border border-red-500/30 shadow-sm backdrop-blur-sm">
+              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
                 <div className="flex items-center gap-1 mb-1">
                   <AlertCircle className="w-3 h-3 text-red-400" />
-                  <span className="text-red-300 font-medium">🚨 URGENT</span>
+                  <span className="text-white font-medium">🚨 URGENT</span>
                 </div>
-                <div className="text-lg font-bold text-red-200">{dashboardMetrics.urgentResponse}</div>
+                <div className="text-lg font-bold text-white">{dashboardMetrics.urgentResponse}</div>
               </div>
-              <div className="bg-slate-700/50 p-4 rounded-xl border border-orange-500/30 shadow-sm backdrop-blur-sm">
+              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
                 <div className="flex items-center gap-1 mb-1">
-                  <Users className="w-3 h-3 text-orange-400" />
-                  <span className="text-orange-300 font-medium">⚡ NEEDS RESPONSE</span>
+                  <Users className="w-3 h-3 text-blue-300" />
+                  <span className="text-white font-medium">⚡ NEEDS RESPONSE</span>
                 </div>
-                <div className="text-lg font-bold text-orange-200">{dashboardMetrics.needsResponse}</div>
+                <div className="text-lg font-bold text-white">{dashboardMetrics.needsResponse}</div>
               </div>
-              <div className="bg-slate-700/50 p-4 rounded-xl border border-yellow-500/30 shadow-sm backdrop-blur-sm">
+              <div className="bg-gray-700/30 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
                 <div className="flex items-center gap-1 mb-1">
-                  <Target className="w-3 h-3 text-yellow-400" />
-                  <span className="text-yellow-300 font-medium">📞 NEEDS FOLLOWUP</span>
+                  <Target className="w-3 h-3 text-blue-300" />
+                  <span className="text-white font-medium">📞 NEEDS FOLLOWUP</span>
                 </div>
-                <div className="text-lg font-bold text-yellow-200">{dashboardMetrics.needsFollowup}</div>
+                <div className="text-lg font-bold text-white">{dashboardMetrics.needsFollowup}</div>
               </div>
             </div>
           )}
           
           {/* Search */}
           <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
             <input
               type="text"
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-blue-500/30 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 text-white placeholder-slate-400 backdrop-blur-sm"
+              className="w-full pl-10 pr-4 py-2 bg-gray-700/30 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 text-white placeholder-gray-400 backdrop-blur-sm"
             />
           </div>
 
@@ -1086,18 +1086,18 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                className="w-full flex items-center justify-between px-4 py-2 bg-gray-700/30 border border-white/10 rounded-lg hover:bg-gray-600/30 focus:ring-2 focus:ring-blue-300 backdrop-blur-sm transition-all"
               >
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium">Sort</span>
+                  <BarChart3 className="w-4 h-4 text-blue-300" />
+                  <span className="text-sm font-medium text-white">Sort</span>
                   {activeSorts.length > 0 && (
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs border border-blue-400/30">
                       {activeSorts.length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
 
               {/* Sort Popup */}
@@ -1180,18 +1180,18 @@ const InboxManager = () => {
             <div className="relative flex-1">
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                className="w-full flex items-center justify-between px-4 py-2 bg-gray-700/30 border border-white/10 rounded-lg hover:bg-gray-600/30 focus:ring-2 focus:ring-blue-300 backdrop-blur-sm transition-all"
               >
                 <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium">Filter</span>
+                  <Filter className="w-4 h-4 text-blue-300" />
+                  <span className="text-sm font-medium text-white">Filter</span>
                   {Object.keys(activeFilters).length > 0 && (
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs border border-blue-400/30">
                       {Object.values(activeFilters).flat().length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
 
               {/* Filter Popup */}
@@ -1294,25 +1294,25 @@ const InboxManager = () => {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'all'
-                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                  : 'bg-gray-700/30 text-gray-300 border border-white/10 hover:bg-gray-600/30'
               }`}
             >
               All Leads
             </button>
             <button
               onClick={() => setActiveTab('need_response')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'need_response'
-                  ? 'bg-orange-100 text-orange-800 border border-orange-300'
-                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                  : 'bg-gray-700/30 text-gray-300 border border-white/10 hover:bg-gray-600/30'
               }`}
             >
               Need Response
               {activeTab !== 'need_response' && (
-                <span className="ml-2 bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                <span className="ml-2 bg-orange-500/20 text-orange-300 px-2 py-1 rounded-full text-xs border border-orange-400/30">
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return false;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -1323,15 +1323,15 @@ const InboxManager = () => {
             </button>
             <button
               onClick={() => setActiveTab('recently_sent')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
                 activeTab === 'recently_sent'
-                  ? 'bg-green-100 text-green-800 border border-green-300'
-                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                  : 'bg-gray-700/30 text-gray-300 border border-white/10 hover:bg-gray-600/30'
               }`}
             >
               Recently Sent
               {activeTab !== 'recently_sent' && (
-                <span className="ml-2 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                <span className="ml-2 bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs border border-green-400/30">
                   {leads.filter(lead => {
                     if (lead.conversation.length === 0) return true;
                     const lastMessage = lead.conversation[lead.conversation.length - 1];
