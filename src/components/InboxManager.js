@@ -926,12 +926,57 @@ const InboxManager = () => {
     
     setIsSending(true);
     try {
-      // Prepare payload with draft message data and lead data
+      // Get the latest message to determine current participants
+      const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
+      
+      // Extract all unique email participants from the conversation
+      const getAllParticipants = () => {
+        const participants = new Set();
+        
+        // Go through conversation to find all unique email addresses
+        selectedLead.conversation.forEach(msg => {
+          if (msg.from) participants.add(msg.from);
+          if (msg.to) participants.add(msg.to);
+          if (msg.cc && Array.isArray(msg.cc)) {
+            msg.cc.forEach(ccEntry => {
+              if (ccEntry.address) participants.add(ccEntry.address);
+            });
+          }
+        });
+        
+        // Remove our own email (assuming it's connor@campaignretain.com or similar)
+        const ourEmails = ['connor@campaignretain.com', 'connor@retentionharbor.com']; // Add your emails here
+        ourEmails.forEach(email => participants.delete(email));
+        
+        return Array.from(participants);
+      };
+      
+      // Determine reply recipients based on the last message
+      let primaryRecipient = '';
+      let ccRecipients = [];
+      
+      if (lastMessage.type === 'REPLY') {
+        // If they replied, send back to the sender and CC everyone else who was involved
+        primaryRecipient = lastMessage.from;
+        
+        // Get all other participants for CC
+        const allParticipants = getAllParticipants();
+        ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
+      } else {
+        // If we sent last, use the same recipients as the last sent message
+        primaryRecipient = lastMessage.to || selectedLead.email;
+        if (lastMessage.cc && Array.isArray(lastMessage.cc)) {
+          ccRecipients = lastMessage.cc.map(cc => cc.address).filter(Boolean);
+        }
+      }
+      
+      // Prepare payload with updated recipients
       const sendPayload = {
-        // Draft message data
+        // Draft message data with dynamic recipients
         message: {
           content: draftResponse.trim(),
-          to: selectedLead.email,
+          to: primaryRecipient,
+          cc: ccRecipients.map(email => ({ name: '', address: email })),
           subject: `Re: ${selectedLead.subject}`,
           type: 'SENT'
         },
@@ -942,7 +987,7 @@ const InboxManager = () => {
           campaign_id: selectedLead.campaign_id,
           lead_id: selectedLead.lead_id,
           email_stats_id: selectedLead.email_stats_id,
-          email: selectedLead.email,
+          email: primaryRecipient, // Update primary email to current recipient
           first_name: selectedLead.first_name,
           last_name: selectedLead.last_name,
           subject: selectedLead.subject,
@@ -953,11 +998,18 @@ const InboxManager = () => {
           tags: selectedLead.tags,
           conversation_history: selectedLead.conversation,
           reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
-          last_activity: selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1].time : selectedLead.created_at
+          last_activity: selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1].time : selectedLead.created_at,
+          // Add all participants info
+          all_participants: getAllParticipants(),
+          cc_recipients: ccRecipients
         }
       };
 
-      console.log('Sending message via webhook:', sendPayload);
+      console.log('Sending message with dynamic recipients:', {
+        to: primaryRecipient,
+        cc: ccRecipients,
+        allParticipants: getAllParticipants()
+      });
 
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
         method: 'POST',
