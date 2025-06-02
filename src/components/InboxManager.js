@@ -1083,7 +1083,12 @@ const InboxManager = () => {
             <div className="grid grid-cols-3 gap-4 mb-6">
               <button
                 onClick={() => {
-                  setActiveFilters({urgency: ['urgent-response']});
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('urgent-response')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['urgent-response']});
+                  }
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
@@ -1094,14 +1099,22 @@ const InboxManager = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">🚨 URGENT</span>
+                    {activeFilters.urgency?.includes('urgent-response') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response</div>
+                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
                 </div>
               </button>
               <button
                 onClick={() => {
-                  setActiveFilters({urgency: ['needs-response']});
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('needs-response')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['needs-response']});
+                  }
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
@@ -1112,14 +1125,22 @@ const InboxManager = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
+                    {activeFilters.urgency?.includes('needs-response') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">Awaiting your reply</div>
+                  <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
                 </div>
               </button>
               <button
                 onClick={() => {
-                  setActiveFilters({urgency: ['needs-followup']});
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('needs-followup')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['needs-followup']});
+                  }
                   setActiveTab('all');
                 }}
                 className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
@@ -1130,9 +1151,12 @@ const InboxManager = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <Target className="w-4 h-4 text-white" />
                     <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                    {activeFilters.urgency?.includes('needs-followup') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
                   </div>
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">Time for follow-up</div>
+                  <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
                 </div>
               </button>
             </div>
@@ -1152,8 +1176,8 @@ const InboxManager = () => {
           </div>
 
           {/* Sort and Filter Buttons */}
-          <div className="flex gap-3 mb-4">
-            <div className="relative flex-1">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="relative">
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
@@ -1893,6 +1917,16 @@ const InboxManager = () => {
         @keyframes glow {
           0% { opacity: 0.4; transform: scaleX(0.5); }
           100% { opacity: 1; transform: scaleX(1); }
+        }
+        
+        @keyframes gradientFlash {
+          0% { opacity: 20%; }
+          50% { opacity: 60%; }
+          100% { opacity: 20%; }
+        }
+        
+        .animate-gradient-flash {
+          animation: gradientFlash 0.4s ease-in-out;
         }
         
         @keyframes breathe {
