@@ -1503,11 +1503,11 @@ const InboxManager = () => {
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A'}}>
+      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: '#1A1C1A', border: '1px solid white', borderRadius: '12px', margin: '8px', marginLeft: '4px'}}>
         {selectedLead ? (
           <>
             {/* Lead Header */}
-            <div className="p-8 border-b border-white/20">
+            <div className="p-8 border-b border-white/20" style={{borderRadius: '12px 12px 0 0'}}>
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-3xl font-bold text-white">
@@ -1527,22 +1527,24 @@ const InboxManager = () => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className="px-3 py-1 rounded-full text-sm font-medium border border-white/20 text-white" style={{backgroundColor: '#1A1C1A'}}>
+                      <span className="px-3 py-1 rounded-full text-sm font-medium text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid white'}}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
                   })()}
                   <button
                     onClick={() => showDeleteConfirmation(selectedLead)}
-                    className="px-3 py-2 text-white hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm border border-white/20 hover:bg-white/5"
+                    className="px-3 py-2 text-white hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm hover:bg-white/5"
                     title="Delete lead"
+                    style={{border: '1px solid white'}}
                   >
                     <X className="w-4 h-4" />
                     Delete
                   </button>
                   <button
                     onClick={() => setSelectedLead(null)}
-                    className="p-2 text-gray-400 hover:text-white rounded-lg border border-white/20 hover:bg-white/5"
+                    className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5"
+                    style={{border: '1px solid white'}}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1551,53 +1553,53 @@ const InboxManager = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8">
+            <div className="flex-1 overflow-y-auto p-8" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
               <div className="space-y-8">
                 {/* Lead Information */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <User className="w-4 h-4 mr-2" />
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                    <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Lead Information
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-gray-500">Subject:</span>
-                      <p className="font-medium">{selectedLead.subject}</p>
+                      <span className="text-gray-300">Subject:</span>
+                      <p className="font-medium text-white">{selectedLead.subject}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Website:</span>
+                      <span className="text-gray-300">Website:</span>
                       <p className="font-medium">
                         {selectedLead.website ? (
-                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
                             {selectedLead.website}
                             <ExternalLink className="w-3 h-3" />
                           </a>
-                        ) : 'N/A'}
+                        ) : <span className="text-white">N/A</span>}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Reply Count:</span>
-                      <p className="font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
+                      <span className="text-gray-300">Reply Count:</span>
+                      <p className="font-medium text-white">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Last Followup:</span>
-                      <p className="font-medium">{(() => {
+                      <span className="text-gray-300">Last Followup:</span>
+                      <p className="font-medium text-white">{(() => {
                         const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
                         return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
                       })()}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Last Reply from Lead:</span>
-                      <p className="font-medium">{(() => {
+                      <span className="text-gray-300">Last Reply from Lead:</span>
+                      <p className="font-medium text-white">{(() => {
                         const lastReply = getLastResponseFromThem(selectedLead.conversation);
                         return lastReply ? formatTime(lastReply) : 'No replies yet';
                       })()}</p>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-500">Tags:</span>
+                      <span className="text-gray-300">Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {selectedLead.tags.map(tag => (
-                          <span key={tag} className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
                             {tag}
                           </span>
                         ))}
@@ -1607,67 +1609,80 @@ const InboxManager = () => {
                 </div>
 
                 {/* Engagement Metrics */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <BarChart3 className="w-4 h-4 mr-2" />
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                    <BarChart3 className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Engagement Metrics
                   </h3>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
                       <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
                         {selectedLead.engagement_score}%
                       </div>
-                      <div className="text-gray-500">Engagement Score</div>
+                      <div className="text-gray-300">Engagement Score</div>
                     </div>
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
-                      <div className="text-2xl font-bold text-blue-600">
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                      <div className="text-2xl font-bold" style={{color: '#54FCFF'}}>
                         {formatResponseTime(selectedLead.response_time_avg)}
                       </div>
-                      <div className="text-gray-500">Avg Response Time</div>
+                      <div className="text-gray-300">Avg Response Time</div>
                     </div>
-                    <div className="text-center bg-gray-50 p-6 rounded-xl border border-gray-200">
-                      <div className="text-2xl font-bold text-purple-600">
+                    <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                      <div className="text-2xl font-bold text-purple-400">
                         {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                       </div>
-                      <div className="text-gray-500">Reply Rate</div>
+                      <div className="text-gray-300">Reply Rate</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Conversation History */}
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-lg">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center text-lg">
-                    <MessageSquare className="w-4 h-4 mr-2" />
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                    <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
-                  <div className="space-y-6 max-h-96 overflow-y-auto">
+                  <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
                     {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-5 rounded-xl border-2 ${
-                        message.type === 'SENT' ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-300'
-                      } shadow-sm`}>
+                      <div key={index} className={`p-5 rounded-xl border-2 shadow-sm ${
+                        message.type === 'SENT' 
+                          ? 'border-blue-400' 
+                          : 'border-gray-400'
+                      }`} style={{
+                        backgroundColor: message.type === 'SENT' 
+                          ? 'rgba(84, 252, 255, 0.1)' 
+                          : 'rgba(255, 255, 255, 0.05)'
+                      }}>
                         <div className="flex justify-between items-start mb-2">
                           <div className="text-sm">
-                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-800' : 'text-gray-800'}`}>
+                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-white'}`}>
                               {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
                             </span>
-                            <span className="text-gray-500 ml-2">
+                            <span className="text-gray-300 ml-2">
                               {formatTime(message.time)}
                             </span>
                             {message.response_time && (
-                              <span className="text-green-600 ml-2 text-xs">
+                              <span className="text-green-400 ml-2 text-xs">
                                 • {formatResponseTime(message.response_time)} response
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-1 text-xs rounded-full ${
-                              message.type === 'SENT' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
+                              message.type === 'SENT' 
+                                ? 'text-blue-300' 
+                                : 'text-white'
+                            }`} style={{
+                              backgroundColor: message.type === 'SENT' 
+                                ? 'rgba(84, 252, 255, 0.2)' 
+                                : 'rgba(255, 255, 255, 0.1)',
+                              border: '1px solid rgba(255, 255, 255, 0.3)'
+                            }}>
                               {message.type}
                             </span>
                           </div>
                         </div>
-                        <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">
                           {message.content}
                         </div>
                       </div>
