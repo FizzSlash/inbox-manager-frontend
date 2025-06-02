@@ -562,7 +562,14 @@ const InboxManager = () => {
       };
 
       console.log('=== WEBHOOK DEBUG INFO ===');
-      console.log('Testing with minimal payload first:', JSON.stringify(minimalPayload, null, 2));
+      console.log('Testing with minimal payload:');
+      console.log('- id:', minimalPayload.id);
+      console.log('- first_name:', minimalPayload.first_name);
+      console.log('- last_name:', minimalPayload.last_name);
+      console.log('- email:', minimalPayload.email);
+      console.log('- intent:', minimalPayload.intent);
+      console.log('- email_message_body length:', minimalPayload.email_message_body?.length || 0);
+      console.log('Full payload:', JSON.stringify(minimalPayload, null, 2));
       console.log('URL:', 'https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b');
 
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
