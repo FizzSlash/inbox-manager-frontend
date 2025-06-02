@@ -525,7 +525,7 @@ const InboxManager = () => {
     };
   }, [leads]);
 
-  // Get intent color and label
+  // Get intent color and label - ONLY for circles, no card backgrounds
   const getIntentStyle = (intent) => {
     if (intent >= 7) return { bg: 'bg-green-500', border: 'border-green-400', text: 'text-white', label: 'High Intent' };
     if (intent >= 4) return { bg: 'bg-yellow-500', border: 'border-yellow-400', text: 'text-white', label: 'Medium Intent' };
