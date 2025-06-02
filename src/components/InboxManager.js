@@ -551,25 +551,34 @@ const InboxManager = () => {
         }))
       };
 
-      // Start with minimal payload to isolate the issue
-      const minimalPayload = {
+      // Debug: Log the full payload we're sending
+      const fullPayload = {
         id: selectedLead.id,
+        email: cleanString(selectedLead.email),
         first_name: cleanString(selectedLead.first_name),
         last_name: cleanString(selectedLead.last_name),
-        email: cleanString(selectedLead.email),
+        subject: cleanString(selectedLead.subject),
         intent: selectedLead.intent,
+        engagement_score: selectedLead.engagement_score,
+        urgency: urgency,
+        last_message_type: lastMessage?.type || 'SENT',
+        last_message_content: cleanString((lastMessage?.content || '').substring(0, 300)),
+        reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
+        days_since_last_message: Math.floor((new Date() - new Date(lastMessage?.time || new Date())) / (1000 * 60 * 60 * 24)),
+        website: cleanString(selectedLead.website || ''),
+        content_brief: cleanString(selectedLead.content_brief || ''),
+        conversation: selectedLead.conversation.map(msg => ({
+          ...msg,
+          content: cleanString(msg.content),
+          from: cleanString(msg.from || ''),
+          to: cleanString(msg.to || '')
+        })),
         email_message_body: selectedLead.email_message_body || ''
       };
 
       console.log('=== WEBHOOK DEBUG INFO ===');
-      console.log('Testing with minimal payload:');
-      console.log('- id:', minimalPayload.id);
-      console.log('- first_name:', minimalPayload.first_name);
-      console.log('- last_name:', minimalPayload.last_name);
-      console.log('- email:', minimalPayload.email);
-      console.log('- intent:', minimalPayload.intent);
-      console.log('- email_message_body length:', minimalPayload.email_message_body?.length || 0);
-      console.log('Full payload:', JSON.stringify(minimalPayload, null, 2));
+      console.log('Payload being sent:', JSON.stringify(fullPayload, null, 2));
+      console.log('Payload size (characters):', JSON.stringify(fullPayload).length);
       console.log('URL:', 'https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b');
 
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
@@ -577,7 +586,7 @@ const InboxManager = () => {
         headers: { 
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(minimalPayload)
+        body: JSON.stringify(fullPayload)
       });
       
       console.log('=== RESPONSE DEBUG INFO ===');
