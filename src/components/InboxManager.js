@@ -241,11 +241,12 @@ const InboxManager = () => {
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [showFilterPopup, setShowFilterPopup] = useState(false);
-  const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
+  const [activeSorts, setActiveSorts] = useState([{ field: 'recent', direction: 'desc' }]);
   const [activeFilters, setActiveFilters] = useState({});
 
   // Available sort options
   const sortOptions = [
+    { field: 'recent', label: 'Most Recent Lead Created', getValue: (lead) => new Date(lead.created_at_best) },
     { field: 'last_reply', label: 'Most Recent Lead Reply', getValue: (lead) => {
       const lastReply = getLastResponseFromThem(lead.conversation);
       return lastReply ? new Date(lastReply) : new Date(0);
@@ -343,7 +344,7 @@ const InboxManager = () => {
   const handleRemoveSort = (field) => {
     setActiveSorts(prev => prev.filter(s => s.field !== field));
     if (activeSorts.length === 1) {
-      setActiveSorts([{ field: 'last_reply', direction: 'desc' }]); // Always have at least one sort
+      setActiveSorts([{ field: 'recent', direction: 'desc' }]); // Always have at least one sort
     }
   };
 
