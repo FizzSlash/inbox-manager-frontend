@@ -115,7 +115,7 @@ const InboxManager = () => {
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
           deal_value_estimate: engagementScore > 80 ? 36000 : engagementScore > 60 ? 24000 : 18000,
-          tags: [lead.lead_category ? getCategoryName(lead.lead_category) : 'Uncategorized'],
+          tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
           conversation: conversation
         };
       });
