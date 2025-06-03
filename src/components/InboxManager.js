@@ -1167,10 +1167,9 @@ const InboxManager = () => {
               transform: translateY(-50%);
             `;
             
-            // Create text content
+            // Create text content without explicit color
             const textContent = document.createElement('span');
             textContent.textContent = line;
-            textContent.style.color = 'white';
             
             listItem.appendChild(bullet);
             listItem.appendChild(textContent);
@@ -1203,9 +1202,8 @@ const InboxManager = () => {
           transform: translateY(-50%);
         `;
         
-        // Create editable content area
+        // Create editable content area without explicit color
         const textContent = document.createElement('span');
-        textContent.style.color = 'white';
         
         listItem.appendChild(bullet);
         listItem.appendChild(textContent);
