@@ -1555,7 +1555,7 @@ const InboxManager = () => {
   const enrichLeadData = async (lead) => {
     setIsEnriching(true);
     try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1568,8 +1568,14 @@ const InboxManager = () => {
       }
 
       const data = await response.json();
-      setEnrichmentData(data);
-      setShowEnrichmentPopup(true);
+      // Parse the text field which contains the JSON string
+      const enrichedData = JSON.parse(data.text);
+      setEnrichmentData({
+        role: enrichedData.role || 'N/A',
+        companySummary: enrichedData["Company Summary"] || 'N/A',
+        linkedin: enrichedData.LinkedIn || 'N/A'
+      });
+      setShowEnrichmentPopup(false); // We're not using the popup anymore
     } catch (error) {
       console.error('Error enriching lead:', error);
     } finally {
