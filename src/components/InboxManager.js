@@ -1166,7 +1166,7 @@ const InboxManager = () => {
               transform: translateY(-50%);
             `;
             
-            // Create text content
+            // Create text content without explicit color
             const textContent = document.createElement('span');
             textContent.textContent = line;
             
@@ -1200,7 +1200,7 @@ const InboxManager = () => {
           transform: translateY(-50%);
         `;
         
-        // Create editable content area
+        // Create editable content area without explicit color
         const textContent = document.createElement('span');
         
         listItem.appendChild(bullet);
@@ -2639,7 +2639,6 @@ const InboxManager = () => {
                                   bullet.style.cssText = `
                                     position: absolute;
                                     left: 4px;
-                                    color: white;
                                     font-size: 1.2em;
                                     line-height: 1;
                                     top: 50%;
