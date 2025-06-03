@@ -2171,27 +2171,29 @@ const InboxManager = () => {
 
                       {/* Rich Text Editor */}
                       <div
+                        ref={editorRef}
                         contentEditable
                         suppressContentEditableWarning={true}
-                        onInput={handleTextareaChange}
-                        dangerouslySetInnerHTML={{ __html: draftHtml || draftResponse }}
-                        dir="ltr"
-                        lang="en"
+                        onInput={(e) => {
+                          const text = e.target.textContent || '';
+                          const html = e.target.innerHTML || '';
+                          setDraftResponse(text);
+                          setDraftHtml(html);
+                        }}
                         onKeyDown={(e) => {
-                          // Handle common keyboard shortcuts
                           if (e.ctrlKey || e.metaKey) {
                             switch(e.key) {
                               case 'b':
                                 e.preventDefault();
-                                formatText('bold');
+                                document.execCommand('bold', false);
                                 break;
                               case 'i':
                                 e.preventDefault();
-                                formatText('italic');
+                                document.execCommand('italic', false);
                                 break;
                               case 'u':
                                 e.preventDefault();
-                                formatText('underline');
+                                document.execCommand('underline', false);
                                 break;
                             }
                           }
@@ -2202,52 +2204,33 @@ const InboxManager = () => {
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
                           minHeight: '160px',
-                          direction: 'ltr',
-                          textAlign: 'left',
-                          writingMode: 'horizontal-tb'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
-                      />
+                      >
+                        {draftResponse || draftHtml || ''}
+                      </div>
 
                       {/* Add CSS for rich text editor content */}
-                      <style jsx>{`
+                      <style jsx global>{`
                         [contenteditable] {
-                          direction: ltr !important;
-                          text-align: left !important;
-                          writing-mode: horizontal-tb !important;
+                          text-align: left;
                         }
                         [contenteditable] * {
-                          direction: ltr !important;
-                          text-align: left !important;
-                          writing-mode: horizontal-tb !important;
-                        }
-                        [contenteditable] p {
-                          direction: ltr !important;
-                          text-align: left !important;
-                          writing-mode: horizontal-tb !important;
-                        }
-                        [contenteditable] div {
-                          direction: ltr !important;
-                          text-align: left !important;
-                          writing-mode: horizontal-tb !important;
+                          text-align: left;
                         }
                         [contenteditable] ul {
-                          list-style-type: disc !important;
-                          margin-left: 20px !important;
-                          padding-left: 20px !important;
-                          display: block !important;
-                          direction: ltr !important;
-                          text-align: left !important;
+                          list-style-type: disc;
+                          margin-left: 20px;
+                          padding-left: 20px;
+                          display: block;
                         }
                         [contenteditable] li {
-                          display: list-item !important;
-                          margin: 5px 0 !important;
-                          direction: ltr !important;
-                          text-align: left !important;
+                          display: list-item;
+                          margin: 5px 0;
                         }
                         [contenteditable] a {
-                          color: #54FCFF !important;
-                          text-decoration: underline !important;
+                          color: #54FCFF;
+                          text-decoration: underline;
                         }
                         [contenteditable] a:hover {
                           opacity: 0.8;
@@ -2255,8 +2238,6 @@ const InboxManager = () => {
                         [contenteditable]:empty:before {
                           content: attr(data-placeholder);
                           color: rgba(255, 255, 255, 0.4);
-                          direction: ltr !important;
-                          text-align: left !important;
                         }
                       `}</style>
                       
