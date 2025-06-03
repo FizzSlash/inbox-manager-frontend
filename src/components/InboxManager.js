@@ -2294,6 +2294,35 @@ const InboxManager = () => {
                         return lastReply ? formatTime(lastReply) : 'No replies yet';
                       })()}</p>
                     </div>
+                    {enrichmentData && (
+                      <>
+                        <div>
+                          <span className="text-gray-300">Role:</span>
+                          <p className="font-medium text-white">{enrichmentData.role || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-300">Company Summary:</span>
+                          <p className="font-medium text-white">{enrichmentData.companySummary || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-300">LinkedIn:</span>
+                          {enrichmentData.linkedin ? (
+                            <a
+                              href={enrichmentData.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium hover:opacity-80 flex items-center gap-1"
+                              style={{color: '#54FCFF'}}
+                            >
+                              View Profile
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <p className="font-medium text-white">N/A</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                     <div className="col-span-2">
                       <span className="text-gray-300">Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
