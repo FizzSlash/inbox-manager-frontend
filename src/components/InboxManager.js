@@ -85,7 +85,7 @@ const InboxManager = () => {
               return {
                 from: msg.from || '',
                 to: msg.to || '',
-                cc: msg.cc || null, // Make sure CC data is preserved
+                cc: msg.cc || null,
                 type: msg.type || 'SENT',
                 time: msg.time || new Date().toISOString(),
                 content: extractTextFromHTML(msg.email_body || ''),
@@ -98,7 +98,6 @@ const InboxManager = () => {
             
             // Extract subject from the first message in conversation or any message with subject
             if (conversation.length > 0) {
-              // Try to find the first message with a subject
               const messageWithSubject = conversation.find(msg => msg.subject && msg.subject.trim() !== '');
               if (messageWithSubject) {
                 extractedSubject = messageWithSubject.subject.trim();
@@ -162,7 +161,11 @@ const InboxManager = () => {
           engagement_score: engagementScore,
           lead_category: lead.lead_category,
           tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
-          conversation: conversation
+          conversation: conversation,
+          // Include the Supabase fields with their values or defaults
+          role: lead.role || 'N/A',
+          company_data: lead.company_data || 'N/A',
+          linkedin_url: lead.linkedin_url || 'N/A'
         };
       });
       
@@ -1570,27 +1573,22 @@ const InboxManager = () => {
       const enrichedData = await response.json();
       console.log('Raw webhook response:', enrichedData);
 
-      // Update the leads array with the new enriched data
-      setLeads(prevLeads => prevLeads.map(l => {
-        if (l.id === lead.id) {
-          return {
-            ...l,
-            role: enrichedData.Role,
-            company_data: enrichedData["Company Summary"],
-            linkedin_url: enrichedData.LinkedIn
-          };
-        }
-        return l;
-      }));
+      // Create a new lead object with the enriched data
+      const updatedLead = {
+        ...lead,
+        role: enrichedData.Role,
+        company_data: enrichedData["Company Summary"],
+        linkedin_url: enrichedData.LinkedIn
+      };
 
-      // Also update selectedLead if this is the currently selected lead
+      // Update the leads array
+      setLeads(prevLeads => prevLeads.map(l => 
+        l.id === lead.id ? updatedLead : l
+      ));
+
+      // If this is the selected lead, update it with a new object reference
       if (selectedLead?.id === lead.id) {
-        setSelectedLead(prev => ({
-          ...prev,
-          role: enrichedData.Role,
-          company_data: enrichedData["Company Summary"],
-          linkedin_url: enrichedData.LinkedIn
-        }));
+        setSelectedLead(updatedLead);
       }
 
     } catch (error) {
