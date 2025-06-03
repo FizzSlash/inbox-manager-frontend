@@ -902,11 +902,20 @@ const InboxManager = () => {
   };
 
   const handleTextareaChange = (e) => {
-    setDraftResponse(e.target.textContent || e.target.innerText);
-    setDraftHtml(e.target.innerHTML);
+    const content = e.target.textContent || e.target.innerText || '';
+    const html = e.target.innerHTML || '';
+    
+    // Ensure text direction is maintained
+    if (content !== draftResponse) {
+      setDraftResponse(content);
+    }
+    if (html !== draftHtml) {
+      setDraftHtml(html);
+    }
   };
 
   const convertToHtml = (text) => {
+    if (!text) return '';
     return text.replace(/\n/g, '<br>');
   };
   const formatResponseTime = (hours) => {
@@ -2166,6 +2175,8 @@ const InboxManager = () => {
                         suppressContentEditableWarning={true}
                         onInput={handleTextareaChange}
                         dangerouslySetInnerHTML={{ __html: draftHtml || draftResponse }}
+                        dir="ltr"
+                        lang="en"
                         onKeyDown={(e) => {
                           // Handle common keyboard shortcuts
                           if (e.ctrlKey || e.metaKey) {
@@ -2193,7 +2204,7 @@ const InboxManager = () => {
                           minHeight: '160px',
                           direction: 'ltr',
                           textAlign: 'left',
-                          unicodeBidi: 'plaintext'
+                          writingMode: 'horizontal-tb'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       />
@@ -2203,18 +2214,30 @@ const InboxManager = () => {
                         [contenteditable] {
                           direction: ltr !important;
                           text-align: left !important;
-                          unicode-bidi: plaintext !important;
+                          writing-mode: horizontal-tb !important;
                         }
                         [contenteditable] * {
                           direction: ltr !important;
                           text-align: left !important;
-                          unicode-bidi: plaintext !important;
+                          writing-mode: horizontal-tb !important;
+                        }
+                        [contenteditable] p {
+                          direction: ltr !important;
+                          text-align: left !important;
+                          writing-mode: horizontal-tb !important;
+                        }
+                        [contenteditable] div {
+                          direction: ltr !important;
+                          text-align: left !important;
+                          writing-mode: horizontal-tb !important;
                         }
                         [contenteditable] ul {
                           list-style-type: disc !important;
                           margin-left: 20px !important;
                           padding-left: 20px !important;
                           display: block !important;
+                          direction: ltr !important;
+                          text-align: left !important;
                         }
                         [contenteditable] li {
                           display: list-item !important;
@@ -2232,6 +2255,8 @@ const InboxManager = () => {
                         [contenteditable]:empty:before {
                           content: attr(data-placeholder);
                           color: rgba(255, 255, 255, 0.4);
+                          direction: ltr !important;
+                          text-align: left !important;
                         }
                       `}</style>
                       
