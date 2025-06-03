@@ -1105,14 +1105,36 @@ const InboxManager = () => {
           .replace(/\\n/g, '\n')  // Convert literal \n to actual line breaks
           .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
           .trim();
+
+        // Update both the text state and HTML content
         setDraftResponse(cleanResponseText);
+        const formattedHtml = convertToHtml(cleanResponseText);
+        setDraftHtml(formattedHtml);
+
+        // Update the contenteditable div
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = formattedHtml;
+        }
+
         console.log('Draft set successfully from object format');
       } else if (data && data.length > 0 && data[0].text) {
         const cleanResponseText = data[0].text
           .replace(/\\n/g, '\n')
           .replace(/\\r/g, '\r')
           .trim();
+
+        // Update both the text state and HTML content
         setDraftResponse(cleanResponseText);
+        const formattedHtml = convertToHtml(cleanResponseText);
+        setDraftHtml(formattedHtml);
+
+        // Update the contenteditable div
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = formattedHtml;
+        }
+
         console.log('Draft set successfully from array format');
       } else {
         console.error('No text found in response:', data);
