@@ -1023,8 +1023,13 @@ const InboxManager = () => {
         link.addEventListener('mouseleave', (e) => {
           link.style.color = '#0066cc';
           const removeBtn = link.querySelector('.remove-link');
-          if (removeBtn && !removeBtn.matches(':hover')) {
-            removeBtn.style.opacity = '0';
+          if (removeBtn) {
+            // Remove the button after a short delay to allow clicking it
+            setTimeout(() => {
+              if (!removeBtn.matches(':hover')) {
+                removeBtn.remove();
+              }
+            }, 100);
           }
         });
       };
@@ -1096,16 +1101,33 @@ const InboxManager = () => {
     
     if (selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
+      const selectedText = selection.toString().trim();
       
-      // Create list HTML
-      const listHtml = '<ul><li>List item 1</li><li>List item 2</li></ul>';
-      
-      // Insert the list
-      const listElement = document.createElement('div');
-      listElement.innerHTML = listHtml;
-      
-      range.deleteContents();
-      range.insertNode(listElement.firstChild);
+      if (selectedText) {
+        // If text is selected, convert each line to a bullet point
+        const lines = selectedText.split('\n');
+        const bulletList = lines
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .map(line => `• ${line}`)
+          .join('\n');
+        
+        const listElement = document.createElement('div');
+        listElement.innerHTML = bulletList;
+        
+        range.deleteContents();
+        range.insertNode(listElement);
+      } else {
+        // If no text is selected, just insert a bullet point
+        const bulletPoint = document.createTextNode('• ');
+        range.insertNode(bulletPoint);
+        
+        // Move cursor after bullet point
+        range.setStartAfter(bulletPoint);
+        range.setEndAfter(bulletPoint);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
       
       // Update the draft content
       handleTextareaChange({ target: editor });
