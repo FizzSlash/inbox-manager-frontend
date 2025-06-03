@@ -309,7 +309,6 @@ const InboxManager = () => {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [draftResponse, setDraftResponse] = useState('');
-  const [draftHtml, setDraftHtml] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
@@ -321,6 +320,7 @@ const InboxManager = () => {
   // New state for rich text editor
   const [showFormatting, setShowFormatting] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [draftHtml, setDraftHtml] = useState('');
   
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
@@ -833,103 +833,136 @@ const InboxManager = () => {
 
   // Rich text formatting functions
   const formatText = (command, value = null) => {
-    const editor = document.querySelector('[contenteditable]');
-    if (!editor) return;
-    
-    // Save current selection
-    const selection = window.getSelection();
-    const range = selection.getRangeAt(0);
-    
-    // Apply formatting
     document.execCommand(command, false, value);
+  };
+
+  const insertLink = () => {
+    // Create custom styled prompt modal instead of browser prompt
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
     
-    // Ensure editor keeps focus
-    editor.focus();
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: #1A1C1A;
+      border: 1px solid white;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+    `;
     
-    // Update state
-    handleTextareaChange({ target: editor });
+    dialog.innerHTML = `
+      <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
+      <input 
+        type="url" 
+        placeholder="Enter URL (https://example.com)"
+        style="
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.05);
+          color: white;
+          margin-bottom: 16px;
+        "
+        id="url-input"
+      />
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button 
+          id="cancel-link"
+          style="
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            cursor: pointer;
+          "
+        >Cancel</button>
+        <button 
+          id="insert-link"
+          style="
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #54FCFF;
+            color: #1A1C1A;
+            cursor: pointer;
+            font-weight: bold;
+          "
+        >Insert Link</button>
+      </div>
+    `;
+    
+    modal.appendChild(dialog);
+    document.body.appendChild(modal);
+    
+    const urlInput = dialog.querySelector('#url-input');
+    const insertBtn = dialog.querySelector('#insert-link');
+    const cancelBtn = dialog.querySelector('#cancel-link');
+    
+    urlInput.focus();
+    
+    const handleInsert = () => {
+      const url = urlInput.value.trim();
+      if (url) {
+        const selectedText = window.getSelection().toString();
+        const linkText = selectedText || url;
+        formatText('createLink', url);
+      }
+      document.body.removeChild(modal);
+    };
+    
+    const handleCancel = () => {
+      document.body.removeChild(modal);
+    };
+    
+    insertBtn.onclick = handleInsert;
+    cancelBtn.onclick = handleCancel;
+    modal.onclick = (e) => e.target === modal && handleCancel();
+    urlInput.onkeydown = (e) => e.key === 'Enter' && handleInsert();
   };
 
   const insertList = () => {
+    // Get current selection and editor
     const editor = document.querySelector('[contenteditable]');
     const selection = window.getSelection();
     
     if (selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
-      const selectedText = range.toString().trim();
       
-      // Create a single bullet point
-      const listHtml = document.createElement('ul');
-      listHtml.style.listStyleType = 'disc';
-      listHtml.style.marginLeft = '20px';
-      listHtml.style.paddingLeft = '20px';
-      
-      const listItem = document.createElement('li');
-      if (selectedText) {
-        // If text is selected, use it as bullet point content
-        listItem.textContent = selectedText;
-      }
-      listHtml.appendChild(listItem);
+      // Create list HTML
+      const listHtml = '<ul><li>List item 1</li><li>List item 2</li></ul>';
       
       // Insert the list
-      range.deleteContents();
-      range.insertNode(listHtml);
+      const listElement = document.createElement('div');
+      listElement.innerHTML = listHtml;
       
-      // Place cursor at end of list item
-      const newRange = document.createRange();
-      newRange.selectNodeContents(listItem);
-      newRange.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      range.deleteContents();
+      range.insertNode(listElement.firstChild);
       
       // Update the draft content
       handleTextareaChange({ target: editor });
     }
   };
 
-  const insertLink = () => {
-    const editor = document.querySelector('[contenteditable]');
-    const selection = window.getSelection();
-    
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const selectedText = range.toString().trim();
-      
-      // Prompt for URL with https:// prefilled
-      const url = prompt('Enter URL:', 'https://');
-      if (url && url.trim() !== '' && url !== 'https://') {
-        const linkElement = document.createElement('a');
-        linkElement.href = url;
-        linkElement.textContent = selectedText || url;
-        linkElement.style.color = '#54FCFF';
-        linkElement.style.textDecoration = 'underline';
-        linkElement.title = url;
-        
-        // Insert the link
-        range.deleteContents();
-        range.insertNode(linkElement);
-        
-        // Update the draft content
-        handleTextareaChange({ target: editor });
-      }
-    }
-  };
-
   const handleTextareaChange = (e) => {
-    const content = e.target.textContent || e.target.innerText || '';
-    const html = e.target.innerHTML || '';
-    
-    // Ensure text direction is maintained
-    if (content !== draftResponse) {
-      setDraftResponse(content);
-    }
-    if (html !== draftHtml) {
-      setDraftHtml(html);
-    }
+    setDraftResponse(e.target.textContent || e.target.innerText);
+    setDraftHtml(e.target.innerHTML);
   };
 
   const convertToHtml = (text) => {
-    if (!text) return '';
     return text.replace(/\n/g, '<br>');
   };
   const formatResponseTime = (hours) => {
@@ -1073,7 +1106,6 @@ const InboxManager = () => {
           .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
           .trim();
         setDraftResponse(cleanResponseText);
-        setDraftHtml(convertToHtml(cleanResponseText)); // Set the HTML content
         console.log('Draft set successfully from object format');
       } else if (data && data.length > 0 && data[0].text) {
         const cleanResponseText = data[0].text
@@ -1081,7 +1113,6 @@ const InboxManager = () => {
           .replace(/\\r/g, '\r')
           .trim();
         setDraftResponse(cleanResponseText);
-        setDraftHtml(convertToHtml(cleanResponseText)); // Set the HTML content
         console.log('Draft set successfully from array format');
       } else {
         console.error('No text found in response:', data);
@@ -1227,15 +1258,6 @@ const InboxManager = () => {
     }
   };
 
-  // Add file upload feedback state
-  const [attachedFiles, setAttachedFiles] = useState([]);
-
-  // Handle file attachment
-  const handleFileAttachment = (e) => {
-    const files = Array.from(e.target.files);
-    setAttachedFiles(files);
-  };
-
   // Loading state
   if (loading) {
     return (
@@ -1303,7 +1325,7 @@ const InboxManager = () => {
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />>
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white relative">
               Inbox Manager
@@ -2171,7 +2193,6 @@ const InboxManager = () => {
                           accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
                           className="hidden"
                           id="attachment-input"
-                          onChange={handleFileAttachment}
                         />
                         <label
                           htmlFor="attachment-input"
@@ -2187,16 +2208,9 @@ const InboxManager = () => {
                       <div
                         contentEditable
                         suppressContentEditableWarning={true}
-                        onInput={(e) => {
-                          const editor = e.target;
-                          const text = editor.textContent || '';
-                          const html = editor.innerHTML || '';
-                          
-                          // Update state
-                          setDraftResponse(text);
-                          setDraftHtml(html);
-                        }}
+                        onInput={handleTextareaChange}
                         onKeyDown={(e) => {
+                          // Handle common keyboard shortcuts
                           if (e.ctrlKey || e.metaKey) {
                             switch(e.key) {
                               case 'b':
@@ -2219,69 +2233,10 @@ const InboxManager = () => {
                           backgroundColor: 'rgba(255, 255, 255, 0.03)', 
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
-                          minHeight: '160px',
-                          textAlign: 'left'
+                          minHeight: '160px'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
-                      >
-                        {draftResponse || ''}
-                      </div>
-
-                      {/* Add CSS for rich text editor content */}
-                      <style jsx global>{`
-                        [contenteditable] {
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] * {
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] p {
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] div {
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] ul {
-                          list-style-type: disc !important;
-                          margin-left: 20px !important;
-                          padding-left: 20px !important;
-                          display: block !important;
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] li {
-                          display: list-item !important;
-                          margin: 5px 0 !important;
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] a {
-                          color: #54FCFF !important;
-                          text-decoration: underline !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                        [contenteditable] a:hover {
-                          opacity: 0.8;
-                        }
-                        [contenteditable]:empty:before {
-                          content: attr(data-placeholder);
-                          color: rgba(255, 255, 255, 0.4);
-                          text-align: left !important;
-                          direction: ltr !important;
-                          unicode-bidi: embed !important;
-                        }
-                      `}</style>
+                      />
                       
                       {/* Show HTML preview for debugging */}
                       {draftHtml && (
