@@ -875,8 +875,11 @@ const InboxManager = () => {
           background: rgba(255, 255, 255, 0.05);
           color: white;
           margin-bottom: 16px;
+          outline: none;
         "
         id="url-input"
+        autocomplete="off"
+        spellcheck="false"
       />
       <div style="display: flex; gap: 8px; justify-content: flex-end;">
         <button 
@@ -912,6 +915,19 @@ const InboxManager = () => {
     const insertBtn = dialog.querySelector('#insert-link');
     const cancelBtn = dialog.querySelector('#cancel-link');
     
+    // Prevent modal from closing when clicking input
+    urlInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Prevent modal from closing when typing
+    urlInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        handleInsert();
+      }
+    });
+
     urlInput.focus();
     
     const handleInsert = () => {
