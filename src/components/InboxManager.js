@@ -1570,31 +1570,23 @@ const InboxManager = () => {
       const data = await response.json();
       console.log('Raw webhook response:', data);
 
-      // Clean up the text field by removing escaped characters
-      const cleanedJsonString = data.text
-        .replace(/\\n/g, '')
-        .replace(/\\"/g, '"')
-        .replace(/^"""/, '')
-        .replace(/"""$/, '')
-        .trim();
-
-      console.log('Cleaned JSON string:', cleanedJsonString);
-
-      // Parse the cleaned JSON string
-      const enrichedData = JSON.parse(cleanedJsonString);
+      // The response is now an array with a single object
+      const enrichedData = Array.isArray(data) ? data[0] : data;
       console.log('Parsed enriched data:', enrichedData);
 
-      setEnrichmentData({
-        role: enrichedData.Role || 'N/A',
-        companySummary: enrichedData["Company Summary"] || 'N/A',
-        linkedin: enrichedData.LinkedIn || 'N/A'
-      });
+      // Update the leads array with the new enriched data
+      setLeads(prevLeads => prevLeads.map(l => {
+        if (l.id === lead.id) {
+          return {
+            ...l,
+            role: enrichedData.Role || 'N/A',
+            company_data: enrichedData["Company Summary"] || 'N/A',
+            linkedin_url: enrichedData.LinkedIn || 'N/A'
+          };
+        }
+        return l;
+      }));
 
-      console.log('Final enrichment data set:', {
-        role: enrichedData.Role || 'N/A',
-        companySummary: enrichedData["Company Summary"] || 'N/A',
-        linkedin: enrichedData.LinkedIn || 'N/A'
-      });
     } catch (error) {
       console.error('Error enriching lead:', error);
       console.error('Error details:', {
@@ -2302,15 +2294,34 @@ const InboxManager = () => {
                       </p>
                     </div>
                     <div>
+                      <span className="text-gray-300">Role:</span>
+                      <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Company Summary:</span>
+                      <p className="font-medium text-white">{selectedLead.company_data || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">LinkedIn:</span>
+                      {selectedLead.linkedin_url ? (
+                        <a
+                          href={selectedLead.linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium hover:opacity-80 flex items-center gap-1"
+                          style={{color: '#54FCFF'}}
+                        >
+                          View Profile
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <p className="font-medium text-white">N/A</p>
+                      )}
+                    </div>
+                    <div>
                       <span className="text-gray-300">Reply Count:</span>
                       <p className="font-medium text-white">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
                     </div>
-                    {enrichmentData && (
-                      <div>
-                        <span className="text-gray-300">Company Summary:</span>
-                        <p className="font-medium text-white">{enrichmentData.companySummary || 'N/A'}</p>
-                      </div>
-                    )}
                     <div>
                       <span className="text-gray-300">Last Reply from Lead:</span>
                       <p className="font-medium text-white">{(() => {
@@ -2325,31 +2336,6 @@ const InboxManager = () => {
                         return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
                       })()}</p>
                     </div>
-                    {enrichmentData && (
-                      <>
-                        <div>
-                          <span className="text-gray-300">Role:</span>
-                          <p className="font-medium text-white">{enrichmentData.role || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-300">LinkedIn:</span>
-                          {enrichmentData.linkedin ? (
-                            <a
-                              href={enrichmentData.linkedin}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium hover:opacity-80 flex items-center gap-1"
-                              style={{color: '#54FCFF'}}
-                            >
-                              View Profile
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          ) : (
-                            <p className="font-medium text-white">N/A</p>
-                          )}
-                        </div>
-                      </>
-                    )}
                     <div className="col-span-2">
                       <span className="text-gray-300">Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
