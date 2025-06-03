@@ -1160,14 +1160,13 @@ const InboxManager = () => {
             bullet.style.cssText = `
               position: absolute;
               left: 4px;
-              color: white;
               font-size: 1.2em;
               line-height: 1;
               top: 50%;
               transform: translateY(-50%);
             `;
             
-            // Create text content without explicit color
+            // Create text content
             const textContent = document.createElement('span');
             textContent.textContent = line;
             
@@ -1195,14 +1194,13 @@ const InboxManager = () => {
         bullet.style.cssText = `
           position: absolute;
           left: 4px;
-          color: white;
           font-size: 1.2em;
           line-height: 1;
           top: 50%;
           transform: translateY(-50%);
         `;
         
-        // Create editable content area without explicit color
+        // Create editable content area
         const textContent = document.createElement('span');
         
         listItem.appendChild(bullet);
