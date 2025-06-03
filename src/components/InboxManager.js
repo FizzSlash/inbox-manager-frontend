@@ -837,12 +837,12 @@ const InboxManager = () => {
   };
 
   const insertLink = () => {
-    // Store the current selection before creating modal
     const selection = window.getSelection();
-    const selectedText = selection.toString();
+    const selectedText = selection.toString().trim();
     const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const editor = document.querySelector('[contenteditable]');
 
-    // Create modal
+    // Create modal with clean styling
     const modal = document.createElement('div');
     modal.style.cssText = `
       position: fixed;
@@ -857,89 +857,162 @@ const InboxManager = () => {
       z-index: 1000;
     `;
 
-    const content = `
-      <div style="
-        background: #1A1C1A;
-        border: 1px solid white;
-        border-radius: 8px;
-        padding: 24px;
-        width: 400px;
-        max-width: 90vw;
-      ">
-        <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; color: white; font-size: 12px; margin-bottom: 4px;">Text to display:</label>
-          <input 
-            type="text" 
-            id="text-input"
-            value="${selectedText}"
-            placeholder="Link text"
-            style="
-              width: 100%;
-              padding: 8px 12px;
-              border: 1px solid rgba(255, 255, 255, 0.2);
-              border-radius: 6px;
-              background: #2A2C2A;
-              color: white;
-              margin-bottom: 8px;
-              font-size: 14px;
-            "
-          >
-        </div>
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; color: white; font-size: 12px; margin-bottom: 4px;">URL:</label>
-          <input 
-            type="text" 
-            id="url-input"
-            placeholder="https://example.com"
-            style="
-              width: 100%;
-              padding: 8px 12px;
-              border: 1px solid rgba(255, 255, 255, 0.2);
-              border-radius: 6px;
-              background: #2A2C2A;
-              color: white;
-              font-size: 14px;
-            "
-          >
-        </div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end;">
-          <button 
-            id="cancel-link"
-            style="
-              padding: 8px 16px;
-              border: 1px solid rgba(255, 255, 255, 0.2);
-              border-radius: 6px;
-              background: rgba(255, 255, 255, 0.05);
-              color: white;
-              cursor: pointer;
-            "
-          >Cancel</button>
-          <button 
-            id="insert-link"
-            style="
-              padding: 8px 16px;
-              border: none;
-              border-radius: 6px;
-              background: #54FCFF;
-              color: #1A1C1A;
-              cursor: pointer;
-              font-weight: bold;
-            "
-          >Insert Link</button>
-        </div>
-      </div>
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: #1A1C1A;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 24px;
+      width: 400px;
+      max-width: 90vw;
+      position: relative;
     `;
 
-    modal.innerHTML = content;
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+    `;
+    closeBtn.addEventListener('mouseover', () => closeBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)');
+    closeBtn.addEventListener('mouseout', () => closeBtn.style.backgroundColor = 'transparent');
+
+    // Title
+    const title = document.createElement('h3');
+    title.textContent = 'Insert Link';
+    title.style.cssText = `
+      color: white;
+      font-weight: bold;
+      margin: 0 0 20px 0;
+      font-size: 16px;
+    `;
+
+    // Text input container
+    const textContainer = document.createElement('div');
+    textContainer.style.marginBottom = '16px';
+    
+    const textLabel = document.createElement('label');
+    textLabel.textContent = 'Text to display:';
+    textLabel.style.cssText = `
+      display: block;
+      color: white;
+      font-size: 12px;
+      margin-bottom: 4px;
+    `;
+
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.value = selectedText;
+    textInput.placeholder = 'Link text';
+    textInput.style.cssText = `
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+    `;
+    textInput.addEventListener('focus', () => textInput.style.borderColor = '#54FCFF');
+    textInput.addEventListener('blur', () => textInput.style.borderColor = 'rgba(255, 255, 255, 0.2)');
+
+    // URL input container
+    const urlContainer = document.createElement('div');
+    urlContainer.style.marginBottom = '24px';
+    
+    const urlLabel = document.createElement('label');
+    urlLabel.textContent = 'URL:';
+    urlLabel.style.cssText = `
+      display: block;
+      color: white;
+      font-size: 12px;
+      margin-bottom: 4px;
+    `;
+
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.placeholder = 'https://example.com';
+    urlInput.style.cssText = textInput.style.cssText;
+    urlInput.addEventListener('focus', () => urlInput.style.borderColor = '#54FCFF');
+    urlInput.addEventListener('blur', () => urlInput.style.borderColor = 'rgba(255, 255, 255, 0.2)');
+
+    // Buttons container
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.cssText = `
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    `;
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.cssText = `
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    `;
+    cancelButton.addEventListener('mouseover', () => cancelButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)');
+    cancelButton.addEventListener('mouseout', () => cancelButton.style.backgroundColor = 'rgba(255, 255, 255, 0.05)');
+
+    const insertButton = document.createElement('button');
+    insertButton.textContent = 'Insert Link';
+    insertButton.style.cssText = `
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #54FCFF;
+      color: #1A1C1A;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    `;
+    insertButton.addEventListener('mouseover', () => insertButton.style.opacity = '0.9');
+    insertButton.addEventListener('mouseout', () => insertButton.style.opacity = '1');
+
+    // Error message element
+    const errorMessage = document.createElement('div');
+    errorMessage.style.cssText = `
+      color: #ff4444;
+      font-size: 12px;
+      margin-top: 8px;
+      min-height: 16px;
+    `;
+
+    // Assemble the modal
+    textContainer.appendChild(textLabel);
+    textContainer.appendChild(textInput);
+    urlContainer.appendChild(urlLabel);
+    urlContainer.appendChild(urlInput);
+    buttonsContainer.appendChild(cancelButton);
+    buttonsContainer.appendChild(insertButton);
+
+    content.appendChild(closeBtn);
+    content.appendChild(title);
+    content.appendChild(textContainer);
+    content.appendChild(urlContainer);
+    content.appendChild(errorMessage);
+    content.appendChild(buttonsContainer);
+    modal.appendChild(content);
+
+    // Add to document
     document.body.appendChild(modal);
 
-    const textInput = modal.querySelector('#text-input');
-    const urlInput = modal.querySelector('#url-input');
-    const insertBtn = modal.querySelector('#insert-link');
-    const cancelBtn = modal.querySelector('#cancel-link');
-
-    // Focus URL input if text is already selected, otherwise focus text input
+    // Focus URL input if text is selected, otherwise focus text input
     setTimeout(() => {
       if (selectedText) {
         urlInput.focus();
@@ -948,170 +1021,148 @@ const InboxManager = () => {
       }
     }, 50);
 
-    const handleInsert = () => {
-      const url = urlInput.value.trim();
+    const validateAndInsert = () => {
       const text = textInput.value.trim();
+      let url = urlInput.value.trim();
+
+      // Clear previous error
+      errorMessage.textContent = '';
+
+      // Validate inputs
+      if (!text) {
+        errorMessage.textContent = 'Please enter the text to display';
+        textInput.style.borderColor = '#ff4444';
+        return;
+      }
 
       if (!url) {
-        urlInput.style.border = '1px solid red';
+        errorMessage.textContent = 'Please enter a URL';
+        urlInput.style.borderColor = '#ff4444';
         return;
       }
 
-      if (!text) {
-        textInput.style.border = '1px solid red';
+      // Add protocol if missing
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch (e) {
+        errorMessage.textContent = 'Please enter a valid URL';
+        urlInput.style.borderColor = '#ff4444';
         return;
       }
 
-      // Ensure URL has protocol
-      const finalUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+      if (range && editor) {
+        // Create the link
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = text;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.cssText = `
+          color: #0066cc;
+          text-decoration: underline;
+          cursor: pointer;
+        `;
 
-      const editor = document.querySelector('[contenteditable]');
-      if (!editor) return;
-
-      // Create link element with standard styling
-      const linkElement = document.createElement('a');
-      linkElement.href = finalUrl;
-      linkElement.textContent = text;
-      linkElement.target = '_blank'; // Open in new tab
-      linkElement.style.cssText = `
-        color: #0066cc;
-        text-decoration: underline;
-        position: relative;
-      `;
-
-      // Add hover effects and remove button
-      const addHoverEffects = (link) => {
-        let removeTimeout;
-        
-        const cleanupRemoveButton = () => {
-          const removeBtn = link.querySelector('.remove-link');
-          if (removeBtn) {
-            removeBtn.remove();
-          }
-        };
-
-        const removeLink = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          // First clean up the remove button
-          cleanupRemoveButton();
-          // Then replace the link with just its text
-          const textNode = document.createTextNode(link.textContent);
-          link.parentNode.replaceChild(textNode, link);
-          // Update the editor content
-          const editor = document.querySelector('[contenteditable]');
-          if (editor) {
-            // Normalize the content to clean up any empty nodes
-            editor.normalize();
-            handleTextareaChange({ target: editor });
-          }
-        };
-
-        link.addEventListener('mouseenter', () => {
-          // Clear any pending removal
-          if (removeTimeout) {
-            clearTimeout(removeTimeout);
-          }
-          
-          // Clean up any existing button first
-          cleanupRemoveButton();
-          
+        // Add hover effect
+        link.addEventListener('mouseover', () => {
           link.style.color = '#004499';
+          link.style.position = 'relative';
           
-          const removeBtn = document.createElement('span');
-          removeBtn.className = 'remove-link';
-          removeBtn.innerHTML = '×';
+          // Show remove button on hover
+          const removeBtn = document.createElement('button');
+          removeBtn.textContent = '×';
+          removeBtn.className = 'link-remove-btn';
           removeBtn.style.cssText = `
             position: absolute;
             top: -12px;
             right: -12px;
             background: #e0e0e0;
             color: #333;
+            border: none;
             border-radius: 50%;
             width: 16px;
             height: 16px;
             font-size: 12px;
-            line-height: 16px;
-            text-align: center;
+            line-height: 1;
             cursor: pointer;
-            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
           `;
           
-          // Use the extracted removeLink function
-          removeBtn.addEventListener('click', removeLink);
+          removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const text = document.createTextNode(link.textContent);
+            link.parentNode.replaceChild(text, link);
+            handleTextareaChange({ target: editor });
+          });
           
           link.appendChild(removeBtn);
         });
 
+        // Remove the remove button when not hovering
         link.addEventListener('mouseleave', () => {
           link.style.color = '#0066cc';
-          removeTimeout = setTimeout(cleanupRemoveButton, 100);
+          const removeBtn = link.querySelector('.link-remove-btn');
+          if (removeBtn) {
+            removeBtn.remove();
+          }
         });
 
-        // Clean up on button mouseleave
-        link.addEventListener('mouseleave', (e) => {
-          if (e.target.classList.contains('remove-link')) {
-            cleanupRemoveButton();
-          }
-        }, true);
-      };
-
-      addHoverEffects(linkElement);
-
-      // Insert the link
-      if (range && selection.rangeCount > 0) {
-        // Replace selected text
+        // Insert the link
         range.deleteContents();
-        range.insertNode(linkElement);
-      } else {
-        // Insert at cursor position or end
-        const newRange = document.createRange();
-        const sel = window.getSelection();
+        range.insertNode(link);
         
-        if (sel.rangeCount > 0) {
-          // Get cursor position
-          newRange.setStart(sel.focusNode, sel.focusOffset);
-        } else {
-          // Insert at end if no cursor
-          newRange.selectNodeContents(editor);
-          newRange.collapse(false);
-        }
-        
-        newRange.insertNode(linkElement);
+        // Update editor content
+        handleTextareaChange({ target: editor });
       }
 
-      // Update content and clean up
-      handleTextareaChange({ target: editor });
-      document.body.removeChild(modal);
-    };
-
-    const handleCancel = () => {
+      // Close modal
       document.body.removeChild(modal);
     };
 
     // Event Listeners
-    insertBtn.addEventListener('click', handleInsert);
-    cancelBtn.addEventListener('click', handleCancel);
+    const closeModal = () => document.body.removeChild(modal);
     
-    // Handle Enter key in inputs
+    closeBtn.addEventListener('click', closeModal);
+    cancelButton.addEventListener('click', closeModal);
+    insertButton.addEventListener('click', validateAndInsert);
+    
+    // Handle Enter key
     [textInput, urlInput].forEach(input => {
       input.addEventListener('keydown', (e) => {
-        e.stopPropagation();
         if (e.key === 'Enter') {
-          handleInsert();
+          e.preventDefault();
+          validateAndInsert();
         }
       });
 
-      // Clear red border on input
+      // Reset border color on input
       input.addEventListener('input', () => {
-        input.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+        input.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+        errorMessage.textContent = '';
       });
     });
 
     // Close on background click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        handleCancel();
+        closeModal();
+      }
+    });
+
+    // Handle Escape key
+    document.addEventListener('keydown', function escapeHandler(e) {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', escapeHandler);
       }
     });
   };
