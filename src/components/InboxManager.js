@@ -942,8 +942,8 @@ const InboxManager = () => {
     if (selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
       
-      // Create list HTML
-      const listHtml = '<ul><li>List item 1</li><li>List item 2</li></ul>';
+      // Create list HTML with proper styling
+      const listHtml = '<ul style="list-style-type: disc; margin-left: 20px; padding-left: 20px;"><li>List item 1</li><li>List item 2</li></ul>';
       
       // Insert the list
       const listElement = document.createElement('div');
@@ -1258,6 +1258,15 @@ const InboxManager = () => {
     } finally {
       setIsSending(false);
     }
+  };
+
+  // Add file upload feedback state
+  const [attachedFiles, setAttachedFiles] = useState([]);
+
+  // Handle file attachment
+  const handleFileAttachment = (e) => {
+    const files = Array.from(e.target.files);
+    setAttachedFiles(files);
   };
 
   // Loading state
@@ -2195,6 +2204,7 @@ const InboxManager = () => {
                           accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
                           className="hidden"
                           id="attachment-input"
+                          onChange={handleFileAttachment}
                         />
                         <label
                           htmlFor="attachment-input"
@@ -2240,6 +2250,22 @@ const InboxManager = () => {
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       />
+
+                      {/* Add CSS for rich text editor content */}
+                      <style jsx>{`
+                        [contenteditable] ul {
+                          list-style-type: disc !important;
+                          margin-left: 20px !important;
+                          padding-left: 20px !important;
+                        }
+                        [contenteditable] li {
+                          display: list-item !important;
+                        }
+                        [contenteditable]:empty:before {
+                          content: attr(data-placeholder);
+                          color: rgba(255, 255, 255, 0.4);
+                        }
+                      `}</style>
                       
                       {/* Show HTML preview for debugging */}
                       {draftHtml && (
