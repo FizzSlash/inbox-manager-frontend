@@ -917,9 +917,81 @@ const InboxManager = () => {
     const handleInsert = () => {
       const url = urlInput.value.trim();
       if (url) {
-        const selectedText = window.getSelection().toString();
-        const linkText = selectedText || url;
-        formatText('createLink', url);
+        const selection = window.getSelection();
+        const range = selection.getRangeAt(0);
+        const selectedText = selection.toString();
+        
+        // Create the link element with neon styling and remove button
+        const linkElement = document.createElement('a');
+        linkElement.href = url;
+        linkElement.textContent = selectedText || url;
+        linkElement.style.cssText = `
+          color: #54FCFF;
+          text-decoration: none;
+          border-bottom: 2px solid #54FCFF;
+          box-shadow: 0 4px 8px rgba(84, 252, 255, 0.2);
+          padding: 0 2px;
+          position: relative;
+          transition: all 0.3s ease;
+        `;
+        
+        // Add hover effect
+        linkElement.addEventListener('mouseenter', () => {
+          linkElement.style.textShadow = '0 0 8px rgba(84, 252, 255, 0.5)';
+          
+          // Create remove button if it doesn't exist
+          if (!linkElement.querySelector('.remove-link')) {
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'remove-link';
+            removeBtn.innerHTML = '×';
+            removeBtn.style.cssText = `
+              position: absolute;
+              top: -12px;
+              right: -12px;
+              background: #54FCFF;
+              color: #1A1C1A;
+              border-radius: 50%;
+              width: 16px;
+              height: 16px;
+              font-size: 12px;
+              line-height: 16px;
+              text-align: center;
+              cursor: pointer;
+              opacity: 0;
+              transition: opacity 0.2s ease;
+            `;
+            
+            removeBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const textNode = document.createTextNode(linkElement.textContent);
+              linkElement.parentNode.replaceChild(textNode, linkElement);
+            });
+            
+            linkElement.appendChild(removeBtn);
+            
+            // Show remove button on hover
+            linkElement.addEventListener('mouseenter', () => {
+              removeBtn.style.opacity = '1';
+            });
+            
+            linkElement.addEventListener('mouseleave', () => {
+              removeBtn.style.opacity = '0';
+            });
+          }
+        });
+        
+        linkElement.addEventListener('mouseleave', () => {
+          linkElement.style.textShadow = 'none';
+        });
+        
+        // Replace the selected text with the link
+        range.deleteContents();
+        range.insertNode(linkElement);
+        
+        // Update the draft content
+        const editor = document.querySelector('[contenteditable]');
+        handleTextareaChange({ target: editor });
       }
       document.body.removeChild(modal);
     };
