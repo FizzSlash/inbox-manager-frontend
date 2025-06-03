@@ -7,6 +7,11 @@ const InboxManager = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Add new state for enrichment data
+  const [enrichmentData, setEnrichmentData] = useState(null);
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [showEnrichmentPopup, setShowEnrichmentPopup] = useState(false);
+
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
   const getLastResponseFromThem = (conversation) => {
@@ -1550,6 +1555,32 @@ const InboxManager = () => {
     }
   };
 
+  // Add enrichment function
+  const enrichLeadData = async (lead) => {
+    setIsEnriching(true);
+    try {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(lead)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to enrich lead data');
+      }
+
+      const data = await response.json();
+      setEnrichmentData(data);
+      setShowEnrichmentPopup(true);
+    } catch (error) {
+      console.error('Error enriching lead:', error);
+    } finally {
+      setIsEnriching(false);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -2205,10 +2236,30 @@ const InboxManager = () => {
               <div className="space-y-8">
                 {/* Lead Information */}
                 <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                    <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                    Lead Information
-                  </h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-white flex items-center text-lg">
+                      <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                      Lead Information
+                    </h3>
+                    <button
+                      onClick={() => enrichLeadData(selectedLead)}
+                      disabled={isEnriching}
+                      className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                      style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                    >
+                      {isEnriching ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                          Enriching...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4" />
+                          Enrich
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-300">Subject:</span>
@@ -2690,6 +2741,53 @@ const InboxManager = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Enrichment Popup */}
+      {showEnrichmentPopup && enrichmentData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" style={{backgroundColor: '#1A1C1A', border: '1px solid rgba(84, 252, 255, 0.3)'}}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold" style={{color: '#54FCFF'}}>Enriched Lead Data</h3>
+              <button
+                onClick={() => setShowEnrichmentPopup(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-gray-400 text-sm">Role</label>
+                <p className="text-white font-medium">{enrichmentData.role || 'N/A'}</p>
+              </div>
+              
+              <div>
+                <label className="text-gray-400 text-sm">Company Summary</label>
+                <p className="text-white font-medium">{enrichmentData.companySummary || 'N/A'}</p>
+              </div>
+              
+              <div>
+                <label className="text-gray-400 text-sm">LinkedIn</label>
+                {enrichmentData.linkedin ? (
+                  <a
+                    href={enrichmentData.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:opacity-80 transition-colors mt-1"
+                    style={{color: '#54FCFF'}}
+                  >
+                    {enrichmentData.linkedin}
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                ) : (
+                  <p className="text-white">N/A</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
