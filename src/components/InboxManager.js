@@ -2276,13 +2276,12 @@ const InboxManager = () => {
                       <span className="text-gray-300">Reply Count:</span>
                       <p className="font-medium text-white">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
                     </div>
-                    <div>
-                      <span className="text-gray-300">Last Followup:</span>
-                      <p className="font-medium text-white">{(() => {
-                        const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
-                        return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
-                      })()}</p>
-                    </div>
+                    {enrichmentData && (
+                      <div>
+                        <span className="text-gray-300">Company Summary:</span>
+                        <p className="font-medium text-white">{enrichmentData.companySummary || 'N/A'}</p>
+                      </div>
+                    )}
                     <div>
                       <span className="text-gray-300">Last Reply from Lead:</span>
                       <p className="font-medium text-white">{(() => {
@@ -2290,15 +2289,18 @@ const InboxManager = () => {
                         return lastReply ? formatTime(lastReply) : 'No replies yet';
                       })()}</p>
                     </div>
+                    <div>
+                      <span className="text-gray-300">Last Followup:</span>
+                      <p className="font-medium text-white">{(() => {
+                        const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
+                        return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
+                      })()}</p>
+                    </div>
                     {enrichmentData && (
                       <>
                         <div>
                           <span className="text-gray-300">Role:</span>
                           <p className="font-medium text-white">{enrichmentData.role || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-300">Company Summary:</span>
-                          <p className="font-medium text-white">{enrichmentData.companySummary || 'N/A'}</p>
                         </div>
                         <div>
                           <span className="text-gray-300">LinkedIn:</span>
