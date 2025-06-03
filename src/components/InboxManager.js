@@ -309,6 +309,7 @@ const InboxManager = () => {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [draftResponse, setDraftResponse] = useState('');
+  const [draftHtml, setDraftHtml] = useState('');
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
@@ -320,7 +321,6 @@ const InboxManager = () => {
   // New state for rich text editor
   const [showFormatting, setShowFormatting] = useState(false);
   const [selectedText, setSelectedText] = useState('');
-  const [draftHtml, setDraftHtml] = useState('');
   
   // New state for advanced sort/filter popups
   const [showSortPopup, setShowSortPopup] = useState(false);
@@ -833,7 +833,21 @@ const InboxManager = () => {
 
   // Rich text formatting functions
   const formatText = (command, value = null) => {
+    const editor = document.querySelector('[contenteditable]');
+    if (!editor) return;
+    
+    // Save current selection
+    const selection = window.getSelection();
+    const range = selection.getRangeAt(0);
+    
+    // Apply formatting
     document.execCommand(command, false, value);
+    
+    // Ensure editor keeps focus
+    editor.focus();
+    
+    // Update state
+    handleTextareaChange({ target: editor });
   };
 
   const insertList = () => {
@@ -2171,12 +2185,14 @@ const InboxManager = () => {
 
                       {/* Rich Text Editor */}
                       <div
-                        ref={editorRef}
                         contentEditable
                         suppressContentEditableWarning={true}
                         onInput={(e) => {
-                          const text = e.target.textContent || '';
-                          const html = e.target.innerHTML || '';
+                          const editor = e.target;
+                          const text = editor.textContent || '';
+                          const html = editor.innerHTML || '';
+                          
+                          // Update state
                           setDraftResponse(text);
                           setDraftHtml(html);
                         }}
@@ -2185,15 +2201,15 @@ const InboxManager = () => {
                             switch(e.key) {
                               case 'b':
                                 e.preventDefault();
-                                document.execCommand('bold', false);
+                                formatText('bold');
                                 break;
                               case 'i':
                                 e.preventDefault();
-                                document.execCommand('italic', false);
+                                formatText('italic');
                                 break;
                               case 'u':
                                 e.preventDefault();
-                                document.execCommand('underline', false);
+                                formatText('underline');
                                 break;
                             }
                           }
@@ -2204,33 +2220,42 @@ const InboxManager = () => {
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
                           minHeight: '160px',
+                          textAlign: 'left'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       >
-                        {draftResponse || draftHtml || ''}
+                        {draftResponse || ''}
                       </div>
 
                       {/* Add CSS for rich text editor content */}
                       <style jsx global>{`
                         [contenteditable] {
-                          text-align: left;
+                          text-align: left !important;
                         }
                         [contenteditable] * {
-                          text-align: left;
+                          text-align: left !important;
+                        }
+                        [contenteditable] p {
+                          text-align: left !important;
+                        }
+                        [contenteditable] div {
+                          text-align: left !important;
                         }
                         [contenteditable] ul {
-                          list-style-type: disc;
-                          margin-left: 20px;
-                          padding-left: 20px;
-                          display: block;
+                          list-style-type: disc !important;
+                          margin-left: 20px !important;
+                          padding-left: 20px !important;
+                          display: block !important;
+                          text-align: left !important;
                         }
                         [contenteditable] li {
-                          display: list-item;
-                          margin: 5px 0;
+                          display: list-item !important;
+                          margin: 5px 0 !important;
+                          text-align: left !important;
                         }
                         [contenteditable] a {
-                          color: #54FCFF;
-                          text-decoration: underline;
+                          color: #54FCFF !important;
+                          text-decoration: underline !important;
                         }
                         [contenteditable] a:hover {
                           opacity: 0.8;
@@ -2238,6 +2263,7 @@ const InboxManager = () => {
                         [contenteditable]:empty:before {
                           content: attr(data-placeholder);
                           color: rgba(255, 255, 255, 0.4);
+                          text-align: left !important;
                         }
                       `}</style>
                       
