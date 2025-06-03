@@ -842,19 +842,62 @@ const InboxManager = () => {
     
     if (selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
+      const selectedText = range.toString().trim();
       
-      // Create list HTML with proper styling
-      const listHtml = '<ul style="list-style-type: disc; margin-left: 20px; padding-left: 20px;"><li>List item 1</li><li>List item 2</li></ul>';
+      // Create a single bullet point
+      const listHtml = document.createElement('ul');
+      listHtml.style.listStyleType = 'disc';
+      listHtml.style.marginLeft = '20px';
+      listHtml.style.paddingLeft = '20px';
+      
+      const listItem = document.createElement('li');
+      if (selectedText) {
+        // If text is selected, use it as bullet point content
+        listItem.textContent = selectedText;
+      }
+      listHtml.appendChild(listItem);
       
       // Insert the list
-      const listElement = document.createElement('div');
-      listElement.innerHTML = listHtml;
-      
       range.deleteContents();
-      range.insertNode(listElement.firstChild);
+      range.insertNode(listHtml);
+      
+      // Place cursor at end of list item
+      const newRange = document.createRange();
+      newRange.selectNodeContents(listItem);
+      newRange.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
       
       // Update the draft content
       handleTextareaChange({ target: editor });
+    }
+  };
+
+  const insertLink = () => {
+    const editor = document.querySelector('[contenteditable]');
+    const selection = window.getSelection();
+    
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const selectedText = range.toString().trim();
+      
+      // Prompt for URL with https:// prefilled
+      const url = prompt('Enter URL:', 'https://');
+      if (url && url.trim() !== '' && url !== 'https://') {
+        const linkElement = document.createElement('a');
+        linkElement.href = url;
+        linkElement.textContent = selectedText || url;
+        linkElement.style.color = '#54FCFF';
+        linkElement.style.textDecoration = 'underline';
+        linkElement.title = url;
+        
+        // Insert the link
+        range.deleteContents();
+        range.insertNode(linkElement);
+        
+        // Update the draft content
+        handleTextareaChange({ target: editor });
+      }
     }
   };
 
@@ -2147,20 +2190,33 @@ const InboxManager = () => {
                           backgroundColor: 'rgba(255, 255, 255, 0.03)', 
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
-                          minHeight: '160px'
+                          minHeight: '160px',
+                          direction: 'ltr'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       />
 
                       {/* Add CSS for rich text editor content */}
                       <style jsx>{`
+                        [contenteditable] {
+                          direction: ltr !important;
+                        }
                         [contenteditable] ul {
                           list-style-type: disc !important;
                           margin-left: 20px !important;
                           padding-left: 20px !important;
+                          display: block !important;
                         }
                         [contenteditable] li {
                           display: list-item !important;
+                          margin: 5px 0 !important;
+                        }
+                        [contenteditable] a {
+                          color: #54FCFF !important;
+                          text-decoration: underline !important;
+                        }
+                        [contenteditable] a:hover {
+                          opacity: 0.8;
                         }
                         [contenteditable]:empty:before {
                           content: attr(data-placeholder);
