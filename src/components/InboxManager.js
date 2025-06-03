@@ -1567,25 +1567,31 @@ const InboxManager = () => {
         throw new Error('Failed to enrich lead data');
       }
 
-      const data = await response.json();
-      console.log('Raw webhook response:', data);
-
-      // The response is now an array with a single object
-      const enrichedData = Array.isArray(data) ? data[0] : data;
-      console.log('Parsed enriched data:', enrichedData);
+      const enrichedData = await response.json();
+      console.log('Raw webhook response:', enrichedData);
 
       // Update the leads array with the new enriched data
       setLeads(prevLeads => prevLeads.map(l => {
         if (l.id === lead.id) {
           return {
             ...l,
-            role: enrichedData.Role || 'N/A',
-            company_data: enrichedData["Company Summary"] || 'N/A',
-            linkedin_url: enrichedData.LinkedIn || 'N/A'
+            role: enrichedData.Role,
+            company_data: enrichedData["Company Summary"],
+            linkedin_url: enrichedData.LinkedIn
           };
         }
         return l;
       }));
+
+      // Also update selectedLead if this is the currently selected lead
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(prev => ({
+          ...prev,
+          role: enrichedData.Role,
+          company_data: enrichedData["Company Summary"],
+          linkedin_url: enrichedData.LinkedIn
+        }));
+      }
 
     } catch (error) {
       console.error('Error enriching lead:', error);
@@ -2297,9 +2303,9 @@ const InboxManager = () => {
                       <span className="text-gray-300">Role:</span>
                       <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
                     </div>
-                    <div>
+                    <div className="col-span-2">
                       <span className="text-gray-300">Company Summary:</span>
-                      <p className="font-medium text-white">{selectedLead.company_data || 'N/A'}</p>
+                      <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-300">LinkedIn:</span>
