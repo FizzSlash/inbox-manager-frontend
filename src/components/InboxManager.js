@@ -1106,6 +1106,7 @@ const InboxManager = () => {
           .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
           .trim();
         setDraftResponse(cleanResponseText);
+        setDraftHtml(convertToHtml(cleanResponseText)); // Set the HTML content
         console.log('Draft set successfully from object format');
       } else if (data && data.length > 0 && data[0].text) {
         const cleanResponseText = data[0].text
@@ -1113,6 +1114,7 @@ const InboxManager = () => {
           .replace(/\\r/g, '\r')
           .trim();
         setDraftResponse(cleanResponseText);
+        setDraftHtml(convertToHtml(cleanResponseText)); // Set the HTML content
         console.log('Draft set successfully from array format');
       } else {
         console.error('No text found in response:', data);
@@ -2209,6 +2211,7 @@ const InboxManager = () => {
                         contentEditable
                         suppressContentEditableWarning={true}
                         onInput={handleTextareaChange}
+                        dangerouslySetInnerHTML={{ __html: draftHtml || draftResponse }}
                         onKeyDown={(e) => {
                           // Handle common keyboard shortcuts
                           if (e.ctrlKey || e.metaKey) {
