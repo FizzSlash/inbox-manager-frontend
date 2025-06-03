@@ -2191,7 +2191,9 @@ const InboxManager = () => {
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
                           minHeight: '160px',
-                          direction: 'ltr'
+                          direction: 'ltr',
+                          textAlign: 'left',
+                          unicodeBidi: 'plaintext'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       />
@@ -2200,6 +2202,13 @@ const InboxManager = () => {
                       <style jsx>{`
                         [contenteditable] {
                           direction: ltr !important;
+                          text-align: left !important;
+                          unicode-bidi: plaintext !important;
+                        }
+                        [contenteditable] * {
+                          direction: ltr !important;
+                          text-align: left !important;
+                          unicode-bidi: plaintext !important;
                         }
                         [contenteditable] ul {
                           list-style-type: disc !important;
@@ -2210,6 +2219,8 @@ const InboxManager = () => {
                         [contenteditable] li {
                           display: list-item !important;
                           margin: 5px 0 !important;
+                          direction: ltr !important;
+                          text-align: left !important;
                         }
                         [contenteditable] a {
                           color: #54FCFF !important;
