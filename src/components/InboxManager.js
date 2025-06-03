@@ -837,7 +837,12 @@ const InboxManager = () => {
   };
 
   const insertLink = () => {
-    // Create custom styled prompt modal instead of browser prompt
+    // Store the current selection before creating modal
+    const selection = window.getSelection();
+    const selectedText = selection.toString();
+    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+    // Create modal
     const modal = document.createElement('div');
     modal.style.cssText = `
       position: fixed;
@@ -862,21 +867,42 @@ const InboxManager = () => {
         max-width: 90vw;
       ">
         <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
-        <input 
-          type="text" 
-          id="url-input"
-          placeholder="Enter URL (https://example.com)"
-          style="
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            background: #2A2C2A;
-            color: white;
-            margin-bottom: 16px;
-            font-size: 14px;
-          "
-        >
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; color: white; font-size: 12px; margin-bottom: 4px;">Text to display:</label>
+          <input 
+            type="text" 
+            id="text-input"
+            value="${selectedText}"
+            placeholder="Link text"
+            style="
+              width: 100%;
+              padding: 8px 12px;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              border-radius: 6px;
+              background: #2A2C2A;
+              color: white;
+              margin-bottom: 8px;
+              font-size: 14px;
+            "
+          >
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; color: white; font-size: 12px; margin-bottom: 4px;">URL:</label>
+          <input 
+            type="text" 
+            id="url-input"
+            placeholder="https://example.com"
+            style="
+              width: 100%;
+              padding: 8px 12px;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              border-radius: 6px;
+              background: #2A2C2A;
+              color: white;
+              font-size: 14px;
+            "
+          >
+        </div>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button 
             id="cancel-link"
@@ -908,40 +934,62 @@ const InboxManager = () => {
     modal.innerHTML = content;
     document.body.appendChild(modal);
 
+    const textInput = modal.querySelector('#text-input');
     const urlInput = modal.querySelector('#url-input');
     const insertBtn = modal.querySelector('#insert-link');
     const cancelBtn = modal.querySelector('#cancel-link');
 
-    // Focus the input after a short delay to ensure it's ready
-    setTimeout(() => urlInput.focus(), 50);
+    // Focus URL input if text is already selected, otherwise focus text input
+    setTimeout(() => {
+      if (selectedText) {
+        urlInput.focus();
+      } else {
+        textInput.focus();
+      }
+    }, 50);
 
     const handleInsert = () => {
       const url = urlInput.value.trim();
-      if (url) {
-        const selection = window.getSelection();
-        const range = selection.getRangeAt(0);
-        const selectedText = selection.toString();
-        
-        // Create the link element with neon styling and remove button
-        const linkElement = document.createElement('a');
-        linkElement.href = url;
-        linkElement.textContent = selectedText || url;
-        linkElement.style.cssText = `
-          color: #54FCFF;
-          text-decoration: none;
-          border-bottom: 2px solid #54FCFF;
-          box-shadow: 0 4px 8px rgba(84, 252, 255, 0.2);
-          padding: 0 2px;
-          position: relative;
-          transition: all 0.3s ease;
-        `;
-        
-        // Add hover effect
-        linkElement.addEventListener('mouseenter', () => {
-          linkElement.style.textShadow = '0 0 8px rgba(84, 252, 255, 0.5)';
+      const text = textInput.value.trim();
+
+      if (!url) {
+        urlInput.style.border = '1px solid red';
+        return;
+      }
+
+      if (!text) {
+        textInput.style.border = '1px solid red';
+        return;
+      }
+
+      // Ensure URL has protocol
+      const finalUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
+      const editor = document.querySelector('[contenteditable]');
+      if (!editor) return;
+
+      // Create link element with neon styling
+      const linkElement = document.createElement('a');
+      linkElement.href = finalUrl;
+      linkElement.textContent = text;
+      linkElement.target = '_blank'; // Open in new tab
+      linkElement.style.cssText = `
+        color: #54FCFF;
+        text-decoration: none;
+        border-bottom: 2px solid #54FCFF;
+        box-shadow: 0 4px 8px rgba(84, 252, 255, 0.2);
+        padding: 0 2px;
+        position: relative;
+        transition: all 0.3s ease;
+      `;
+
+      // Add hover effects and remove button
+      const addHoverEffects = (link) => {
+        link.addEventListener('mouseenter', () => {
+          link.style.textShadow = '0 0 8px rgba(84, 252, 255, 0.5)';
           
-          // Create remove button if it doesn't exist
-          if (!linkElement.querySelector('.remove-link')) {
+          // Add remove button if it doesn't exist
+          if (!link.querySelector('.remove-link')) {
             const removeBtn = document.createElement('span');
             removeBtn.className = 'remove-link';
             removeBtn.innerHTML = '×';
@@ -960,40 +1008,57 @@ const InboxManager = () => {
               cursor: pointer;
               opacity: 0;
               transition: opacity 0.2s ease;
+              z-index: 1000;
             `;
             
             removeBtn.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
-              const textNode = document.createTextNode(linkElement.textContent);
-              linkElement.parentNode.replaceChild(textNode, linkElement);
+              const textNode = document.createTextNode(link.textContent);
+              link.parentNode.replaceChild(textNode, link);
+              handleTextareaChange({ target: editor });
             });
             
-            linkElement.appendChild(removeBtn);
-            
-            // Show remove button on hover
-            linkElement.addEventListener('mouseenter', () => {
-              removeBtn.style.opacity = '1';
-            });
-            
-            linkElement.addEventListener('mouseleave', () => {
-              removeBtn.style.opacity = '0';
-            });
+            link.appendChild(removeBtn);
+            removeBtn.style.opacity = '1';
           }
         });
-        
-        linkElement.addEventListener('mouseleave', () => {
-          linkElement.style.textShadow = 'none';
+
+        link.addEventListener('mouseleave', (e) => {
+          link.style.textShadow = 'none';
+          const removeBtn = link.querySelector('.remove-link');
+          if (removeBtn && !removeBtn.matches(':hover')) {
+            removeBtn.style.opacity = '0';
+          }
         });
-        
-        // Replace the selected text with the link
+      };
+
+      addHoverEffects(linkElement);
+
+      // Insert the link
+      if (range && selection.rangeCount > 0) {
+        // Replace selected text
         range.deleteContents();
         range.insertNode(linkElement);
+      } else {
+        // Insert at cursor position or end
+        const newRange = document.createRange();
+        const sel = window.getSelection();
         
-        // Update the draft content
-        const editor = document.querySelector('[contenteditable]');
-        handleTextareaChange({ target: editor });
+        if (sel.rangeCount > 0) {
+          // Get cursor position
+          newRange.setStart(sel.focusNode, sel.focusOffset);
+        } else {
+          // Insert at end if no cursor
+          newRange.selectNodeContents(editor);
+          newRange.collapse(false);
+        }
+        
+        newRange.insertNode(linkElement);
       }
+
+      // Update content and clean up
+      handleTextareaChange({ target: editor });
       document.body.removeChild(modal);
     };
 
@@ -1004,11 +1069,20 @@ const InboxManager = () => {
     // Event Listeners
     insertBtn.addEventListener('click', handleInsert);
     cancelBtn.addEventListener('click', handleCancel);
-    urlInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') {
-        handleInsert();
-      }
+    
+    // Handle Enter key in inputs
+    [textInput, urlInput].forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          handleInsert();
+        }
+      });
+
+      // Clear red border on input
+      input.addEventListener('input', () => {
+        input.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+      });
     });
 
     // Close on background click
