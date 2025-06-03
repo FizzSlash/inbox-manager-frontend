@@ -2220,11 +2220,8 @@ const InboxManager = () => {
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
                           minHeight: '160px',
-                          textAlign: 'left',
-                          direction: 'ltr',
-                          unicodeBidi: 'embed'
+                          textAlign: 'left'
                         }}
-                        dir="ltr"
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       >
                         {draftResponse || ''}
