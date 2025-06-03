@@ -990,6 +990,23 @@ const InboxManager = () => {
           }
         };
 
+        const removeLink = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // First clean up the remove button
+          cleanupRemoveButton();
+          // Then replace the link with just its text
+          const textNode = document.createTextNode(link.textContent);
+          link.parentNode.replaceChild(textNode, link);
+          // Update the editor content
+          const editor = document.querySelector('[contenteditable]');
+          if (editor) {
+            // Normalize the content to clean up any empty nodes
+            editor.normalize();
+            handleTextareaChange({ target: editor });
+          }
+        };
+
         link.addEventListener('mouseenter', () => {
           // Clear any pending removal
           if (removeTimeout) {
@@ -1020,33 +1037,18 @@ const InboxManager = () => {
             z-index: 1000;
           `;
           
-          removeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const textNode = document.createTextNode(link.textContent);
-            link.parentNode.replaceChild(textNode, link);
-            const editor = document.querySelector('[contenteditable]');
-            if (editor) {
-              handleTextareaChange({ target: editor });
-            }
-          });
+          // Use the extracted removeLink function
+          removeBtn.addEventListener('click', removeLink);
           
           link.appendChild(removeBtn);
         });
 
-        link.addEventListener('mouseleave', (e) => {
+        link.addEventListener('mouseleave', () => {
           link.style.color = '#0066cc';
-          
-          // Set timeout to remove the button
-          removeTimeout = setTimeout(() => {
-            const removeBtn = link.querySelector('.remove-link');
-            if (removeBtn && !removeBtn.matches(':hover')) {
-              cleanupRemoveButton();
-            }
-          }, 100);
+          removeTimeout = setTimeout(cleanupRemoveButton, 100);
         });
 
-        // Add cleanup on button mouseleave as well
+        // Clean up on button mouseleave
         link.addEventListener('mouseleave', (e) => {
           if (e.target.classList.contains('remove-link')) {
             cleanupRemoveButton();
@@ -1155,6 +1157,11 @@ const InboxManager = () => {
   };
 
   const handleTextareaChange = (e) => {
+    // Clean up any remaining remove buttons
+    const removeButtons = e.target.querySelectorAll('.remove-link');
+    removeButtons.forEach(btn => btn.remove());
+    
+    // Update content
     setDraftResponse(e.target.textContent || e.target.innerText);
     setDraftHtml(e.target.innerHTML);
   };
