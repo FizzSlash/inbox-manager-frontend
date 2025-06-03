@@ -981,57 +981,77 @@ const InboxManager = () => {
 
       // Add hover effects and remove button
       const addHoverEffects = (link) => {
+        let removeTimeout;
+        
+        const cleanupRemoveButton = () => {
+          const removeBtn = link.querySelector('.remove-link');
+          if (removeBtn) {
+            removeBtn.remove();
+          }
+        };
+
         link.addEventListener('mouseenter', () => {
+          // Clear any pending removal
+          if (removeTimeout) {
+            clearTimeout(removeTimeout);
+          }
+          
+          // Clean up any existing button first
+          cleanupRemoveButton();
+          
           link.style.color = '#004499';
           
-          // Add remove button if it doesn't exist
-          if (!link.querySelector('.remove-link')) {
-            const removeBtn = document.createElement('span');
-            removeBtn.className = 'remove-link';
-            removeBtn.innerHTML = '×';
-            removeBtn.style.cssText = `
-              position: absolute;
-              top: -12px;
-              right: -12px;
-              background: #e0e0e0;
-              color: #333;
-              border-radius: 50%;
-              width: 16px;
-              height: 16px;
-              font-size: 12px;
-              line-height: 16px;
-              text-align: center;
-              cursor: pointer;
-              opacity: 0;
-              transition: opacity 0.2s ease;
-              z-index: 1000;
-            `;
-            
-            removeBtn.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const textNode = document.createTextNode(link.textContent);
-              link.parentNode.replaceChild(textNode, link);
+          const removeBtn = document.createElement('span');
+          removeBtn.className = 'remove-link';
+          removeBtn.innerHTML = '×';
+          removeBtn.style.cssText = `
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            background: #e0e0e0;
+            color: #333;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            font-size: 12px;
+            line-height: 16px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 1000;
+          `;
+          
+          removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const textNode = document.createTextNode(link.textContent);
+            link.parentNode.replaceChild(textNode, link);
+            const editor = document.querySelector('[contenteditable]');
+            if (editor) {
               handleTextareaChange({ target: editor });
-            });
-            
-            link.appendChild(removeBtn);
-            removeBtn.style.opacity = '1';
-          }
+            }
+          });
+          
+          link.appendChild(removeBtn);
         });
 
         link.addEventListener('mouseleave', (e) => {
           link.style.color = '#0066cc';
-          const removeBtn = link.querySelector('.remove-link');
-          if (removeBtn) {
-            // Remove the button after a short delay to allow clicking it
-            setTimeout(() => {
-              if (!removeBtn.matches(':hover')) {
-                removeBtn.remove();
-              }
-            }, 100);
-          }
+          
+          // Set timeout to remove the button
+          removeTimeout = setTimeout(() => {
+            const removeBtn = link.querySelector('.remove-link');
+            if (removeBtn && !removeBtn.matches(':hover')) {
+              cleanupRemoveButton();
+            }
+          }, 100);
         });
+
+        // Add cleanup on button mouseleave as well
+        link.addEventListener('mouseleave', (e) => {
+          if (e.target.classList.contains('remove-link')) {
+            cleanupRemoveButton();
+          }
+        }, true);
       };
 
       addHoverEffects(linkElement);
@@ -1524,7 +1544,7 @@ const InboxManager = () => {
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />>
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white relative">
               Inbox Manager
