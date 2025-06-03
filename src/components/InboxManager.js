@@ -851,85 +851,70 @@ const InboxManager = () => {
       justify-content: center;
       z-index: 1000;
     `;
-    
-    const dialog = document.createElement('div');
-    dialog.style.cssText = `
-      background: #1A1C1A;
-      border: 1px solid white;
-      border-radius: 8px;
-      padding: 24px;
-      max-width: 400px;
-      width: 90%;
-    `;
-    
-    dialog.innerHTML = `
-      <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
-      <input 
-        type="url" 
-        placeholder="Enter URL (https://example.com)"
-        style="
-          width: 100%;
-          padding: 8px 12px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.05);
-          color: white;
-          margin-bottom: 16px;
-          outline: none;
-        "
-        id="url-input"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button 
-          id="cancel-link"
+
+    const content = `
+      <div style="
+        background: #1A1C1A;
+        border: 1px solid white;
+        border-radius: 8px;
+        padding: 24px;
+        width: 400px;
+        max-width: 90vw;
+      ">
+        <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
+        <input 
+          type="text" 
+          id="url-input"
+          placeholder="Enter URL (https://example.com)"
           style="
-            padding: 8px 16px;
+            width: 100%;
+            padding: 8px 12px;
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 6px;
-            background: rgba(255, 255, 255, 0.05);
+            background: #2A2C2A;
             color: white;
-            cursor: pointer;
+            margin-bottom: 16px;
+            font-size: 14px;
           "
-        >Cancel</button>
-        <button 
-          id="insert-link"
-          style="
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            background: #54FCFF;
-            color: #1A1C1A;
-            cursor: pointer;
-            font-weight: bold;
-          "
-        >Insert Link</button>
+        >
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button 
+            id="cancel-link"
+            style="
+              padding: 8px 16px;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              border-radius: 6px;
+              background: rgba(255, 255, 255, 0.05);
+              color: white;
+              cursor: pointer;
+            "
+          >Cancel</button>
+          <button 
+            id="insert-link"
+            style="
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              background: #54FCFF;
+              color: #1A1C1A;
+              cursor: pointer;
+              font-weight: bold;
+            "
+          >Insert Link</button>
+        </div>
       </div>
     `;
-    
-    modal.appendChild(dialog);
+
+    modal.innerHTML = content;
     document.body.appendChild(modal);
-    
-    const urlInput = dialog.querySelector('#url-input');
-    const insertBtn = dialog.querySelector('#insert-link');
-    const cancelBtn = dialog.querySelector('#cancel-link');
-    
-    // Prevent modal from closing when clicking input
-    urlInput.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
 
-    // Prevent modal from closing when typing
-    urlInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') {
-        handleInsert();
-      }
-    });
+    const urlInput = modal.querySelector('#url-input');
+    const insertBtn = modal.querySelector('#insert-link');
+    const cancelBtn = modal.querySelector('#cancel-link');
 
-    urlInput.focus();
-    
+    // Focus the input after a short delay to ensure it's ready
+    setTimeout(() => urlInput.focus(), 50);
+
     const handleInsert = () => {
       const url = urlInput.value.trim();
       if (url) {
@@ -1011,15 +996,27 @@ const InboxManager = () => {
       }
       document.body.removeChild(modal);
     };
-    
+
     const handleCancel = () => {
       document.body.removeChild(modal);
     };
-    
-    insertBtn.onclick = handleInsert;
-    cancelBtn.onclick = handleCancel;
-    modal.onclick = (e) => e.target === modal && handleCancel();
-    urlInput.onkeydown = (e) => e.key === 'Enter' && handleInsert();
+
+    // Event Listeners
+    insertBtn.addEventListener('click', handleInsert);
+    cancelBtn.addEventListener('click', handleCancel);
+    urlInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        handleInsert();
+      }
+    });
+
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        handleCancel();
+      }
+    });
   };
 
   const insertList = () => {
