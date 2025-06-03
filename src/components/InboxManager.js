@@ -968,25 +968,21 @@ const InboxManager = () => {
       const editor = document.querySelector('[contenteditable]');
       if (!editor) return;
 
-      // Create link element with neon styling
+      // Create link element with standard styling
       const linkElement = document.createElement('a');
       linkElement.href = finalUrl;
       linkElement.textContent = text;
       linkElement.target = '_blank'; // Open in new tab
       linkElement.style.cssText = `
-        color: #54FCFF;
-        text-decoration: none;
-        border-bottom: 2px solid #54FCFF;
-        box-shadow: 0 4px 8px rgba(84, 252, 255, 0.2);
-        padding: 0 2px;
+        color: #0066cc;
+        text-decoration: underline;
         position: relative;
-        transition: all 0.3s ease;
       `;
 
       // Add hover effects and remove button
       const addHoverEffects = (link) => {
         link.addEventListener('mouseenter', () => {
-          link.style.textShadow = '0 0 8px rgba(84, 252, 255, 0.5)';
+          link.style.color = '#004499';
           
           // Add remove button if it doesn't exist
           if (!link.querySelector('.remove-link')) {
@@ -997,8 +993,8 @@ const InboxManager = () => {
               position: absolute;
               top: -12px;
               right: -12px;
-              background: #54FCFF;
-              color: #1A1C1A;
+              background: #e0e0e0;
+              color: #333;
               border-radius: 50%;
               width: 16px;
               height: 16px;
@@ -1025,7 +1021,7 @@ const InboxManager = () => {
         });
 
         link.addEventListener('mouseleave', (e) => {
-          link.style.textShadow = 'none';
+          link.style.color = '#0066cc';
           const removeBtn = link.querySelector('.remove-link');
           if (removeBtn && !removeBtn.matches(':hover')) {
             removeBtn.style.opacity = '0';
