@@ -1129,36 +1129,92 @@ const InboxManager = () => {
       const selectedText = selection.toString().trim();
       
       if (selectedText) {
-        // Convert selected text into bullet points
+        // Convert selected text into a formatted list
         const lines = selectedText.split('\n');
-        const formattedText = lines
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = `
+          margin: 8px 0;
+          padding-left: 8px;
+        `;
+        
+        lines
           .map(line => line.trim())
           .filter(line => line.length > 0)
-          .map(line => `\u2022 ${line}`) // Use bullet point character
-          .join('\n');
+          .forEach(line => {
+            const listItem = document.createElement('div');
+            listItem.style.cssText = `
+              position: relative;
+              padding-left: 20px;
+              margin: 4px 0;
+              line-height: 1.5;
+            `;
+            
+            // Create bullet point
+            const bullet = document.createElement('span');
+            bullet.textContent = '•';
+            bullet.style.cssText = `
+              position: absolute;
+              left: 4px;
+              color: white;
+              font-size: 1.2em;
+              line-height: 1;
+              top: 50%;
+              transform: translateY(-50%);
+            `;
+            
+            // Create text content
+            const textContent = document.createElement('span');
+            textContent.textContent = line;
+            textContent.style.color = 'white';
+            
+            listItem.appendChild(bullet);
+            listItem.appendChild(textContent);
+            listContainer.appendChild(listItem);
+          });
         
-        // Create new div with the bullet points
-        const listElement = document.createElement('div');
-        listElement.textContent = formattedText;
-        
-        // Insert the list
+        // Insert the formatted list
         range.deleteContents();
-        range.insertNode(listElement);
-        
-        // Add a newline after the list
-        const newline = document.createElement('div');
-        newline.innerHTML = '<br>';
-        listElement.parentNode.insertBefore(newline, listElement.nextSibling);
+        range.insertNode(listContainer);
       } else {
-        // Insert a single bullet point
-        const bulletPoint = document.createTextNode('\u2022 ');
-        range.insertNode(bulletPoint);
+        // Insert a single formatted bullet point
+        const listItem = document.createElement('div');
+        listItem.style.cssText = `
+          position: relative;
+          padding-left: 20px;
+          margin: 4px 0;
+          line-height: 1.5;
+        `;
         
-        // Move cursor after bullet point
-        range.setStartAfter(bulletPoint);
-        range.setEndAfter(bulletPoint);
+        // Create bullet point
+        const bullet = document.createElement('span');
+        bullet.textContent = '•';
+        bullet.style.cssText = `
+          position: absolute;
+          left: 4px;
+          color: white;
+          font-size: 1.2em;
+          line-height: 1;
+          top: 50%;
+          transform: translateY(-50%);
+        `;
+        
+        // Create editable content area
+        const textContent = document.createElement('span');
+        textContent.style.color = 'white';
+        
+        listItem.appendChild(bullet);
+        listItem.appendChild(textContent);
+        
+        // Insert at cursor position
+        range.deleteContents();
+        range.insertNode(listItem);
+        
+        // Move cursor to text content
+        const newRange = document.createRange();
+        newRange.setStart(textContent, 0);
+        newRange.collapse(true);
         selection.removeAllRanges();
-        selection.addRange(range);
+        selection.addRange(newRange);
       }
       
       // Update the draft content
