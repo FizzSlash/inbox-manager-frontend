@@ -865,26 +865,7 @@ const InboxManager = () => {
       padding: 24px;
       width: 400px;
       max-width: 90vw;
-      position: relative;
     `;
-
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '×';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: none;
-      border: none;
-      color: white;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-    `;
-    closeBtn.addEventListener('mouseover', () => closeBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)');
-    closeBtn.addEventListener('mouseout', () => closeBtn.style.backgroundColor = 'transparent');
 
     // Title
     const title = document.createElement('h3');
@@ -896,7 +877,7 @@ const InboxManager = () => {
       font-size: 16px;
     `;
 
-    // Text input container
+    // Text input
     const textContainer = document.createElement('div');
     textContainer.style.marginBottom = '16px';
     
@@ -924,30 +905,30 @@ const InboxManager = () => {
       box-sizing: border-box;
       outline: none;
     `;
-    textInput.addEventListener('focus', () => textInput.style.borderColor = '#54FCFF');
-    textInput.addEventListener('blur', () => textInput.style.borderColor = 'rgba(255, 255, 255, 0.2)');
 
-    // URL input container
+    // URL input
     const urlContainer = document.createElement('div');
     urlContainer.style.marginBottom = '24px';
     
     const urlLabel = document.createElement('label');
     urlLabel.textContent = 'URL:';
-    urlLabel.style.cssText = `
-      display: block;
-      color: white;
-      font-size: 12px;
-      margin-bottom: 4px;
-    `;
+    urlLabel.style.cssText = textLabel.style.cssText;
 
     const urlInput = document.createElement('input');
     urlInput.type = 'text';
     urlInput.placeholder = 'https://example.com';
     urlInput.style.cssText = textInput.style.cssText;
-    urlInput.addEventListener('focus', () => urlInput.style.borderColor = '#54FCFF');
-    urlInput.addEventListener('blur', () => urlInput.style.borderColor = 'rgba(255, 255, 255, 0.2)');
 
-    // Buttons container
+    // Error message
+    const errorMessage = document.createElement('div');
+    errorMessage.style.cssText = `
+      color: #ff4444;
+      font-size: 12px;
+      margin-bottom: 16px;
+      min-height: 16px;
+    `;
+
+    // Buttons
     const buttonsContainer = document.createElement('div');
     buttonsContainer.style.cssText = `
       display: flex;
@@ -966,8 +947,6 @@ const InboxManager = () => {
       cursor: pointer;
       font-size: 14px;
     `;
-    cancelButton.addEventListener('mouseover', () => cancelButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)');
-    cancelButton.addEventListener('mouseout', () => cancelButton.style.backgroundColor = 'rgba(255, 255, 255, 0.05)');
 
     const insertButton = document.createElement('button');
     insertButton.textContent = 'Insert Link';
@@ -981,17 +960,6 @@ const InboxManager = () => {
       font-weight: bold;
       font-size: 14px;
     `;
-    insertButton.addEventListener('mouseover', () => insertButton.style.opacity = '0.9');
-    insertButton.addEventListener('mouseout', () => insertButton.style.opacity = '1');
-
-    // Error message element
-    const errorMessage = document.createElement('div');
-    errorMessage.style.cssText = `
-      color: #ff4444;
-      font-size: 12px;
-      margin-top: 8px;
-      min-height: 16px;
-    `;
 
     // Assemble the modal
     textContainer.appendChild(textLabel);
@@ -1001,7 +969,6 @@ const InboxManager = () => {
     buttonsContainer.appendChild(cancelButton);
     buttonsContainer.appendChild(insertButton);
 
-    content.appendChild(closeBtn);
     content.appendChild(title);
     content.appendChild(textContainer);
     content.appendChild(urlContainer);
@@ -1009,7 +976,6 @@ const InboxManager = () => {
     content.appendChild(buttonsContainer);
     modal.appendChild(content);
 
-    // Add to document
     document.body.appendChild(modal);
 
     // Focus URL input if text is selected, otherwise focus text input
@@ -1025,19 +991,14 @@ const InboxManager = () => {
       const text = textInput.value.trim();
       let url = urlInput.value.trim();
 
-      // Clear previous error
-      errorMessage.textContent = '';
-
       // Validate inputs
       if (!text) {
         errorMessage.textContent = 'Please enter the text to display';
-        textInput.style.borderColor = '#ff4444';
         return;
       }
 
       if (!url) {
         errorMessage.textContent = 'Please enter a URL';
-        urlInput.style.borderColor = '#ff4444';
         return;
       }
 
@@ -1051,11 +1012,15 @@ const InboxManager = () => {
         new URL(url);
       } catch (e) {
         errorMessage.textContent = 'Please enter a valid URL';
-        urlInput.style.borderColor = '#ff4444';
         return;
       }
 
       if (range && editor) {
+        // Create link wrapper div to help with positioning the remove button
+        const linkWrapper = document.createElement('span');
+        linkWrapper.style.position = 'relative';
+        linkWrapper.style.display = 'inline-block';
+        
         // Create the link
         const link = document.createElement('a');
         link.href = url;
@@ -1067,58 +1032,55 @@ const InboxManager = () => {
           text-decoration: underline;
           cursor: pointer;
         `;
-
-        // Add hover effect
-        link.addEventListener('mouseover', () => {
+        
+        // Create remove button (always visible)
+        const removeBtn = document.createElement('span');
+        removeBtn.textContent = '×';
+        removeBtn.style.cssText = `
+          position: absolute;
+          top: -8px;
+          right: -12px;
+          background: #e0e0e0;
+          color: #333;
+          border-radius: 50%;
+          width: 16px;
+          height: 16px;
+          font-size: 12px;
+          line-height: 16px;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+          opacity: 0;
+          transition: opacity 0.2s;
+        `;
+        
+        // Show/hide remove button on hover
+        linkWrapper.addEventListener('mouseenter', () => {
+          removeBtn.style.opacity = '1';
           link.style.color = '#004499';
-          link.style.position = 'relative';
-          
-          // Show remove button on hover
-          const removeBtn = document.createElement('button');
-          removeBtn.textContent = '×';
-          removeBtn.className = 'link-remove-btn';
-          removeBtn.style.cssText = `
-            position: absolute;
-            top: -12px;
-            right: -12px;
-            background: #e0e0e0;
-            color: #333;
-            border: none;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            font-size: 12px;
-            line-height: 1;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-          `;
-          
-          removeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const text = document.createTextNode(link.textContent);
-            link.parentNode.replaceChild(text, link);
-            handleTextareaChange({ target: editor });
-          });
-          
-          link.appendChild(removeBtn);
         });
-
-        // Remove the remove button when not hovering
-        link.addEventListener('mouseleave', () => {
+        
+        linkWrapper.addEventListener('mouseleave', () => {
+          removeBtn.style.opacity = '0';
           link.style.color = '#0066cc';
-          const removeBtn = link.querySelector('.link-remove-btn');
-          if (removeBtn) {
-            removeBtn.remove();
-          }
         });
-
-        // Insert the link
+        
+        // Handle remove button click
+        removeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const text = document.createTextNode(link.textContent);
+          linkWrapper.parentNode.replaceChild(text, linkWrapper);
+          handleTextareaChange({ target: editor });
+        });
+        
+        // Assemble the link component
+        linkWrapper.appendChild(link);
+        linkWrapper.appendChild(removeBtn);
+        
+        // Insert into document
         range.deleteContents();
-        range.insertNode(link);
+        range.insertNode(linkWrapper);
         
         // Update editor content
         handleTextareaChange({ target: editor });
@@ -1129,10 +1091,7 @@ const InboxManager = () => {
     };
 
     // Event Listeners
-    const closeModal = () => document.body.removeChild(modal);
-    
-    closeBtn.addEventListener('click', closeModal);
-    cancelButton.addEventListener('click', closeModal);
+    cancelButton.addEventListener('click', () => document.body.removeChild(modal));
     insertButton.addEventListener('click', validateAndInsert);
     
     // Handle Enter key
@@ -1143,25 +1102,19 @@ const InboxManager = () => {
           validateAndInsert();
         }
       });
-
-      // Reset border color on input
-      input.addEventListener('input', () => {
-        input.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-        errorMessage.textContent = '';
-      });
     });
 
     // Close on background click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        closeModal();
+        document.body.removeChild(modal);
       }
     });
 
     // Handle Escape key
     document.addEventListener('keydown', function escapeHandler(e) {
       if (e.key === 'Escape') {
-        closeModal();
+        document.body.removeChild(modal);
         document.removeEventListener('keydown', escapeHandler);
       }
     });
