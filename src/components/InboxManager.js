@@ -836,106 +836,7 @@ const InboxManager = () => {
     document.execCommand(command, false, value);
   };
 
-  const insertLink = () => {
-    // Create custom styled prompt modal instead of browser prompt
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    `;
-    
-    const dialog = document.createElement('div');
-    dialog.style.cssText = `
-      background: #1A1C1A;
-      border: 1px solid white;
-      border-radius: 8px;
-      padding: 24px;
-      max-width: 400px;
-      width: 90%;
-    `;
-    
-    dialog.innerHTML = `
-      <h3 style="color: white; font-weight: bold; margin-bottom: 16px;">Insert Link</h3>
-      <input 
-        type="url" 
-        placeholder="Enter URL (https://example.com)"
-        style="
-          width: 100%;
-          padding: 8px 12px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 6px;
-          background: rgba(255, 255, 255, 0.05);
-          color: white;
-          margin-bottom: 16px;
-        "
-        id="url-input"
-      />
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button 
-          id="cancel-link"
-          style="
-            padding: 8px 16px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
-            cursor: pointer;
-          "
-        >Cancel</button>
-        <button 
-          id="insert-link"
-          style="
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            background: #54FCFF;
-            color: #1A1C1A;
-            cursor: pointer;
-            font-weight: bold;
-          "
-        >Insert Link</button>
-      </div>
-    `;
-    
-    modal.appendChild(dialog);
-    document.body.appendChild(modal);
-    
-    const urlInput = dialog.querySelector('#url-input');
-    const insertBtn = dialog.querySelector('#insert-link');
-    const cancelBtn = dialog.querySelector('#cancel-link');
-    
-    urlInput.focus();
-    
-    const handleInsert = () => {
-      const url = urlInput.value.trim();
-      if (url) {
-        const selectedText = window.getSelection().toString();
-        const linkText = selectedText || url;
-        formatText('createLink', url);
-      }
-      document.body.removeChild(modal);
-    };
-    
-    const handleCancel = () => {
-      document.body.removeChild(modal);
-    };
-    
-    insertBtn.onclick = handleInsert;
-    cancelBtn.onclick = handleCancel;
-    modal.onclick = (e) => e.target === modal && handleCancel();
-    urlInput.onkeydown = (e) => e.key === 'Enter' && handleInsert();
-  };
-
   const insertList = () => {
-    // Get current selection and editor
     const editor = document.querySelector('[contenteditable]');
     const selection = window.getSelection();
     
@@ -1336,7 +1237,7 @@ const InboxManager = () => {
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />>
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-white relative">
               Inbox Manager
