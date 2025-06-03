@@ -2220,8 +2220,11 @@ const InboxManager = () => {
                           border: '1px solid rgba(255, 255, 255, 0.2)', 
                           '--tw-ring-color': '#54FCFF',
                           minHeight: '160px',
-                          textAlign: 'left'
+                          textAlign: 'left',
+                          direction: 'ltr',
+                          unicodeBidi: 'embed'
                         }}
+                        dir="ltr"
                         data-placeholder="Generated draft will appear here, or write your own response..."
                       >
                         {draftResponse || ''}
@@ -2231,15 +2234,23 @@ const InboxManager = () => {
                       <style jsx global>{`
                         [contenteditable] {
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] * {
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] p {
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] div {
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] ul {
                           list-style-type: disc !important;
@@ -2247,15 +2258,21 @@ const InboxManager = () => {
                           padding-left: 20px !important;
                           display: block !important;
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] li {
                           display: list-item !important;
                           margin: 5px 0 !important;
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] a {
                           color: #54FCFF !important;
                           text-decoration: underline !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                         [contenteditable] a:hover {
                           opacity: 0.8;
@@ -2264,6 +2281,8 @@ const InboxManager = () => {
                           content: attr(data-placeholder);
                           color: rgba(255, 255, 255, 0.4);
                           text-align: left !important;
+                          direction: ltr !important;
+                          unicode-bidi: embed !important;
                         }
                       `}</style>
                       
