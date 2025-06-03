@@ -2518,6 +2518,79 @@ const InboxManager = () => {
                                 formatText('underline');
                                 break;
                             }
+                          } else if (e.key === 'Enter') {
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentListItem = range.startContainer;
+                              
+                              // Navigate up to find the list item div
+                              while (currentListItem && (!currentListItem.style || currentListItem.style.position !== 'relative')) {
+                                currentListItem = currentListItem.parentNode;
+                              }
+                              
+                              // If we're in a list item
+                              if (currentListItem && currentListItem.style && currentListItem.style.position === 'relative') {
+                                e.preventDefault();
+                                
+                                // Check if current list item is empty (except for bullet)
+                                const textContent = currentListItem.textContent.replace('•', '').trim();
+                                
+                                if (textContent === '') {
+                                  // Exit list if empty
+                                  const newLine = document.createElement('div');
+                                  newLine.innerHTML = '<br>';
+                                  currentListItem.parentNode.replaceChild(newLine, currentListItem);
+                                  
+                                  // Place cursor in new line
+                                  const newRange = document.createRange();
+                                  newRange.setStart(newLine, 0);
+                                  newRange.collapse(true);
+                                  selection.removeAllRanges();
+                                  selection.addRange(newRange);
+                                } else {
+                                  // Create new bullet point
+                                  const listItem = document.createElement('div');
+                                  listItem.style.cssText = `
+                                    position: relative;
+                                    padding-left: 20px;
+                                    margin: 4px 0;
+                                    line-height: 1.5;
+                                  `;
+                                  
+                                  const bullet = document.createElement('span');
+                                  bullet.textContent = '•';
+                                  bullet.style.cssText = `
+                                    position: absolute;
+                                    left: 4px;
+                                    color: white;
+                                    font-size: 1.2em;
+                                    line-height: 1;
+                                    top: 50%;
+                                    transform: translateY(-50%);
+                                  `;
+                                  
+                                  const textContent = document.createElement('span');
+                                  textContent.style.color = 'white';
+                                  
+                                  listItem.appendChild(bullet);
+                                  listItem.appendChild(textContent);
+                                  
+                                  // Insert after current list item
+                                  currentListItem.parentNode.insertBefore(listItem, currentListItem.nextSibling);
+                                  
+                                  // Move cursor to new list item
+                                  const newRange = document.createRange();
+                                  newRange.setStart(textContent, 0);
+                                  newRange.collapse(true);
+                                  selection.removeAllRanges();
+                                  selection.addRange(newRange);
+                                }
+                                
+                                // Update content
+                                handleTextareaChange({ target: e.target });
+                              }
+                            }
                           }
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2 focus:outline-none overflow-y-auto"
