@@ -1568,16 +1568,39 @@ const InboxManager = () => {
       }
 
       const data = await response.json();
-      // Parse the text field which contains the JSON string
-      const enrichedData = JSON.parse(data.text);
+      console.log('Raw webhook response:', data);
+
+      // Clean up the text field by removing escaped characters
+      const cleanedJsonString = data.text
+        .replace(/\\n/g, '')
+        .replace(/\\"/g, '"')
+        .replace(/^"""/, '')
+        .replace(/"""$/, '')
+        .trim();
+
+      console.log('Cleaned JSON string:', cleanedJsonString);
+
+      // Parse the cleaned JSON string
+      const enrichedData = JSON.parse(cleanedJsonString);
+      console.log('Parsed enriched data:', enrichedData);
+
       setEnrichmentData({
-        role: enrichedData.role || 'N/A',
+        role: enrichedData.Role || 'N/A',
         companySummary: enrichedData["Company Summary"] || 'N/A',
         linkedin: enrichedData.LinkedIn || 'N/A'
       });
-      setShowEnrichmentPopup(false); // We're not using the popup anymore
+
+      console.log('Final enrichment data set:', {
+        role: enrichedData.Role || 'N/A',
+        companySummary: enrichedData["Company Summary"] || 'N/A',
+        linkedin: enrichedData.LinkedIn || 'N/A'
+      });
     } catch (error) {
       console.error('Error enriching lead:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
     } finally {
       setIsEnriching(false);
     }
