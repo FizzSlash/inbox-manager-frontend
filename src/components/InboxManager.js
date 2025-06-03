@@ -1,6 +1,5 @@
-const React = require('react');
-const { useState, useEffect, useMemo } = require('react');
-const { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity } = require('lucide-react');
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity } from 'lucide-react';
 
 const InboxManager = () => {
   // State for leads from API
@@ -2460,4 +2459,4 @@ const InboxManager = () => {
   );
 };
 
-module.exports = InboxManager;
+export default InboxManager;
