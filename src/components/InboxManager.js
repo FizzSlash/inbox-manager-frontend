@@ -1806,12 +1806,20 @@ const InboxManager = () => {
         setSelectedLead(updatedLead);
       }
 
+      // Show success/not found toast
+      if (phoneNumber) {
+        showToast('Phone number found!', 'success', lead.id);
+      } else {
+        showToast('No phone number found', 'error', lead.id);
+      }
+
     } catch (error) {
       console.error('Error finding phone number:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
+      showToast('Error searching for phone number', 'error', lead.id);
     } finally {
       setSearchingPhoneLeads(prev => {
         const next = new Set(prev);
