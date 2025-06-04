@@ -191,10 +191,7 @@ const InboxManager = () => {
           company_data: lead.company_data || 'N/A',
           personal_linkedin_url: lead.personal_linkedin_url || null,
           business_linkedin_url: lead.business_linkedin_url || null,
-          linkedin_url: lead.linkedin_url || 'N/A',
-          phone: lead.phone || null,
-          // Add recipient info
-          cc_recipients: ccEmails.map(cc => cc.address)
+          linkedin_url: lead.linkedin_url || 'N/A'
         };
       });
       
