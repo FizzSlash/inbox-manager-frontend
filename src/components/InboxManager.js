@@ -2324,9 +2324,7 @@ const InboxManager = () => {
               <div
                 key={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group hover:shadow-xl animate-slideIn ${
-                  selectedLead?.id === lead.id ? 'shadow-2xl transform scale-105' : 'hover:scale-102 hover:-translate-y-1'
-                }`}
+                className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
                   backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
                   border: selectedLead?.id === lead.id ? '2px solid rgba(84, 252, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.1)',
