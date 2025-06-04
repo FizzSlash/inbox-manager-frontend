@@ -165,6 +165,8 @@ const InboxManager = () => {
           // Include the Supabase fields with their values or defaults
           role: lead.role || 'N/A',
           company_data: lead.company_data || 'N/A',
+          personal_linkedin_url: lead.personal_linkedin_url || null,
+          business_linkedin_url: lead.business_linkedin_url || null,
           linkedin_url: lead.linkedin_url || 'N/A'
         };
       });
@@ -1576,9 +1578,10 @@ const InboxManager = () => {
       // Create a new lead object with the enriched data
       const updatedLead = {
         ...lead,
-        role: enrichedData.Role,
-        company_data: enrichedData["Company Summary"],
-        linkedin_url: enrichedData.LinkedIn
+        role: enrichedData.Role || null,
+        company_data: enrichedData["Company Summary"] || null,
+        personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
+        business_linkedin_url: enrichedData["Business LinkedIn"] || null
       };
 
       // Update the leads array
@@ -2306,16 +2309,33 @@ const InboxManager = () => {
                       <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-300">LinkedIn:</span>
-                      {selectedLead.linkedin_url ? (
+                      <span className="text-gray-300">Personal LinkedIn:</span>
+                      {selectedLead.personal_linkedin_url ? (
                         <a
-                          href={selectedLead.linkedin_url}
+                          href={selectedLead.personal_linkedin_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium hover:opacity-80 flex items-center gap-1"
                           style={{color: '#54FCFF'}}
                         >
                           View Profile
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <p className="font-medium text-white">N/A</p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Company LinkedIn:</span>
+                      {selectedLead.business_linkedin_url ? (
+                        <a
+                          href={selectedLead.business_linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium hover:opacity-80 flex items-center gap-1"
+                          style={{color: '#54FCFF'}}
+                        >
+                          View Company
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       ) : (
