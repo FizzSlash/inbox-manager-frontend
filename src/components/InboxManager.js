@@ -2531,6 +2531,17 @@ const InboxManager = () => {
                     {selectedLead.first_name} {selectedLead.last_name}
                   </h2>
                   <p className="text-gray-300 mt-2 font-medium">{selectedLead.email}</p>
+                  {selectedLead.phone ? (
+                    <p className="text-sm mt-2 flex items-center gap-2" style={{color: '#54FCFF'}}>
+                      <Phone className="w-3 h-3" />
+                      <span className="font-medium">{selectedLead.phone}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm mt-2 text-gray-400 flex items-center gap-2">
+                      <Phone className="w-3 h-3" />
+                      <span>No phone number found</span>
+                    </p>
+                  )}
                   {selectedLead.website && (
                     <p className="text-sm mt-2">
                       <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{color: '#54FCFF'}}>
