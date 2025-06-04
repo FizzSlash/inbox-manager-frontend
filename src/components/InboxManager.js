@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 const InboxManager = () => {
@@ -38,6 +38,16 @@ const InboxManager = () => {
 
   // Replace single toast with array of toasts
   const [toasts, setToasts] = useState([]);
+  const toastsTimeoutRef = useRef({}); // Store timeouts by toast ID
+
+  // Clean up all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(toastsTimeoutRef.current).forEach(timeout => {
+        clearTimeout(timeout);
+      });
+    };
+  }, []);
 
   // Modified toast helper function
   const showToast = (message, type = 'success', leadId = null) => {
@@ -46,25 +56,22 @@ const InboxManager = () => {
     
     setToasts(currentToasts => [...currentToasts, newToast]);
     
-    // Auto-dismiss after 3 seconds
-    setTimeout(() => {
-      setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
+    // Store the timeout reference
+    toastsTimeoutRef.current[id] = setTimeout(() => {
+      removeToast(id);
     }, 3000);
   };
 
   // Remove specific toast
   const removeToast = (id) => {
+    // Clear the timeout
+    if (toastsTimeoutRef.current[id]) {
+      clearTimeout(toastsTimeoutRef.current[id]);
+      delete toastsTimeoutRef.current[id];
+    }
+    
     setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
   };
-
-  // Clean up timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (toastTimeout) {
-        clearTimeout(toastTimeout);
-      }
-    };
-  }, [toastTimeout]);
 
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
@@ -1997,43 +2004,58 @@ const InboxManager = () => {
       )}
 
       {/* Toast Notifications Container */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
         {toasts.map(toast => (
           <div 
             key={toast.id}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102"
+            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
             style={{
               backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
               border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
-              backdropFilter: 'blur(8px)'
+              backdropFilter: 'blur(8px)',
+              animation: 'slideIn 0.2s ease-out'
             }}
             onClick={() => {
               if (toast.leadId) {
                 const lead = leads.find(l => l.id === toast.leadId);
                 if (lead) {
                   setSelectedLead(lead);
+                  removeToast(toast.id);
                 }
               }
             }}
           >
             {toast.type === 'success' ? (
-              <CheckCircle className="w-5 h-5" style={{color: '#54FCFF'}} />
+              <CheckCircle className="w-5 h-5 shrink-0" style={{color: '#54FCFF'}} />
             ) : (
-              <AlertCircle className="w-5 h-5" style={{color: '#FF6363'}} />
+              <AlertCircle className="w-5 h-5 shrink-0" style={{color: '#FF6363'}} />
             )}
-            <span className="text-white text-sm font-medium">{toast.message}</span>
+            <span className="text-white text-sm font-medium flex-1">{toast.message}</span>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 removeToast(toast.id);
               }}
-              className="ml-2 text-gray-400 hover:text-white"
+              className="ml-2 text-gray-400 hover:text-white shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         ))}
       </div>
+
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
 
       {/* Add margin-top to main content to account for nav bar */}
       <div className="flex-1 flex mt-12">
