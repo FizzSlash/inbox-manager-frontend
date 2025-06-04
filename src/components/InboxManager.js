@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
 
 const InboxManager = () => {
   // State for leads from API
@@ -1587,51 +1593,49 @@ const InboxManager = () => {
   const enrichLeadData = async (lead) => {
     setIsEnriching(true);
     try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+      const response = await fetch('/api/enrich', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...lead,
-          smartlead_api_key: apiKeys.smartlead,
-          claude_api_key: apiKeys.claude,
-          fullenrich_api_key: apiKeys.fullenrich
-        })
+        body: JSON.stringify({ lead })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to enrich lead data');
-      }
-
-      const enrichedData = await response.json();
-      console.log('Raw webhook response:', enrichedData);
-
-      // Create a new lead object with the enriched data
+      const data = await response.json();
+      
+      // Update the lead with enriched data
       const updatedLead = {
         ...lead,
-        role: enrichedData.Role || null,
-        company_data: enrichedData["Company Summary"] || null,
-        personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
-        business_linkedin_url: enrichedData["Business LinkedIn"] || null
+        role: data.role || lead.role,
+        company_data: data.company_data || lead.company_data,
+        personal_linkedin_url: data.personal_linkedin_url || lead.personal_linkedin_url,
+        business_linkedin_url: data.business_linkedin_url || lead.business_linkedin_url,
+        // If there's no last name in the lead but we got one from enrichment, update the name
+        name: !lead.name?.includes(' ') && data.last_name ? `${lead.name} ${data.last_name}` : lead.name
       };
 
-      // Update the leads array
-      setLeads(prevLeads => prevLeads.map(l => 
-        l.id === lead.id ? updatedLead : l
-      ));
+      // Update both the leads array and selected lead
+      setLeads(prevLeads => 
+        prevLeads.map(l => l.id === lead.id ? updatedLead : l)
+      );
+      setSelectedLead(updatedLead);
 
-      // If this is the selected lead, update it with a new object reference
-      if (selectedLead?.id === lead.id) {
-        setSelectedLead(updatedLead);
-      }
+      // Update in Supabase
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          role: data.role,
+          company_data: data.company_data,
+          personal_linkedin_url: data.personal_linkedin_url,
+          business_linkedin_url: data.business_linkedin_url,
+          name: updatedLead.name
+        })
+        .eq('id', lead.id);
+
+      if (error) throw error;
 
     } catch (error) {
       console.error('Error enriching lead:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      });
     } finally {
       setIsEnriching(false);
     }
