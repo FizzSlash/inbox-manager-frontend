@@ -1665,12 +1665,20 @@ const InboxManager = () => {
         setSelectedLead(updatedLead);
       }
 
+      // Show success toast if we got any data
+      if (enrichedData.Role || enrichedData["Company Summary"] || enrichedData["Personal LinkedIn"] || enrichedData["Business LinkedIn"]) {
+        showToast('Lead data enriched successfully!', 'success', lead.id);
+      } else {
+        showToast('No additional data found', 'error', lead.id);
+      }
+
     } catch (error) {
       console.error('Error enriching lead:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
+      showToast('Error enriching lead data', 'error', lead.id);
     } finally {
       setEnrichingLeads(prev => {
         const next = new Set(prev);
