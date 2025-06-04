@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, SortAsc, SortDesc } from 'lucide-react';
 
 const InboxManager = () => {
   // State for leads from API
@@ -40,6 +40,23 @@ const InboxManager = () => {
   const [toast, setToast] = useState(null);
   const [toastTimeout, setToastTimeout] = useState(null);
 
+  // Add data log state
+  const [dataLog, setDataLog] = useState([]);
+  const [showDataLog, setShowDataLog] = useState(false);
+
+  // Add log entry helper function
+  const addLogEntry = (type, status, message, leadId, leadName) => {
+    setDataLog(prev => [{
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      type,
+      status,
+      message,
+      leadId,
+      leadName
+    }, ...prev]);
+  };
+
   // Toast helper function
   const showToast = (message, type = 'success', leadId = null) => {
     // Clear any existing timeout
@@ -55,6 +72,19 @@ const InboxManager = () => {
     }, 3000);
     
     setToastTimeout(timeout);
+
+    // Add to data log if leadId exists
+    if (leadId) {
+      const lead = leads.find(l => l.id === leadId);
+      const leadName = lead ? `${lead.first_name} ${lead.last_name}` : 'Unknown Lead';
+      addLogEntry(
+        message.includes('phone') ? 'phone' : 'enrich',
+        type,
+        message,
+        leadId,
+        leadName
+      );
+    }
   };
 
   // Clean up timeout on unmount
@@ -1843,9 +1873,12 @@ const InboxManager = () => {
       <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
         <div className="flex space-x-4">
           <button
-            onClick={() => setActiveTab('inbox')}
+            onClick={() => {
+              setActiveTab('inbox');
+              setShowDataLog(false);
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'inbox' ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
+              activeTab === 'inbox' && !showDataLog ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -1854,7 +1887,24 @@ const InboxManager = () => {
             </div>
           </button>
           <button
-            onClick={() => setShowApiSettings(true)}
+            onClick={() => {
+              setShowDataLog(true);
+              setActiveTab('inbox');
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showDataLog ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Data Log
+            </div>
+          </button>
+          <button
+            onClick={() => {
+              setShowApiSettings(true);
+              setShowDataLog(false);
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               showApiSettings ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
             }`}
@@ -1866,6 +1916,59 @@ const InboxManager = () => {
           </button>
         </div>
       </div>
+
+      {/* Data Log Panel */}
+      {showDataLog && (
+        <div className="absolute top-12 left-0 right-0 bottom-0 z-10 bg-[#1A1C1A] overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-8">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              <Clock className="w-6 h-6" style={{color: '#54FCFF'}} />
+              Data Log
+            </h2>
+            <div className="space-y-4">
+              {dataLog.map(entry => (
+                <div
+                  key={entry.id}
+                  onClick={() => {
+                    if (entry.leadId) {
+                      const lead = leads.find(l => l.id === entry.leadId);
+                      if (lead) {
+                        setSelectedLead(lead);
+                        setShowDataLog(false);
+                      }
+                    }
+                  }}
+                  className="p-4 rounded-lg cursor-pointer transition-all hover:scale-[1.02]"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: `1px solid ${entry.status === 'success' ? '#54FCFF' : '#FF6363'}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {entry.type === 'phone' ? (
+                        <Phone className="w-4 h-4" style={{color: '#54FCFF'}} />
+                      ) : (
+                        <Zap className="w-4 h-4" style={{color: '#54FCFF'}} />
+                      )}
+                      <span className="text-white font-medium">{entry.leadName}</span>
+                      <span className="text-gray-400">{entry.message}</span>
+                    </div>
+                    <span className="text-sm text-gray-400">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {dataLog.length === 0 && (
+                <div className="text-center text-gray-400 py-8">
+                  No data operations logged yet
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API Settings Modal */}
       {showApiSettings && (
