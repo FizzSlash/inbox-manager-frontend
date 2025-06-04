@@ -2285,8 +2285,8 @@ const InboxManager = () => {
               </div>
 
               {/* Lead List */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
-                <div className="pb-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden relative" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
+                <div className="pb-4 relative">
                   {filteredAndSortedLeads.map((lead, index) => {
                   const intentStyle = getIntentStyle(lead.intent);
                   const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -2324,8 +2324,8 @@ const InboxManager = () => {
                     <div
                       key={lead.id}
                       onClick={() => setSelectedLead(lead)}
-                      className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group hover:shadow-xl animate-slideIn ${
-                        selectedLead?.id === lead.id ? 'shadow-2xl transform scale-105' : 'hover:scale-102 hover:-translate-y-1'
+                      className={`p-5 cursor-pointer transition-all duration-500 ease-out relative m-2 rounded-lg group ${
+                        selectedLead?.id === lead.id ? 'shadow-2xl transform scale-102' : 'hover:scale-101'
                       }`}
                       style={{
                         backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
@@ -2333,7 +2333,8 @@ const InboxManager = () => {
                         borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)',
                         boxShadow: selectedLead?.id === lead.id ? '0 0 30px rgba(84, 252, 255, 0.3)' : 'none',
                         animationDelay: `${index * 0.1}s`,
-                        backdropFilter: 'blur(5px)'
+                        backdropFilter: 'blur(5px)',
+                        transform: selectedLead?.id === lead.id ? 'scale(1.02)' : 'none'
                       }}
                     >
                       {/* Hover glow effect */}
