@@ -2485,153 +2485,155 @@ const InboxManager = () => {
                   {/* Content */}
                   <div className="flex-1 overflow-y-auto p-8" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
                     <div className="space-y-8">
-                      {/* Lead Information */}
-                      <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-bold text-white flex items-center text-lg">
-                            <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                            Lead Information
-                          </h3>
-                          <button
-                            onClick={() => enrichLeadData(selectedLead)}
-                            disabled={isEnriching}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
-                          >
-                            {isEnriching ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                                Enriching...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-4 h-4" />
-                                Enrich
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-300">Subject:</span>
-                            <p className="font-medium text-white">{selectedLead.subject}</p>
+                      {/* Lead Information - Split into 3 sections */}
+                      <div className="space-y-6">
+                        {/* General Info Section */}
+                        <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center text-lg">
+                              <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                              General Information
+                            </h3>
                           </div>
-                          <div>
-                            <span className="text-gray-300">Website:</span>
-                            <p className="font-medium">
-                              {selectedLead.website ? (
-                                <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
-                                  {selectedLead.website}
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              ) : <span className="text-white">N/A</span>}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Role:</span>
-                            <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-gray-300">Company Summary:</span>
-                            <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Personal LinkedIn:</span>
-                            {selectedLead.personal_linkedin_url ? (
-                              <a
-                                href={selectedLead.personal_linkedin_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium hover:opacity-80 flex items-center gap-1"
-                                style={{color: '#54FCFF'}}
-                              >
-                                View Profile
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            ) : (
-                              <p className="font-medium text-white">N/A</p>
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Company LinkedIn:</span>
-                            {selectedLead.business_linkedin_url ? (
-                              <a
-                                href={selectedLead.business_linkedin_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium hover:opacity-80 flex items-center gap-1"
-                                style={{color: '#54FCFF'}}
-                              >
-                                View Company
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            ) : (
-                              <p className="font-medium text-white">N/A</p>
-                            )}
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Reply Count:</span>
-                            <p className="font-medium text-white">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Last Reply from Lead:</span>
-                            <p className="font-medium text-white">{(() => {
-                              const lastReply = getLastResponseFromThem(selectedLead.conversation);
-                              return lastReply ? formatTime(lastReply) : 'No replies yet';
-                            })()}</p>
-                          </div>
-                          <div>
-                            <span className="text-gray-300">Last Followup:</span>
-                            <p className="font-medium text-white">{(() => {
-                              const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
-                              return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
-                            })()}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-gray-300">Tags:</span>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {selectedLead.tags.map(tag => (
-                                <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                                  {tag}
-                                </span>
-                              ))}
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-300">Subject:</span>
+                              <p className="font-medium text-white">{selectedLead.subject}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-300">Website:</span>
+                              <p className="font-medium">
+                                {selectedLead.website ? (
+                                  <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
+                                    {selectedLead.website}
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : <span className="text-white">N/A</span>}
+                              </p>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-300">Tags:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {selectedLead.tags.map(tag => (
+                                  <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Engagement Metrics */}
-                      <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                        <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                          <BarChart3 className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                          Engagement Metrics
-                        </h3>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                            <div className={`text-2xl font-bold ${getEngagementColor(selectedLead.engagement_score)}`}>
-                              {selectedLead.engagement_score}%
-                            </div>
-                            <div className="text-gray-300 mb-2">Engagement Score</div>
-                            <div className="text-xs text-gray-400 leading-tight">
-                              Reply rate (60pts max) + Response speed bonus (40pts max)
-                            </div>
+                        {/* Enrichment Info Section */}
+                        <div className="rounded-2xl p-6 shadow-lg relative" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center text-lg">
+                              <Zap className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                              Enrichment Data
+                            </h3>
+                            <button
+                              onClick={() => enrichLeadData(selectedLead)}
+                              disabled={isEnriching}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            >
+                              {isEnriching ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  Enriching...
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="w-4 h-4" />
+                                  Enrich
+                                </>
+                              )}
+                            </button>
                           </div>
-                          <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                            <div className="text-2xl font-bold" style={{color: '#54FCFF'}}>
-                              {formatResponseTime(selectedLead.response_time_avg)}
+
+                          {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) ? (
+                            <div className="text-center py-6 text-gray-400">
+                              <Zap className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                              <p className="text-sm">Click the Enrich button in the top right to fetch additional data</p>
                             </div>
-                            <div className="text-gray-300 mb-2">Avg Response Time</div>
-                            <div className="text-xs text-gray-400 leading-tight">
-                              Average time between your message and their reply
+                          ) : (
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-300">Role:</span>
+                                <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-gray-300">Company Summary:</span>
+                                <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-300">Personal LinkedIn:</span>
+                                {selectedLead.personal_linkedin_url ? (
+                                  <a
+                                    href={selectedLead.personal_linkedin_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium hover:opacity-80 flex items-center gap-1"
+                                    style={{color: '#54FCFF'}}
+                                  >
+                                    View Profile
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : (
+                                  <p className="font-medium text-white">N/A</p>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-gray-300">Company LinkedIn:</span>
+                                {selectedLead.business_linkedin_url ? (
+                                  <a
+                                    href={selectedLead.business_linkedin_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium hover:opacity-80 flex items-center gap-1"
+                                    style={{color: '#54FCFF'}}
+                                  >
+                                    View Company
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : (
+                                  <p className="font-medium text-white">N/A</p>
+                                )}
+                              </div>
                             </div>
+                          )}
+                        </div>
+
+                        {/* Engagement Info Section */}
+                        <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white flex items-center text-lg">
+                              <Activity className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                              Engagement Data
+                            </h3>
                           </div>
-                          <div className="text-center p-6 rounded-xl" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                            <div className="text-2xl font-bold text-purple-400">
-                              {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-300">Reply Count:</span>
+                              <p className="font-medium text-white">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</p>
                             </div>
-                            <div className="text-gray-300 mb-2">Reply Rate</div>
-                            <div className="text-xs text-gray-400 leading-tight">
-                              Number of their replies vs messages you sent
+                            <div>
+                              <span className="text-gray-300">Last Reply from Lead:</span>
+                              <p className="font-medium text-white">{(() => {
+                                const lastReply = getLastResponseFromThem(selectedLead.conversation);
+                                return lastReply ? formatTime(lastReply) : 'No replies yet';
+                              })()}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-300">Last Followup:</span>
+                              <p className="font-medium text-white">{(() => {
+                                const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
+                                return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
+                              })()}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-300">Average Response Time:</span>
+                              <p className="font-medium text-white">{formatResponseTime(selectedLead.response_time_avg)}</p>
                             </div>
                           </div>
                         </div>
