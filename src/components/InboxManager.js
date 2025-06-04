@@ -32,6 +32,10 @@ const InboxManager = () => {
   // Add new state for searching phone number
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
+  // Replace single loading states with maps of lead IDs
+  const [enrichingLeads, setEnrichingLeads] = useState(new Set());
+  const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
+
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
   const getLastResponseFromThem = (conversation) => {
@@ -1588,7 +1592,7 @@ const InboxManager = () => {
 
   // Add enrichment function
   const enrichLeadData = async (lead) => {
-    setIsEnriching(true);
+    setEnrichingLeads(prev => new Set([...prev, lead.id]));
     try {
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
         method: 'POST',
@@ -1636,7 +1640,11 @@ const InboxManager = () => {
         stack: error.stack
       });
     } finally {
-      setIsEnriching(false);
+      setEnrichingLeads(prev => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
     }
   };
 
@@ -1725,7 +1733,7 @@ const InboxManager = () => {
   };
 
   const findPhoneNumber = async (lead) => {
-    setIsSearchingPhone(true);
+    setSearchingPhoneLeads(prev => new Set([...prev, lead.id]));
     try {
       const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/0b5749de-2324-45da-aa36-20971addef0b', {
         method: 'POST',
@@ -1770,7 +1778,11 @@ const InboxManager = () => {
         stack: error.stack
       });
     } finally {
-      setIsSearchingPhone(false);
+      setSearchingPhoneLeads(prev => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
     }
   };
 
@@ -2567,11 +2579,11 @@ const InboxManager = () => {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => findPhoneNumber(selectedLead)}
-                              disabled={isSearchingPhone}
+                              disabled={searchingPhoneLeads.has(selectedLead.id)}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
                               style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
                             >
-                              {isSearchingPhone ? (
+                              {searchingPhoneLeads.has(selectedLead.id) ? (
                                 <>
                                   <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
                                   Searching...
@@ -2585,11 +2597,11 @@ const InboxManager = () => {
                             </button>
                             <button
                               onClick={() => enrichLeadData(selectedLead)}
-                              disabled={isEnriching}
+                              disabled={enrichingLeads.has(selectedLead.id)}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
                               style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
                             >
-                              {isEnriching ? (
+                              {enrichingLeads.has(selectedLead.id) ? (
                                 <>
                                   <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
                                   Enriching...
