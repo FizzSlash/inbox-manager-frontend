@@ -1,5 +1,45 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
+
+const Toast = ({ message, type, onClose, leadId, onLeadClick }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const handleClick = (e) => {
+    e.preventDefault();
+    if (leadId) {
+      onLeadClick(leadId);
+    }
+    onClose();
+  };
+
+  return (
+    <div 
+      className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform animate-fade-in hover:opacity-80"
+      style={{
+        backgroundColor: type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
+        border: `1px solid ${type === 'success' ? '#54FCFF' : '#FF6363'}`,
+        backdropFilter: 'blur(8px)'
+      }}
+      onClick={handleClick}
+    >
+      {type === 'success' ? (
+        <CheckCircle className="w-4 h-4" style={{color: '#54FCFF'}} />
+      ) : (
+        <AlertCircle className="w-4 h-4" style={{color: '#FF6363'}} />
+      )}
+      <span className="text-sm font-medium text-white">{message}</span>
+      {leadId && (
+        <ChevronRight className="w-4 h-4 text-gray-400" />
+      )}
+    </div>
+  );
+};
 
 const InboxManager = () => {
   // State for leads from API
@@ -369,6 +409,22 @@ const InboxManager = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success', leadId = null) => {
+    setToast({ message, type, leadId });
+  };
+
+  const hideToast = () => {
+    setToast(null);
+  };
+
+  const handleToastLeadClick = (leadId) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) {
+      setSelectedLead(lead);
+    }
+  };
 
   // Available filter options
   const filterOptions = {
@@ -1596,7 +1652,7 @@ const InboxManager = () => {
   const enrichLeadData = async (lead) => {
     setEnrichingLeads(prev => new Set([...prev, lead.id]));
     try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/0b5749de-2324-45da-aa36-20971addef0b', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1613,34 +1669,33 @@ const InboxManager = () => {
         throw new Error('Failed to enrich lead data');
       }
 
-      const enrichedData = await response.json();
-      console.log('Raw webhook response:', enrichedData);
-
-      // Create a new lead object with the enriched data
+      const data = await response.json();
+      
+      // Update the lead with enriched data
       const updatedLead = {
         ...lead,
-        role: enrichedData.Role || null,
-        company_data: enrichedData["Company Summary"] || null,
-        personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
-        business_linkedin_url: enrichedData["Business LinkedIn"] || null
+        role: data.role || lead.role,
+        company_data: data.company_data || lead.company_data,
+        personal_linkedin_url: data.personal_linkedin_url || lead.personal_linkedin_url,
+        business_linkedin_url: data.business_linkedin_url || lead.business_linkedin_url,
+        linkedin_url: data.linkedin_url || lead.linkedin_url
       };
 
-      // Update the leads array
+      // Update leads array
       setLeads(prevLeads => prevLeads.map(l => 
         l.id === lead.id ? updatedLead : l
       ));
 
-      // If this is the selected lead, update it with a new object reference
+      // Update selected lead if this is the current one
       if (selectedLead?.id === lead.id) {
         setSelectedLead(updatedLead);
       }
 
+      showToast('Lead data successfully enriched', 'success', lead.id);
+
     } catch (error) {
       console.error('Error enriching lead:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      });
+      showToast('Failed to enrich lead data', 'error', lead.id);
     } finally {
       setEnrichingLeads(prev => {
         const next = new Set(prev);
@@ -1776,12 +1831,22 @@ const InboxManager = () => {
         setSelectedLead(updatedLead);
       }
 
+      // Show success/info toast based on whether a phone number was found
+      showToast(
+        phoneNumber 
+          ? `Phone number found: ${phoneNumber}`
+          : 'No phone number found',
+        phoneNumber ? 'success' : 'error',
+        lead.id
+      );
+
     } catch (error) {
       console.error('Error finding phone number:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
+      showToast('Failed to find phone number', 'error');
     } finally {
       setSearchingPhoneLeads(prev => {
         const next = new Set(prev);
@@ -1793,6 +1858,15 @@ const InboxManager = () => {
 
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={hideToast}
+        />
+      )}
+
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
         <div className="flex space-x-4">
@@ -3289,3 +3363,20 @@ const InboxManager = () => {
 };
 
 export default InboxManager;
+
+<style jsx global>{`
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out forwards;
+  }
+`}</style>
