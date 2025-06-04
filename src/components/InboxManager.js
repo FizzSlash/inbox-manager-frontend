@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 const InboxManager = () => {
   // State for leads from API
@@ -28,6 +28,9 @@ const InboxManager = () => {
   const [isSavingApi, setIsSavingApi] = useState(false);
   const [showApiToast, setShowApiToast] = useState(false);
   const [apiToastMessage, setApiToastMessage] = useState({ type: '', message: '' });
+
+  // Add new state for searching phone number
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
@@ -1721,6 +1724,56 @@ const InboxManager = () => {
     );
   };
 
+  const findPhoneNumber = async (lead) => {
+    setIsSearchingPhone(true);
+    try {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...lead,
+          smartlead_api_key: apiKeys.smartlead,
+          claude_api_key: apiKeys.claude,
+          fullenrich_api_key: apiKeys.fullenrich
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to find phone number');
+      }
+
+      const data = await response.json();
+      console.log('Raw webhook response:', data);
+
+      // Create a new lead object with the phone number
+      const updatedLead = {
+        ...lead,
+        phone: data.phone || null
+      };
+
+      // Update the leads array
+      setLeads(prevLeads => prevLeads.map(l => 
+        l.id === lead.id ? updatedLead : l
+      ));
+
+      // If this is the selected lead, update it with a new object reference
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(updatedLead);
+      }
+
+    } catch (error) {
+      console.error('Error finding phone number:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+    } finally {
+      setIsSearchingPhone(false);
+    }
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2511,24 +2564,44 @@ const InboxManager = () => {
                     <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Lead Information
                   </h3>
-                          <button
-                            onClick={() => enrichLeadData(selectedLead)}
-                            disabled={isEnriching}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
-                          >
-                            {isEnriching ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                                Enriching...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-4 h-4" />
-                                Enrich
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => findPhoneNumber(selectedLead)}
+                              disabled={isSearchingPhone}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            >
+                              {isSearchingPhone ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  Searching...
+                                </>
+                              ) : (
+                                <>
+                                  <Phone className="w-4 h-4" />
+                                  Find Phone
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => enrichLeadData(selectedLead)}
+                              disabled={isEnriching}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            >
+                              {isEnriching ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  Enriching...
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="w-4 h-4" />
+                                  Enrich
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Communication Timeline */}
@@ -2597,6 +2670,10 @@ const InboxManager = () => {
                           </a>
                         ) : <span className="text-white">N/A</span>}
                       </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Phone:</span>
+                      <p className="font-medium text-white">{selectedLead.phone || 'N/A'}</p>
                     </div>
                     <div className="col-span-2">
                       <span className="text-gray-300">Tags:</span>
