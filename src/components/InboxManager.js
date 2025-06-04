@@ -1603,6 +1603,11 @@ const InboxManager = () => {
 
       const data = await response.json();
       
+      // Create the updated name if we have a new last name
+      const updatedName = !lead.name?.includes(' ') && data.last_name 
+        ? `${lead.name} ${data.last_name}` 
+        : lead.name;
+      
       // Update the lead with enriched data
       const updatedLead = {
         ...lead,
@@ -1610,14 +1615,12 @@ const InboxManager = () => {
         company_data: data.company_data || lead.company_data,
         personal_linkedin_url: data.personal_linkedin_url || lead.personal_linkedin_url,
         business_linkedin_url: data.business_linkedin_url || lead.business_linkedin_url,
-        // If there's no last name in the lead but we got one from enrichment, update the name
-        name: !lead.name?.includes(' ') && data.last_name ? `${lead.name} ${data.last_name}` : lead.name
+        name: updatedName // Add the name to the updated lead object
       };
 
-      // Update both the leads array and selected lead
-      setLeads(prevLeads => 
-        prevLeads.map(l => l.id === lead.id ? updatedLead : l)
-      );
+      // Update both the leads array and selected lead with new references
+      const newLeads = leads.map(l => l.id === lead.id ? updatedLead : l);
+      setLeads(newLeads);
       setSelectedLead(updatedLead);
 
       // Update in Supabase
@@ -1628,7 +1631,7 @@ const InboxManager = () => {
           company_data: data.company_data,
           personal_linkedin_url: data.personal_linkedin_url,
           business_linkedin_url: data.business_linkedin_url,
-          name: updatedLead.name
+          name: updatedName
         })
         .eq('id', lead.id);
 
