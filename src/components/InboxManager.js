@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js'
-import { toast } from 'react-toastify'
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-)
 
 const InboxManager = () => {
   // State for leads from API
@@ -1592,59 +1585,53 @@ const InboxManager = () => {
 
   // Add enrichment function
   const enrichLeadData = async (lead) => {
-    if (!lead) return;
     setIsEnriching(true);
-
     try {
-      const response = await fetch('https://hook.eu1.make.com/YOUR_WEBHOOK_URL', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          email: lead.email,
-          name: lead.name,
-          company: lead.company,
-          api_key: apiKeys.fullenrich
+          ...lead,
+          smartlead_api_key: apiKeys.smartlead,
+          claude_api_key: apiKeys.claude,
+          fullenrich_api_key: apiKeys.fullenrich
         })
       });
 
-      const data = await response.json();
-      
-      // Create updated lead object with enriched data
-      const enrichedLead = {
+      if (!response.ok) {
+        throw new Error('Failed to enrich lead data');
+      }
+
+      const enrichedData = await response.json();
+      console.log('Raw webhook response:', enrichedData);
+
+      // Create a new lead object with the enriched data
+      const updatedLead = {
         ...lead,
-        role: data.role || lead.role,
-        company_data: data.company_data || lead.company_data,
-        personal_linkedin_url: data.personal_linkedin_url || lead.personal_linkedin_url,
-        business_linkedin_url: data.business_linkedin_url || lead.business_linkedin_url,
-        // Only update last name if it wasn't present before
-        name: !lead.name?.includes(' ') && data.last_name ? `${lead.name} ${data.last_name}` : lead.name
+        role: enrichedData.Role || null,
+        company_data: enrichedData["Company Summary"] || null,
+        personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
+        business_linkedin_url: enrichedData["Business LinkedIn"] || null
       };
 
-      // Update lead in Supabase
-      const { error } = await supabase
-        .from('leads')
-        .update({
-          role: enrichedLead.role,
-          company_data: enrichedLead.company_data,
-          personal_linkedin_url: enrichedLead.personal_linkedin_url,
-          business_linkedin_url: enrichedLead.business_linkedin_url,
-          name: enrichedLead.name
-        })
-        .eq('id', lead.id);
+      // Update the leads array
+      setLeads(prevLeads => prevLeads.map(l => 
+        l.id === lead.id ? updatedLead : l
+      ));
 
-      if (error) throw error;
-
-      // Update local state
-      setLeads(prevLeads => 
-        prevLeads.map(l => l.id === lead.id ? enrichedLead : l)
-      );
-      setSelectedLead(enrichedLead);
+      // If this is the selected lead, update it with a new object reference
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(updatedLead);
+      }
 
     } catch (error) {
       console.error('Error enriching lead:', error);
-      toast.error('Failed to enrich lead data');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
     } finally {
       setIsEnriching(false);
     }
@@ -2518,12 +2505,12 @@ const InboxManager = () => {
             <div className="flex-1 overflow-y-auto p-8" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
               <div className="space-y-8">
                       {/* Unified Lead Information Section */}
-                      <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                         <div className="flex justify-between items-center mb-6">
                           <h3 className="font-bold text-white flex items-center text-lg">
-                            <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                            Lead Information
-                          </h3>
+                    <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                    Lead Information
+                  </h3>
                           <button
                             onClick={() => enrichLeadData(selectedLead)}
                             disabled={isEnriching}
@@ -2596,35 +2583,35 @@ const InboxManager = () => {
                             {activeSection.includes('general') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm pl-6">
-                                  <div>
-                                    <span className="text-gray-300">Subject:</span>
-                                    <p className="font-medium text-white">{selectedLead.subject}</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-300">Website:</span>
-                                    <p className="font-medium">
-                                      {selectedLead.website ? (
-                                        <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
-                                          {selectedLead.website}
-                                          <ExternalLink className="w-3 h-3" />
-                                        </a>
-                                      ) : <span className="text-white">N/A</span>}
-                                    </p>
-                                  </div>
-                                  <div className="col-span-2">
-                                    <span className="text-gray-300">Tags:</span>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {selectedLead.tags.map(tag => (
-                                        <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                                          {tag}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
+                    <div>
+                      <span className="text-gray-300">Subject:</span>
+                      <p className="font-medium text-white">{selectedLead.subject}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Website:</span>
+                      <p className="font-medium">
+                        {selectedLead.website ? (
+                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
+                            {selectedLead.website}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : <span className="text-white">N/A</span>}
+                      </p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-300">Tags:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedLead.tags.map(tag => (
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                               </div>
                             )}
-                          </div>
+                </div>
 
                           {/* Enrichment Data Subsection */}
                           <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
@@ -2638,7 +2625,7 @@ const InboxManager = () => {
                                   style={{color: '#54FCFF'}} 
                                 />
                                 <span className="text-white font-medium">Enrichment Data</span>
-                              </div>
+                      </div>
                               {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) && (
                                 <span className="text-xs text-gray-400">No data yet</span>
                               )}
@@ -2649,17 +2636,17 @@ const InboxManager = () => {
                                   <div className="text-center py-6 text-gray-400 rounded-lg border border-white/10 mx-6">
                                     <Zap className="w-8 h-8 mx-auto mb-3 opacity-50" />
                                     <p className="text-sm">Click the Enrich button above to fetch additional data</p>
-                                  </div>
+                      </div>
                                 ) : (
                                   <div className="grid grid-cols-2 gap-4 text-sm pl-6">
                                     <div>
                                       <span className="text-gray-300">Role:</span>
                                       <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
-                                    </div>
+                    </div>
                                     <div className="col-span-2">
                                       <span className="text-gray-300">Company Summary:</span>
                                       <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
-                                    </div>
+                      </div>
                                     <div>
                                       <span className="text-gray-300">Personal LinkedIn:</span>
                                       {selectedLead.personal_linkedin_url ? (
@@ -2676,7 +2663,7 @@ const InboxManager = () => {
                                       ) : (
                                         <p className="font-medium text-white">N/A</p>
                                       )}
-                                    </div>
+                      </div>
                                     <div>
                                       <span className="text-gray-300">Company LinkedIn:</span>
                                       {selectedLead.business_linkedin_url ? (
@@ -2693,7 +2680,7 @@ const InboxManager = () => {
                                       ) : (
                                         <p className="font-medium text-white">N/A</p>
                                       )}
-                                    </div>
+                    </div>
                                   </div>
                                 )}
                               </div>
@@ -2734,43 +2721,43 @@ const InboxManager = () => {
                                       <div>
                                         <span className="text-gray-400">Reply Rate</span>
                                         <p className="text-2xl font-bold mt-1 text-white">
-                                          {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
+                        {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                                         </p>
-                                      </div>
-                                    </div>
+                      </div>
+                      </div>
                                   </div>
                                 </div>
                               </div>
                             )}
-                          </div>
-                        </div>
-                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                      {/* Conversation History */}
-                      <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                        <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                          <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                          Conversation History ({selectedLead.conversation.length} messages)
-                        </h3>
-                        <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
-                          {selectedLead.conversation.map((message, index) => (
-                            <div key={index} className={`p-5 rounded-xl border shadow-sm ${
-                              message.type === 'SENT' 
-                                ? 'border-blue-400' 
-                                : 'border-gray-400'
-                            }`} style={{
-                              backgroundColor: message.type === 'SENT' 
-                                ? 'rgba(84, 252, 255, 0.08)' 
-                                : 'rgba(255, 255, 255, 0.03)',
-                              borderColor: message.type === 'SENT' 
-                                ? 'rgba(84, 252, 255, 0.3)' 
-                                : 'rgba(255, 255, 255, 0.2)'
-                            }}>
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="text-sm">
-                                  <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-white'}`}>
-                                    {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
-                                  </span>
+                {/* Conversation History */}
+                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                    <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                    Conversation History ({selectedLead.conversation.length} messages)
+                  </h3>
+                  <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
+                    {selectedLead.conversation.map((message, index) => (
+                      <div key={index} className={`p-5 rounded-xl border shadow-sm ${
+                        message.type === 'SENT' 
+                          ? 'border-blue-400' 
+                          : 'border-gray-400'
+                      }`} style={{
+                        backgroundColor: message.type === 'SENT' 
+                          ? 'rgba(84, 252, 255, 0.08)' 
+                          : 'rgba(255, 255, 255, 0.03)',
+                        borderColor: message.type === 'SENT' 
+                          ? 'rgba(84, 252, 255, 0.3)' 
+                          : 'rgba(255, 255, 255, 0.2)'
+                      }}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="text-sm">
+                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-white'}`}>
+                              {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
+                            </span>
                             <span className="text-gray-300 ml-2">
                               {formatTime(message.time)}
                             </span>
@@ -3042,7 +3029,7 @@ const InboxManager = () => {
                                       // Update content
                                       handleTextareaChange({ target: e.target });
                                     }
-                                  }
+                            }
                           }
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2 focus:outline-none overflow-y-auto"
