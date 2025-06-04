@@ -2671,36 +2671,32 @@ const InboxManager = () => {
                             {activeSection.includes('general') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm pl-6">
-                    <div>
-                      <span className="text-gray-300">Subject:</span>
-                      <p className="font-medium text-white">{selectedLead.subject}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-300">Website:</span>
-                      <p className="font-medium">
-                        {selectedLead.website ? (
-                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
-                            {selectedLead.website}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : <span className="text-white">N/A</span>}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-300">Phone:</span>
-                      <p className="font-medium text-white">{selectedLead.phone || 'N/A'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-300">Tags:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedLead.tags.map(tag => (
-                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                                    <div>
+                                      <span className="text-gray-300">Subject:</span>
+                                      <p className="font-medium text-white">{selectedLead.subject}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-300">Website:</span>
+                                      <p className="font-medium">
+                                        {selectedLead.website ? (
+                                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
+                                            {selectedLead.website}
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        ) : <span className="text-white">N/A</span>}
+                                      </p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <span className="text-gray-300">Tags:</span>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {selectedLead.tags.map(tag => (
+                                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                               </div>
                             )}
                 </div>
