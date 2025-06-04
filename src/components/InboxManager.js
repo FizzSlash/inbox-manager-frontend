@@ -72,134 +72,34 @@ const InboxManager = () => {
 
   const fetchLeads = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch('https://leads-api-nu.vercel.app/api/retention-harbor');
-      if (!response.ok) throw new Error('Failed to fetch leads');
-      
-      const data = await response.json();
-      
-      // Transform the data to match the expected format
-      const transformedLeads = (data.leads || []).map(lead => {
-        // Parse conversation data from email_message_body and extract subject
-        let conversation = [];
-        let extractedSubject = `Campaign for ${lead.first_name || 'Lead'}`;
-        let emailStatsId = null;
-        
-        try {
-          if (lead.email_message_body) {
-            const parsedConversation = JSON.parse(lead.email_message_body);
-            
-            // Extract stats_id from the first message
-            if (parsedConversation.length > 0 && parsedConversation[0].stats_id) {
-              emailStatsId = parsedConversation[0].stats_id;
-            }
-            
-            conversation = parsedConversation.map((msg, index) => {
-              const prevMsg = parsedConversation[index - 1];
-              let responseTime = undefined;
-              
-              if (msg.type === 'REPLY' && prevMsg && prevMsg.type === 'SENT') {
-                const timeDiff = new Date(msg.time) - new Date(prevMsg.time);
-                responseTime = timeDiff / (1000 * 60 * 60); // Convert to hours
-              }
+      const { data, error } = await supabase
+        .from('leads')
+        .select(`
+          *,
+          id,
+          name,
+          email,
+          website,
+          subject,
+          conversation,
+          tags,
+          stage,
+          intent,
+          engagement_score,
+          response_time_avg,
+          role,
+          company_data,
+          personal_linkedin_url,
+          business_linkedin_url,
+          phone
+        `)
+        .order('created_at', { ascending: false });
 
-              return {
-                from: msg.from || '',
-                to: msg.to || '',
-                cc: msg.cc || null,
-                type: msg.type || 'SENT',
-                time: msg.time || new Date().toISOString(),
-                content: extractTextFromHTML(msg.email_body || ''),
-                subject: msg.subject || '',
-                opened: (msg.open_count || 0) > 0,
-                clicked: (msg.click_count || 0) > 0,
-                response_time: responseTime
-              };
-            });
-            
-            // Extract subject from the first message in conversation or any message with subject
-            if (conversation.length > 0) {
-              const messageWithSubject = conversation.find(msg => msg.subject && msg.subject.trim() !== '');
-              if (messageWithSubject) {
-                extractedSubject = messageWithSubject.subject.trim();
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Error parsing conversation for lead', lead.id, e);
-          conversation = [];
-        }
+      if (error) throw error;
 
-        // Calculate metrics from conversation
-        const replies = conversation.filter(m => m.type === 'REPLY');
-        const sent = conversation.filter(m => m.type === 'SENT');
-        
-        // Calculate average response time
-        const responseTimes = conversation
-          .filter(m => m.response_time !== undefined)
-          .map(m => m.response_time);
-        const avgResponseTime = responseTimes.length > 0 
-          ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length 
-          : 0;
-
-        // Calculate engagement score
-        let engagementScore = 0;
-        if (sent.length > 0) {
-          engagementScore += Math.min((replies.length / sent.length) * 60, 60);
-          if (avgResponseTime < 1) engagementScore += 40;
-          else if (avgResponseTime < 4) engagementScore += 30;
-          else if (avgResponseTime < 24) engagementScore += 20;
-          else if (avgResponseTime < 72) engagementScore += 10;
-        }
-        engagementScore = Math.round(Math.min(engagementScore, 100));
-
-        // Calculate intent score based on conversation content
-        const allText = conversation.map(m => m.content.toLowerCase()).join(' ');
-        let intentScore = 1 + Math.min(replies.length * 2, 6);
-        const positiveKeywords = ['interested', 'yes', 'sure', 'sounds good', 'let me know', 'call', 'meeting', 'schedule'];
-        intentScore += positiveKeywords.filter(keyword => allText.includes(keyword)).length;
-        if (allText.includes('price') || allText.includes('cost')) intentScore += 1;
-        if (allText.includes('sample') || allText.includes('example')) intentScore += 1;
-        intentScore = Math.min(intentScore, 10);
-
-        return {
-          id: lead.id,
-          campaign_id: lead.campaign_ID || null,
-          lead_id: lead.lead_ID || null,
-          email_stats_id: emailStatsId,
-          created_at: lead.created_at,
-          updated_at: lead.created_at,
-          email: lead.lead_email,
-          first_name: lead.first_name || 'Unknown',
-          last_name: lead.last_name || '',
-          website: lead.website || lead.lead_email?.split('@')[1] || '',
-          content_brief: `Email marketing campaign for ${lead.lead_category || 'business'}`,
-          subject: extractedSubject,
-          email_message_body: lead.email_message_body,
-          intent: intentScore,
-          created_at_best: lead.created_at,
-          response_time_avg: avgResponseTime,
-          engagement_score: engagementScore,
-          lead_category: lead.lead_category,
-          tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
-          conversation: conversation,
-          // Include the Supabase fields with their values or defaults
-          role: lead.role || 'N/A',
-          company_data: lead.company_data || 'N/A',
-          personal_linkedin_url: lead.personal_linkedin_url || null,
-          business_linkedin_url: lead.business_linkedin_url || null,
-          linkedin_url: lead.linkedin_url || 'N/A'
-        };
-      });
-      
-      setLeads(transformedLeads);
-    } catch (err) {
-      console.error('Error fetching leads:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setLeads(data || []);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
     }
   };
 
@@ -1745,7 +1645,7 @@ const InboxManager = () => {
       // Update the lead with the phone number
       const updatedLead = {
         ...lead,
-        phone_number: data.phone_number || lead.phone_number
+        phone: data.phone || lead.phone
       };
 
       // Update both the leads array and selected lead with new references
@@ -1757,7 +1657,7 @@ const InboxManager = () => {
       const { error } = await supabase
         .from('leads')
         .update({
-          phone_number: data.phone_number
+          phone: data.phone
         })
         .eq('id', lead.id);
 
@@ -2668,8 +2568,8 @@ const InboxManager = () => {
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-300">Phone Number:</span>
-                      <p className="font-medium text-white">{selectedLead.phone_number || 'N/A'}</p>
+                      <span className="text-gray-300">Phone:</span>
+                      <p className="font-medium text-white">{selectedLead.phone || 'N/A'}</p>
                     </div>
                     <div className="col-span-2">
                       <span className="text-gray-300">Tags:</span>
