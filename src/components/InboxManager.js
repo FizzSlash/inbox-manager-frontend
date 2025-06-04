@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -366,6 +366,7 @@ const InboxManager = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   // Available filter options
   const filterOptions = {
@@ -1728,6 +1729,47 @@ const InboxManager = () => {
     );
   };
 
+  const findPhoneNumber = async (lead) => {
+    setIsSearchingPhone(true);
+    try {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lead })
+      });
+
+      const data = await response.json();
+      
+      // Update the lead with the phone number
+      const updatedLead = {
+        ...lead,
+        phone_number: data.phone_number || lead.phone_number
+      };
+
+      // Update both the leads array and selected lead with new references
+      const newLeads = leads.map(l => l.id === lead.id ? updatedLead : l);
+      setLeads(newLeads);
+      setSelectedLead(updatedLead);
+
+      // Update in Supabase
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          phone_number: data.phone_number
+        })
+        .eq('id', lead.id);
+
+      if (error) throw error;
+
+    } catch (error) {
+      console.error('Error finding phone number:', error);
+    } finally {
+      setIsSearchingPhone(false);
+    }
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2518,24 +2560,44 @@ const InboxManager = () => {
                     <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Lead Information
                   </h3>
-                          <button
-                            onClick={() => enrichLeadData(selectedLead)}
-                            disabled={isEnriching}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
-                          >
-                            {isEnriching ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                                Enriching...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-4 h-4" />
-                                Enrich
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => findPhoneNumber(selectedLead)}
+                              disabled={isSearchingPhone}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            >
+                              {isSearchingPhone ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  Searching...
+                                </>
+                              ) : (
+                                <>
+                                  <Phone className="w-4 h-4" />
+                                  Find Phone
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => enrichLeadData(selectedLead)}
+                              disabled={isEnriching}
+                              className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            >
+                              {isEnriching ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  Enriching...
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="w-4 h-4" />
+                                  Enrich
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Communication Timeline */}
@@ -2604,6 +2666,10 @@ const InboxManager = () => {
                           </a>
                         ) : <span className="text-white">N/A</span>}
                       </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-300">Phone Number:</span>
+                      <p className="font-medium text-white">{selectedLead.phone_number || 'N/A'}</p>
                     </div>
                     <div className="col-span-2">
                       <span className="text-gray-300">Tags:</span>
