@@ -36,6 +36,36 @@ const InboxManager = () => {
   const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
 
+  // Add toast state
+  const [toast, setToast] = useState(null);
+  const [toastTimeout, setToastTimeout] = useState(null);
+
+  // Toast helper function
+  const showToast = (message, type = 'success', leadId = null) => {
+    // Clear any existing timeout
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+    }
+
+    setToast({ message, type, leadId });
+    
+    // Auto-dismiss after 3 seconds
+    const timeout = setTimeout(() => {
+      setToast(null);
+    }, 3000);
+    
+    setToastTimeout(timeout);
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeout) {
+        clearTimeout(toastTimeout);
+      }
+    };
+  }, [toastTimeout]);
+
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
   const getLastResponseFromThem = (conversation) => {
@@ -1947,6 +1977,42 @@ const InboxManager = () => {
             )}
             {apiToastMessage.message}
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div 
+          className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102"
+          style={{
+            backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
+            border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
+            backdropFilter: 'blur(8px)'
+          }}
+          onClick={() => {
+            if (toast.leadId) {
+              const lead = leads.find(l => l.id === toast.leadId);
+              if (lead) {
+                setSelectedLead(lead);
+              }
+            }
+          }}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle className="w-5 h-5" style={{color: '#54FCFF'}} />
+          ) : (
+            <AlertCircle className="w-5 h-5" style={{color: '#FF6363'}} />
+          )}
+          <span className="text-white text-sm font-medium">{toast.message}</span>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setToast(null);
+            }}
+            className="ml-2 text-gray-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
