@@ -59,7 +59,7 @@ const InboxManager = () => {
     // Store the timeout reference
     toastsTimeoutRef.current[id] = setTimeout(() => {
       removeToast(id);
-    }, 3000);
+    }, 10000);
   };
 
   // Remove specific toast
@@ -1673,11 +1673,12 @@ const InboxManager = () => {
         setSelectedLead(updatedLead);
       }
 
-      // Show success toast if we got any data
+      // Show success/not found toast with lead name
+      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
       if (enrichedData.Role || enrichedData["Company Summary"] || enrichedData["Personal LinkedIn"] || enrichedData["Business LinkedIn"]) {
-        showToast('Lead data enriched successfully!', 'success', lead.id);
+        showToast(`Data enriched for ${leadName}`, 'success', lead.id);
       } else {
-        showToast('No additional data found', 'error', lead.id);
+        showToast(`No additional data found for ${leadName}`, 'error', lead.id);
       }
 
     } catch (error) {
@@ -1686,7 +1687,8 @@ const InboxManager = () => {
         message: error.message,
         stack: error.stack
       });
-      showToast('Error enriching lead data', 'error', lead.id);
+      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      showToast(`Error enriching data for ${leadName}`, 'error', lead.id);
     } finally {
       setEnrichingLeads(prev => {
         const next = new Set(prev);
@@ -1803,7 +1805,7 @@ const InboxManager = () => {
       const data = await response.json();
       console.log('Raw webhook response:', data);
 
-      // Extract phone number from the nested structure - fixing the path
+      // Extract phone number from the nested structure
       const phoneNumber = data?.datas?.[0]?.contact?.phones?.[0]?.number || null;
 
       // Create a new lead object with the phone number
@@ -1822,11 +1824,12 @@ const InboxManager = () => {
         setSelectedLead(updatedLead);
       }
 
-      // Show success/not found toast
+      // Show success/not found toast with lead name
+      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
       if (phoneNumber) {
-        showToast('Phone number found!', 'success', lead.id);
+        showToast(`Phone found for ${leadName}`, 'success', lead.id);
       } else {
-        showToast('No phone number found', 'error', lead.id);
+        showToast(`No phone found for ${leadName}`, 'error', lead.id);
       }
 
     } catch (error) {
@@ -1835,7 +1838,8 @@ const InboxManager = () => {
         message: error.message,
         stack: error.stack
       });
-      showToast('Error searching for phone number', 'error', lead.id);
+      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      showToast(`Error searching phone for ${leadName}`, 'error', lead.id);
     } finally {
       setSearchingPhoneLeads(prev => {
         const next = new Set(prev);
