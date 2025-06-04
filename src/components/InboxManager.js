@@ -1659,7 +1659,8 @@ const InboxManager = () => {
         role: enrichedData.Role || null,
         company_data: enrichedData["Company Summary"] || null,
         personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
-        business_linkedin_url: enrichedData["Business LinkedIn"] || null
+        business_linkedin_url: enrichedData["Business LinkedIn"] || null,
+        last_name: enrichedData["Last Name"] || lead.last_name || ''
       };
 
       // Update the leads array
