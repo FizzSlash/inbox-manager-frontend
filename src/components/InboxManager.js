@@ -340,8 +340,8 @@ const InboxManager = () => {
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
   
-  // Add state for collapsible sections
-  const [activeSection, setActiveSection] = useState('general');
+  // Add state for collapsible sections - default to all open
+  const [activeSection, setActiveSection] = useState(['general', 'enrichment', 'engagement']);
   
   // New state for editable email fields
   const [editableToEmail, setEditableToEmail] = useState('');
@@ -1703,6 +1703,24 @@ const InboxManager = () => {
     }
   };
 
+  // Function to toggle all sections
+  const toggleAllSections = () => {
+    if (activeSection.length === 0) {
+      setActiveSection(['general', 'enrichment', 'engagement']);
+    } else {
+      setActiveSection([]);
+    }
+  };
+
+  // Function to toggle individual section
+  const toggleSection = (section) => {
+    setActiveSection(prev => 
+      prev.includes(section) 
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2494,22 +2512,11 @@ const InboxManager = () => {
                             Lead Information
                           </h3>
                           <button
-                            onClick={() => enrichLeadData(selectedLead)}
-                            disabled={isEnriching}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                            onClick={toggleAllSections}
+                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80"
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
                           >
-                            {isEnriching ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                                Enriching...
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="w-4 h-4" />
-                                Enrich
-                              </>
-                            )}
+                            {activeSection.length === 0 ? 'Expand All' : 'Collapse All'}
                           </button>
                         </div>
 
@@ -2551,18 +2558,18 @@ const InboxManager = () => {
                           {/* General Info Subsection */}
                           <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
                             <button 
-                              onClick={() => setActiveSection(activeSection === 'general' ? null : 'general')}
+                              onClick={() => toggleSection('general')}
                               className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
-                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection === 'general' ? 'rotate-90' : ''}`} 
+                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('general') ? 'rotate-90' : ''}`} 
                                   style={{color: '#54FCFF'}} 
                                 />
                                 <span className="text-white font-medium">General Information</span>
                               </div>
                             </button>
-                            {activeSection === 'general' && (
+                            {activeSection.includes('general') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm pl-6">
                                   <div>
@@ -2598,12 +2605,12 @@ const InboxManager = () => {
                           {/* Enrichment Data Subsection */}
                           <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
                             <button 
-                              onClick={() => setActiveSection(activeSection === 'enrichment' ? null : 'enrichment')}
+                              onClick={() => toggleSection('enrichment')}
                               className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
-                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection === 'enrichment' ? 'rotate-90' : ''}`} 
+                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('enrichment') ? 'rotate-90' : ''}`} 
                                   style={{color: '#54FCFF'}} 
                                 />
                                 <span className="text-white font-medium">Enrichment Data</span>
@@ -2612,8 +2619,28 @@ const InboxManager = () => {
                                 <span className="text-xs text-gray-400">No data yet</span>
                               )}
                             </button>
-                            {activeSection === 'enrichment' && (
+                            {activeSection.includes('enrichment') && (
                               <div className="px-4 pb-4">
+                                <div className="flex justify-end mb-4">
+                                  <button
+                                    onClick={() => enrichLeadData(selectedLead)}
+                                    disabled={isEnriching}
+                                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                                    style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                                  >
+                                    {isEnriching ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                        Enriching...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Zap className="w-4 h-4" />
+                                        Enrich
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
                                 {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) ? (
                                   <div className="text-center py-6 text-gray-400 rounded-lg border border-white/10 mx-6">
                                     <Zap className="w-8 h-8 mx-auto mb-3 opacity-50" />
@@ -2672,31 +2699,37 @@ const InboxManager = () => {
                           {/* Engagement Metrics Subsection */}
                           <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
                             <button 
-                              onClick={() => setActiveSection(activeSection === 'engagement' ? null : 'engagement')}
+                              onClick={() => toggleSection('engagement')}
                               className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
-                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection === 'engagement' ? 'rotate-90' : ''}`} 
+                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('engagement') ? 'rotate-90' : ''}`} 
                                   style={{color: '#54FCFF'}} 
                                 />
                                 <span className="text-white font-medium">Engagement Metrics</span>
                               </div>
                             </button>
-                            {activeSection === 'engagement' && (
+                            {activeSection.includes('engagement') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-3 gap-4 text-sm pl-6">
                                   <div className="col-span-3 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                                    <div className="flex items-center justify-between">
+                                    <div className="grid grid-cols-3 gap-8">
                                       <div>
                                         <span className="text-gray-400">Engagement Score</span>
                                         <p className={`text-2xl font-bold mt-1 ${getEngagementColor(selectedLead.engagement_score)}`}>
                                           {selectedLead.engagement_score}%
                                         </p>
                                       </div>
-                                      <div className="text-right">
+                                      <div>
+                                        <span className="text-gray-400">Intent Score</span>
+                                        <p className="text-2xl font-bold mt-1" style={{color: '#54FCFF'}}>
+                                          {selectedLead.intent}/10
+                                        </p>
+                                      </div>
+                                      <div>
                                         <span className="text-gray-400">Reply Rate</span>
-                                        <p className="text-xl font-bold mt-1" style={{color: '#54FCFF'}}>
+                                        <p className="text-2xl font-bold mt-1 text-white">
                                           {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                                         </p>
                                       </div>
