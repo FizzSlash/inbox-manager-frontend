@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js'
+import { toast } from 'react-toastify'
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+)
 
 const InboxManager = () => {
   // State for leads from API
@@ -1585,53 +1592,59 @@ const InboxManager = () => {
 
   // Add enrichment function
   const enrichLeadData = async (lead) => {
+    if (!lead) return;
     setIsEnriching(true);
+
     try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
+      const response = await fetch('https://hook.eu1.make.com/YOUR_WEBHOOK_URL', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...lead,
-          smartlead_api_key: apiKeys.smartlead,
-          claude_api_key: apiKeys.claude,
-          fullenrich_api_key: apiKeys.fullenrich
+          email: lead.email,
+          name: lead.name,
+          company: lead.company,
+          api_key: apiKeys.fullenrich
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to enrich lead data');
-      }
-
-      const enrichedData = await response.json();
-      console.log('Raw webhook response:', enrichedData);
-
-      // Create a new lead object with the enriched data
-      const updatedLead = {
+      const data = await response.json();
+      
+      // Create updated lead object with enriched data
+      const enrichedLead = {
         ...lead,
-        role: enrichedData.Role || null,
-        company_data: enrichedData["Company Summary"] || null,
-        personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
-        business_linkedin_url: enrichedData["Business LinkedIn"] || null
+        role: data.role || lead.role,
+        company_data: data.company_data || lead.company_data,
+        personal_linkedin_url: data.personal_linkedin_url || lead.personal_linkedin_url,
+        business_linkedin_url: data.business_linkedin_url || lead.business_linkedin_url,
+        // Only update last name if it wasn't present before
+        name: !lead.name?.includes(' ') && data.last_name ? `${lead.name} ${data.last_name}` : lead.name
       };
 
-      // Update the leads array
-      setLeads(prevLeads => prevLeads.map(l => 
-        l.id === lead.id ? updatedLead : l
-      ));
+      // Update lead in Supabase
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          role: enrichedLead.role,
+          company_data: enrichedLead.company_data,
+          personal_linkedin_url: enrichedLead.personal_linkedin_url,
+          business_linkedin_url: enrichedLead.business_linkedin_url,
+          name: enrichedLead.name
+        })
+        .eq('id', lead.id);
 
-      // If this is the selected lead, update it with a new object reference
-      if (selectedLead?.id === lead.id) {
-        setSelectedLead(updatedLead);
-      }
+      if (error) throw error;
+
+      // Update local state
+      setLeads(prevLeads => 
+        prevLeads.map(l => l.id === lead.id ? enrichedLead : l)
+      );
+      setSelectedLead(enrichedLead);
 
     } catch (error) {
       console.error('Error enriching lead:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      });
+      toast.error('Failed to enrich lead data');
     } finally {
       setIsEnriching(false);
     }
