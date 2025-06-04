@@ -2512,11 +2512,22 @@ const InboxManager = () => {
                             Lead Information
                           </h3>
                           <button
-                            onClick={toggleAllSections}
-                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+                            onClick={() => enrichLeadData(selectedLead)}
+                            disabled={isEnriching}
+                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
                           >
-                            {activeSection.length === 0 ? 'Expand All' : 'Collapse All'}
+                            {isEnriching ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                Enriching...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-4 h-4" />
+                                Enrich
+                              </>
+                            )}
                           </button>
                         </div>
 
@@ -2621,26 +2632,6 @@ const InboxManager = () => {
                             </button>
                             {activeSection.includes('enrichment') && (
                               <div className="px-4 pb-4">
-                                <div className="flex justify-end mb-4">
-                                  <button
-                                    onClick={() => enrichLeadData(selectedLead)}
-                                    disabled={isEnriching}
-                                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                                    style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
-                                  >
-                                    {isEnriching ? (
-                                      <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                                        Enriching...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Zap className="w-4 h-4" />
-                                        Enrich
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
                                 {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) ? (
                                   <div className="text-center py-6 text-gray-400 rounded-lg border border-white/10 mx-6">
                                     <Zap className="w-8 h-8 mx-auto mb-3 opacity-50" />
