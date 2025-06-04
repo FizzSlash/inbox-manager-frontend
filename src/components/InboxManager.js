@@ -1727,55 +1727,49 @@ const InboxManager = () => {
   const findPhoneNumber = async (lead) => {
     setIsSearchingPhone(true);
     try {
-      // Split the name into first and last name
-      const nameParts = lead.name.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts[1] || '';
-      
-      // Get domain from email or website
-      const domain = lead.website || lead.email.split('@')[1];
-
-      const response = await fetch('https://app.fullenrich.com/api/v1/contact/enrich/bulk', {
+      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/0b5749de-2324-45da-aa36-20971addef0b', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKeys.fullenrich}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          name: lead.name,
-          webhook_url: 'https://reidsickels.app.n8n.cloud/webhook-test/190d6eeb-0479-4af4-9ed6-88298469f9c8',
-          datas: [
-            {
-              firstname: firstName,
-              lastname: lastName,
-              domain: domain,
-              enrich_fields: [
-                "contact.phones"
-              ],
-              custom: {
-                user_id: lead.id
-              }
-            }
-          ]
+          ...lead,
+          smartlead_api_key: apiKeys.smartlead,
+          claude_api_key: apiKeys.claude,
+          fullenrich_api_key: apiKeys.fullenrich
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to initiate phone search');
+        throw new Error('Failed to find phone number');
       }
 
-      // Show searching state - the actual phone number will come through the webhook
-      setIsSearchingPhone(true);
+      const data = await response.json();
+      console.log('Raw webhook response:', data);
 
-      // Note: The phone number will be updated when the webhook receives the data
-      // We don't need to handle the response here as it's just confirming the request was received
+      // Create a new lead object with the phone number
+      const updatedLead = {
+        ...lead,
+        phone: data.phone || null
+      };
+
+      // Update the leads array
+      setLeads(prevLeads => prevLeads.map(l => 
+        l.id === lead.id ? updatedLead : l
+      ));
+
+      // If this is the selected lead, update it with a new object reference
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(updatedLead);
+      }
 
     } catch (error) {
-      console.error('Error initiating phone search:', error);
+      console.error('Error finding phone number:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
+    } finally {
       setIsSearchingPhone(false);
     }
   };
