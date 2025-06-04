@@ -1755,10 +1755,13 @@ const InboxManager = () => {
       const data = await response.json();
       console.log('Raw webhook response:', data);
 
+      // Extract phone number from the nested structure
+      const phoneNumber = data?.data?.[0]?.contact?.phones?.[0]?.number || null;
+
       // Create a new lead object with the phone number
       const updatedLead = {
         ...lead,
-        phone: data.phone || null
+        phone: phoneNumber
       };
 
       // Update the leads array
