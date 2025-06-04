@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -16,7 +16,6 @@ const InboxManager = () => {
   // Add new state for enrichment data
   const [enrichmentData, setEnrichmentData] = useState(null);
   const [isEnriching, setIsEnriching] = useState(false);
-  const [isFindingPhone, setIsFindingPhone] = useState(false);
   const [showEnrichmentPopup, setShowEnrichmentPopup] = useState(false);
 
   // Add new state for API settings and tab management
@@ -191,8 +190,7 @@ const InboxManager = () => {
           company_data: lead.company_data || 'N/A',
           personal_linkedin_url: lead.personal_linkedin_url || null,
           business_linkedin_url: lead.business_linkedin_url || null,
-          linkedin_url: lead.linkedin_url || 'N/A',
-          phone_number: lead.phone_number || null
+          linkedin_url: lead.linkedin_url || 'N/A'
         };
       });
       
@@ -1730,48 +1728,6 @@ const InboxManager = () => {
     );
   };
 
-  // Add findPhoneNumber function
-  const findPhoneNumber = async (lead) => {
-    setIsFindingPhone(true);
-    try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook-test/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ lead })
-      });
-
-      const data = await response.json();
-      
-      // Update the lead with phone number
-      const updatedLead = {
-        ...lead,
-        phone_number: data.phone_number || lead.phone_number
-      };
-
-      // Update both the leads array and selected lead with new references
-      const newLeads = leads.map(l => l.id === lead.id ? updatedLead : l);
-      setLeads(newLeads);
-      setSelectedLead(updatedLead);
-
-      // Update in Supabase
-      const { error } = await supabase
-        .from('leads')
-        .update({
-          phone_number: data.phone_number
-        })
-        .eq('id', lead.id);
-
-      if (error) throw error;
-
-    } catch (error) {
-      console.error('Error finding phone number:', error);
-    } finally {
-      setIsFindingPhone(false);
-    }
-  };
-
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2557,136 +2513,112 @@ const InboxManager = () => {
               <div className="space-y-8">
                       {/* Unified Lead Information Section */}
                 <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center">
-                      <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                      <h3 className="font-bold text-white text-lg">Lead Information</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => findPhoneNumber(selectedLead)}
-                        disabled={isFindingPhone}
-                        className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                        style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
-                      >
-                        {isFindingPhone ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                            Finding...
-                          </>
-                        ) : (
-                          <>
-                            <Phone className="w-4 h-4" />
-                            Find Phone
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => enrichLeadData(selectedLead)}
-                        disabled={isEnriching}
-                        className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                        style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
-                      >
-                        {isEnriching ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
-                            Enriching...
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="w-4 h-4" />
-                            Enrich
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                        <div className="flex justify-between items-center mb-6">
+                          <h3 className="font-bold text-white flex items-center text-lg">
+                    <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                    Lead Information
+                  </h3>
+                          <button
+                            onClick={() => enrichLeadData(selectedLead)}
+                            disabled={isEnriching}
+                            className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
+                            style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                          >
+                            {isEnriching ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                Enriching...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-4 h-4" />
+                                Enrich
+                              </>
+                            )}
+                          </button>
+                        </div>
 
-                  {/* Communication Timeline */}
-                  <div className="mb-6 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <span className="text-gray-400">Last Reply</span>
-                          <p className="text-white font-medium mt-1">
-                            {(() => {
-                              const lastReply = getLastResponseFromThem(selectedLead.conversation);
-                              return lastReply ? formatTime(lastReply) : 'No replies yet';
-                            })()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Last Followup</span>
-                          <p className="text-white font-medium mt-1">
-                            {(() => {
-                              const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
-                              return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
-                            })()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Avg Response</span>
-                          <p className="text-white font-medium mt-1">{formatResponseTime(selectedLead.response_time_avg)}</p>
-                        </div>
-                      </div>
-                      <div className="px-3 py-1 rounded-full text-sm" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(84, 252, 255, 0.2)'}}>
-                        <span className="text-white font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</span>
-                        <span className="text-gray-400"> replies</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {/* General Info Subsection */}
-                    <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
-                      <button 
-                        onClick={() => toggleSection('general')}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <ChevronRight 
-                            className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('general') ? 'rotate-90' : ''}`} 
-                            style={{color: '#54FCFF'}} 
-                          />
-                          <span className="text-white font-medium">General Information</span>
-                        </div>
-                      </button>
-                      {activeSection.includes('general') && (
-                        <div className="px-4 pb-4">
-                          <div className="grid grid-cols-2 gap-4 text-sm pl-6">
-                <div>
-                  <span className="text-gray-300">Subject:</span>
-                  <p className="font-medium text-white">{selectedLead.subject}</p>
-                </div>
-                <div>
-                  <span className="text-gray-300">Website:</span>
-                  <p className="font-medium">
-                    {selectedLead.website ? (
-                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
-                        {selectedLead.website}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : <span className="text-white">N/A</span>}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-300">Phone:</span>
-                  <p className="font-medium text-white">{selectedLead.phone_number || 'N/A'}</p>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-gray-300">Tags:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedLead.tags.map(tag => (
-                      <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                        {/* Communication Timeline */}
+                        <div className="mb-6 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-6">
+                              <div>
+                                <span className="text-gray-400">Last Reply</span>
+                                <p className="text-white font-medium mt-1">
+                                  {(() => {
+                                    const lastReply = getLastResponseFromThem(selectedLead.conversation);
+                                    return lastReply ? formatTime(lastReply) : 'No replies yet';
+                                  })()}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Last Followup</span>
+                                <p className="text-white font-medium mt-1">
+                                  {(() => {
+                                    const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
+                                    return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
+                                  })()}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Avg Response</span>
+                                <p className="text-white font-medium mt-1">{formatResponseTime(selectedLead.response_time_avg)}</p>
+                              </div>
+                            </div>
+                            <div className="px-3 py-1 rounded-full text-sm" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(84, 252, 255, 0.2)'}}>
+                              <span className="text-white font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</span>
+                              <span className="text-gray-400"> replies</span>
+                            </div>
                           </div>
-                        )}
+                        </div>
+
+                        <div className="space-y-2">
+                          {/* General Info Subsection */}
+                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
+                            <button 
+                              onClick={() => toggleSection('general')}
+                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronRight 
+                                  className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('general') ? 'rotate-90' : ''}`} 
+                                  style={{color: '#54FCFF'}} 
+                                />
+                                <span className="text-white font-medium">General Information</span>
+                              </div>
+                            </button>
+                            {activeSection.includes('general') && (
+                              <div className="px-4 pb-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm pl-6">
+                    <div>
+                      <span className="text-gray-300">Subject:</span>
+                      <p className="font-medium text-white">{selectedLead.subject}</p>
                     </div>
+                    <div>
+                      <span className="text-gray-300">Website:</span>
+                      <p className="font-medium">
+                        {selectedLead.website ? (
+                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
+                            {selectedLead.website}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : <span className="text-white">N/A</span>}
+                      </p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-300">Tags:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedLead.tags.map(tag => (
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                              </div>
+                            )}
+                </div>
 
                           {/* Enrichment Data Subsection */}
                           <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
