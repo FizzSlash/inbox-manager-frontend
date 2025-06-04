@@ -2630,6 +2630,17 @@ const InboxManager = () => {
                                 <span className="text-gray-400">Avg Response</span>
                                 <p className="text-white font-medium mt-1">{formatResponseTime(selectedLead.response_time_avg)}</p>
                               </div>
+                              <div className="ml-6 px-4 py-2 rounded-lg" style={{
+                                backgroundColor: 'rgba(84, 252, 255, 0.05)',
+                                border: '2px solid rgba(84, 252, 255, 0.3)',
+                                boxShadow: '0 0 10px rgba(84, 252, 255, 0.1)'
+                              }}>
+                                <span className="text-gray-400">Phone</span>
+                                <p className="text-white font-medium mt-1 flex items-center gap-2">
+                                  <Phone className="w-4 h-4" style={{color: '#54FCFF'}} />
+                                  {selectedLead.phone || 'N/A'}
+                                </p>
+                              </div>
                             </div>
                             <div className="px-3 py-1 rounded-full text-sm" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(84, 252, 255, 0.2)'}}>
                               <span className="text-white font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</span>
