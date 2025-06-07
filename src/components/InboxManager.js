@@ -1,6 +1,188 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
+// Add responsive styles
+const styles = {
+  container: {
+    maxWidth: '100%',
+    padding: '1rem',
+    '@media (max-width: 768px)': {
+      padding: '0.5rem'
+    }
+  },
+  mainGrid: {
+    display: 'grid',
+    gridTemplateColumns: '300px 1fr',
+    gap: '1rem',
+    '@media (max-width: 768px)': {
+      gridTemplateColumns: '1fr',
+      gap: '0.5rem'
+    }
+  },
+  sidebar: {
+    '@media (max-width: 768px)': {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      zIndex: 1000,
+      background: 'white',
+      transform: 'translateX(-100%)',
+      transition: 'transform 0.3s ease',
+      '&.active': {
+        transform: 'translateX(0)'
+      }
+    }
+  }
+};
+
+// Add more component-specific styles
+const componentStyles = {
+  card: {
+    padding: '1.5rem',
+    '@media (max-width: 768px)': {
+      padding: '1rem'
+    }
+  },
+  buttonGroup: {
+    display: 'flex',
+    gap: '0.5rem',
+    '@media (max-width: 768px)': {
+      flexDirection: 'column'
+    }
+  },
+  table: {
+    width: '100%',
+    '@media (max-width: 768px)': {
+      display: 'block',
+      overflowX: 'auto'
+    }
+  },
+  filterSection: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.5rem',
+    '@media (max-width: 768px)': {
+      flexDirection: 'column'
+    }
+  },
+  searchBar: {
+    width: '100%',
+    maxWidth: '400px',
+    '@media (max-width: 768px)': {
+      maxWidth: '100%'
+    }
+  },
+  modal: {
+    width: '90%',
+    maxWidth: '600px',
+    '@media (max-width: 768px)': {
+      width: '95%',
+      margin: '1rem'
+    }
+  },
+  tabs: {
+    display: 'flex',
+    gap: '1rem',
+    '@media (max-width: 768px)': {
+      overflowX: 'auto',
+      padding: '0.5rem 0'
+    }
+  }
+};
+
+// Add mobile-friendly toast positioning
+const toastStyles = {
+  container: {
+    position: 'fixed',
+    bottom: '1rem',
+    right: '1rem',
+    zIndex: 1000,
+    '@media (max-width: 768px)': {
+      bottom: '0',
+      right: '0',
+      left: '0',
+      padding: '0.5rem'
+    }
+  }
+};
+
+// Add touch interaction helpers
+const touchInteractionStyles = {
+  button: {
+    minHeight: '44px', // Minimum touch target size
+    '@media (max-width: 768px)': {
+      padding: '0.75rem 1rem',
+      touchAction: 'manipulation'
+    }
+  },
+  input: {
+    '@media (max-width: 768px)': {
+      fontSize: '16px', // Prevent iOS zoom on focus
+      minHeight: '44px',
+      padding: '0.5rem'
+    }
+  },
+  select: {
+    '@media (max-width: 768px)': {
+      minHeight: '44px',
+      padding: '0.5rem 2rem 0.5rem 0.5rem' // Space for dropdown arrow
+    }
+  },
+  link: {
+    '@media (max-width: 768px)': {
+      padding: '0.5rem', // Larger touch target
+      display: 'inline-block'
+    }
+  }
+};
+
+// Add mobile gesture handlers
+const useMobileGestures = () => {
+  const touchStart = useRef(null);
+  const touchEnd = useRef(null);
+
+  const onTouchStart = (e) => {
+    touchEnd.current = null;
+    touchStart.current = {
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    };
+  };
+
+  const onTouchMove = (e) => {
+    touchEnd.current = {
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    };
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart.current || !touchEnd.current) return;
+
+    const distanceX = touchStart.current.x - touchEnd.current.x;
+    const distanceY = touchStart.current.y - touchEnd.current.y;
+    const isHorizontalSwipe = Math.abs(distanceX) > Math.abs(distanceY);
+
+    if (isHorizontalSwipe && Math.abs(distanceX) > 50) {
+      if (distanceX > 0) {
+        // Swipe left - close mobile menu
+        setIsMobileMenuOpen(false);
+      } else {
+        // Swipe right - open mobile menu
+        setIsMobileMenuOpen(true);
+      }
+    }
+  };
+
+  return {
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd
+  };
+};
+
 const InboxManager = () => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
@@ -1849,11 +2031,22 @@ const InboxManager = () => {
     }
   };
 
+  // Add mobile menu state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Add mobile menu toggle function
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  // Add mobile gesture handlers
+  const mobileGestures = useMobileGestures();
+
   return (
-    <div className="flex h-screen relative overflow-hidden md:flex-row flex-col" style={{backgroundColor: '#1A1C1A'}}>
-      {/* Top navigation bar */}
-      <div className="absolute top-0 left-0 right-0 h-auto md:h-12 bg-opacity-50 backdrop-blur-md z-20 flex flex-col md:flex-row items-center px-3 md:px-6 py-2 md:py-0 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
-        <div className="flex flex-wrap gap-2 md:space-x-4 w-full md:w-auto justify-center">
+    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+      {/* Top Navigation Bar */}
+      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
+        <div className="flex space-x-4">
           <button
             onClick={() => setActiveTab('inbox')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -1881,9 +2074,9 @@ const InboxManager = () => {
 
       {/* API Settings Modal */}
       {showApiSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 md:p-4">
-          <div className="bg-[#1A1C1A] rounded-xl shadow-xl w-full max-w-2xl border border-white/10 overflow-hidden mx-2 md:mx-0">
-            <div className="p-4 md:p-6 border-b border-white/10">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
+            <div className="p-6 border-b border-white/10">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                   <Key className="w-5 h-5" style={{color: '#54FCFF'}} />
@@ -1898,7 +2091,7 @@ const InboxManager = () => {
               </div>
             </div>
             
-            <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 space-y-6">
               {/* Smartlead API */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-white">
@@ -1910,8 +2103,8 @@ const InboxManager = () => {
                     type="password"
                     value={apiKeys.smartlead}
                     onChange={(e) => handleApiKeyChange('smartlead', e.target.value)}
-                    placeholder="Enter your Smartlead API key"
-                    className="w-full px-4 py-3 md:py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all text-base md:text-sm"
+                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                    placeholder="Enter Smartlead API key"
                   />
                   {apiTestStatus.smartlead === true && (
                     <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
@@ -1960,7 +2153,7 @@ const InboxManager = () => {
               </div>
             </div>
 
-            <div className="p-4 md:p-6 bg-white/5 border-t border-white/10 flex flex-col md:flex-row justify-end gap-2 md:gap-3">
+            <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
               <button
                 onClick={() => setShowApiSettings(false)}
                 className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
@@ -2009,7 +2202,7 @@ const InboxManager = () => {
       )}
 
       {/* Toast Notifications Container */}
-      <div className="fixed top-2 md:top-4 right-2 md:right-4 z-50 flex flex-col-reverse gap-2 max-w-[90vw] md:max-w-md">
+      <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
         {toasts.map(toast => (
           <div 
             key={toast.id}
@@ -2120,9 +2313,20 @@ const InboxManager = () => {
 
           {/* Dashboard Metrics with breathing animation */}
           {showMetrics && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6 px-2 md:px-0">
-              {/* Metric cards will automatically reflow */}
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash">
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <button
+                onClick={() => {
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('urgent-response')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['urgent-response']});
+                  }
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
+              >
                 <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
@@ -2135,8 +2339,20 @@ const InboxManager = () => {
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
                   <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
                 </div>
-              </div>
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash">
+              </button>
+              <button
+                onClick={() => {
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('needs-response')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['needs-response']});
+                  }
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
+              >
                 <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
@@ -2149,8 +2365,20 @@ const InboxManager = () => {
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
                   <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
                 </div>
-              </div>
-              <div className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash">
+              </button>
+              <button
+                onClick={() => {
+                  // Toggle filter - if already active, clear it
+                  if (activeFilters.urgency?.includes('needs-followup')) {
+                    setActiveFilters({});
+                  } else {
+                    setActiveFilters({urgency: ['needs-followup']});
+                  }
+                  setActiveTab('all');
+                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
+              >
                 <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
@@ -2163,7 +2391,7 @@ const InboxManager = () => {
                   <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
                   <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
                 </div>
-              </div>
+              </button>
             </div>
           )}
           
