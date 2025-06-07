@@ -2079,8 +2079,14 @@ const InboxManager = () => {
              transform: scale(0.8);
              transform-origin: top left;
              width: 125%; /* Compensate for scale to prevent cutoff */
-             height: 125vh !important; /* Ensure we have room for the scaled content */
-             overflow: auto !important;
+             min-height: 100vh !important;
+             max-height: 100vh !important;
+             overflow: hidden !important;
+           }
+           /* Ensure the content container doesn't scroll unnecessarily */
+           .flex-1.flex.mt-12 {
+             overflow: auto;
+             height: calc(100vh - 48px);
            }
          }
         `}</style>
