@@ -1,24 +1,84 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 // Touch feedback hook - defined outside component since it's a custom hook
 const useTouchFeedback = () => {
   const [isTouched, setIsTouched] = useState(false);
   
-  return {
-    touchProps: {
-      onTouchStart: () => setIsTouched(true),
-      onTouchEnd: () => setIsTouched(false),
-      style: {
-        transform: isTouched ? 'scale(0.98)' : 'scale(1)',
-        transition: 'transform 0.1s ease-in-out',
-      }
-    },
-    className: isTouched ? 'opacity-80' : ''
-  };
+  const touchProps = useMemo(() => ({
+    onTouchStart: () => setIsTouched(true),
+    onTouchEnd: () => setIsTouched(false),
+    style: {
+      transform: isTouched ? 'scale(0.98)' : 'scale(1)',
+      transition: 'transform 0.1s ease-in-out',
+    }
+  }), [isTouched]);
+
+  const className = useMemo(() => isTouched ? 'opacity-80' : '', [isTouched]);
+  
+  return { touchProps, className };
 };
 
 const InboxManager = () => {
+  // State declarations at the top
+  const [viewportInitialized, setViewportInitialized] = useState(false);
+  const [stylesInitialized, setStylesInitialized] = useState(false);
+
+  // Mobile styles definition - memoized to prevent recreation
+  const mobileStyles = useMemo(() => `
+    @media (max-width: 768px) {
+      button, 
+      [role="button"],
+      a {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 12px;
+        touch-action: manipulation;
+      }
+      
+      input,
+      textarea {
+        font-size: 16px !important; /* Prevent iOS zoom */
+      }
+      
+      * {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
+  `, []);
+
+  // Setup mobile viewport - with cleanup and state tracking
+  useEffect(() => {
+    if (viewportInitialized) return;
+    
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(meta);
+    setViewportInitialized(true);
+    
+    return () => {
+      document.head.removeChild(meta);
+      setViewportInitialized(false);
+    };
+  }, [viewportInitialized]);
+
+  // Setup mobile styles - with cleanup and state tracking
+  useEffect(() => {
+    if (stylesInitialized) return;
+    
+    const style = document.createElement('style');
+    style.textContent = mobileStyles;
+    document.head.appendChild(style);
+    setStylesInitialized(true);
+    
+    return () => {
+      document.head.removeChild(style);
+      setStylesInitialized(false);
+    };
+  }, [mobileStyles, stylesInitialized]);
+
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1865,30 +1925,6 @@ const InboxManager = () => {
       });
     }
   };
-
-  // Mobile styles definition
-  const mobileStyles = `
-    @media (max-width: 768px) {
-      button, 
-      [role="button"],
-      a {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 12px;
-        touch-action: manipulation;
-      }
-      
-      input,
-      textarea {
-        font-size: 16px !important; /* Prevent iOS zoom */
-      }
-      
-      * {
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-      }
-    }
-  `;
 
   // Setup mobile viewport
   useEffect(() => {
