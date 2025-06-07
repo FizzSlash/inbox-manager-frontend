@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
-// Add mobile-responsive styles
+// Add mobile-responsive styles as an object with simple values
 const mobileStyles = {
   container: {
     width: '100%',
@@ -9,53 +9,69 @@ const mobileStyles = {
     padding: '10px',
     boxSizing: 'border-box',
     overflowX: 'hidden',
+    backgroundColor: '#1A1C1A'
   },
   header: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: window.innerWidth < 768 ? 'column' : 'row',
     gap: '10px',
-    '@media (min-width: 768px)': {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
+    alignItems: window.innerWidth < 768 ? 'stretch' : 'center'
   },
   searchBar: {
     width: '100%',
-    maxWidth: '100%',
-    '@media (min-width: 768px)': {
-      maxWidth: '300px',
-    },
+    maxWidth: window.innerWidth < 768 ? '100%' : '300px'
   },
   filterSection: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
-    marginBottom: '10px',
+    marginBottom: '10px'
   },
   card: {
     width: '100%',
-    margin: '10px 0',
+    margin: window.innerWidth < 768 ? '10px 0' : '10px',
     padding: '15px',
-    boxSizing: 'border-box',
-    '@media (min-width: 768px)': {
-      margin: '10px',
-    },
+    boxSizing: 'border-box'
   },
   buttonGroup: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
-    marginTop: '10px',
+    marginTop: '10px'
   },
   button: {
     minWidth: 'auto',
     padding: '8px 12px',
     fontSize: '14px',
-    whiteSpace: 'nowrap',
-  },
+    whiteSpace: 'nowrap'
+  }
 };
 
 const InboxManager = () => {
+  // Add responsive state
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Add viewport meta tag
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name=viewport]');
+    if (!viewport) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(meta);
+    }
+  }, []);
+
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
