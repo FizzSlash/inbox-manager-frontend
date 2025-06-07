@@ -2,6 +2,17 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 const InboxManager = () => {
+  // Add viewport meta tag for mobile responsiveness
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name=viewport]');
+    if (!viewport) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1';
+      document.head.appendChild(meta);
+    }
+  }, []);
+
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2010,11 +2021,11 @@ const InboxManager = () => {
 
       {/* Toast Notifications Container */}
       <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
-        {toasts.map(toast => (
-          <div 
-            key={toast.id}
+          {toasts.map(toast => (
+            <div
+              key={toast.id}
             className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
-            style={{
+              style={{
               backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
               border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
               backdropFilter: 'blur(8px)',
@@ -2045,9 +2056,9 @@ const InboxManager = () => {
             >
               <X className="w-4 h-4" />
             </button>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
 
       <style jsx global>{`
         @keyframes slideIn {
@@ -2947,14 +2958,14 @@ const InboxManager = () => {
                 </div>
 
                 {/* Conversation History */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
+                <div className="rounded-2xl p-4 md:p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                  <h3 className="font-bold text-white mb-3 md:mb-4 flex items-center text-base md:text-lg">
                     <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
-                  <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
+                  <div className="space-y-4 md:space-y-6 max-h-[calc(100vh-24rem)] md:max-h-96 overflow-y-auto px-1" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
                     {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-5 rounded-xl border shadow-sm ${
+                      <div key={index} className={`p-3 md:p-5 rounded-xl border shadow-sm ${
                         message.type === 'SENT' 
                           ? 'border-blue-400' 
                           : 'border-gray-400'
@@ -2966,17 +2977,18 @@ const InboxManager = () => {
                           ? 'rgba(84, 252, 255, 0.3)' 
                           : 'rgba(255, 255, 255, 0.2)'
                       }}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="text-sm">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2 md:gap-0 mb-2">
+                          <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-white'}`}>
                               {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
                             </span>
-                            <span className="text-gray-300 ml-2">
+                            <span className="text-gray-300">
                               {formatTime(message.time)}
                             </span>
                             {message.response_time && (
-                              <span className="text-green-400 ml-2 text-xs">
-                                • {formatResponseTime(message.response_time)} response
+                              <span className="text-green-400 text-xs flex items-center">
+                                <span className="hidden md:inline mx-1">•</span>
+                                {formatResponseTime(message.response_time)} response
                               </span>
                             )}
                           </div>
@@ -2997,104 +3009,112 @@ const InboxManager = () => {
                         </div>
 
                         {/* Email routing information */}
-                        <div className="mb-3 text-xs text-gray-400 space-y-1">
-                          <div className="flex flex-wrap gap-4">
-                            <span><strong>From:</strong> {message.from || 'N/A'}</span>
-                            <span><strong>To:</strong> {message.to || 'N/A'}</span>
+                        <div className="mb-3 text-xs text-gray-400 space-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
+                            <div className="flex items-start gap-1">
+                              <strong className="min-w-[3rem]">From:</strong>
+                              <span className="break-all">{message.from || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-start gap-1">
+                              <strong className="min-w-[3rem]">To:</strong>
+                              <span className="break-all">{message.to || 'N/A'}</span>
+                            </div>
                           </div>
                           {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
-                            <div>
-                              <strong>CC:</strong> {message.cc.map(cc => {
+                            <div className="flex items-start gap-1">
+                              <strong className="min-w-[3rem]">CC:</strong>
+                              <span className="break-all">{message.cc.map(cc => {
                                 if (typeof cc === 'string') return cc;
                                 if (cc && cc.address) return cc.address;
                                 if (cc && cc.name && cc.name.trim() !== '') return cc.name;
                                 return '';
-                              }).filter(Boolean).join(', ')}
+                              }).filter(Boolean).join(', ')}</span>
                             </div>
                           )}
                           {message.subject && (
-                            <div>
-                              <strong>Subject:</strong> {message.subject}
+                            <div className="flex items-start gap-1">
+                              <strong className="min-w-[3rem]">Subject:</strong>
+                              <span className="break-all">{message.subject}</span>
                             </div>
                           )}
                         </div>
 
-                        <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">
+                        <div className="text-sm text-white whitespace-pre-wrap leading-relaxed break-words">
                           {message.content}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-
-                {/* Response Section */}
+          
+          {/* Response Section */}
                 <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                   <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                    <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                    Compose Response
-                  </h3>
-                  
+              <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+              Compose Response
+            </h3>
+            
                   <div className="space-y-6">
-                    {/* Editable Email Recipients */}
+              {/* Editable Email Recipients */}
                     <div className="bg-white/5 p-4 rounded-lg border border-white/10">
                       <h4 className="text-white font-medium mb-3 flex items-center text-sm">
-                        <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
-                        Email Recipients
-                      </h4>
+                  <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                  Email Recipients
+                </h4>
                       <div className="grid grid-cols-1 gap-3">
-                        <div>
-                          <label className="text-gray-300 text-xs block mb-1">To:</label>
-                          <input
-                            type="email"
-                            value={editableToEmail}
-                            onChange={(e) => setEditableToEmail(e.target.value)}
+                  <div>
+                    <label className="text-gray-300 text-xs block mb-1">To:</label>
+                    <input
+                      type="email"
+                      value={editableToEmail}
+                      onChange={(e) => setEditableToEmail(e.target.value)}
                             className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
-                            placeholder="Primary recipient email"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
-                          <input
-                            type="text"
-                            value={editableCcEmails}
-                            onChange={(e) => setEditableCcEmails(e.target.value)}
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                      placeholder="Primary recipient email"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
+                    <input
+                      type="text"
+                      value={editableCcEmails}
+                      onChange={(e) => setEditableCcEmails(e.target.value)}
                             className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
-                            placeholder="CC recipients (optional)"
-                          />
-                        </div>
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                      placeholder="CC recipients (optional)"
+                    />
+                  </div>
                         <div className="text-xs text-gray-400">
                           Auto-populated based on conversation. Edit as needed before sending.
                         </div>
-                      </div>
-                    </div>
+                </div>
+              </div>
 
                     <div className="flex gap-3">
-                      <button
-                        onClick={generateDraft}
-                        disabled={isGeneratingDraft}
+                <button
+                  onClick={generateDraft}
+                  disabled={isGeneratingDraft}
                         className="px-4 py-2 text-white rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
-                        style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                        {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
-                      </button>
-                    </div>
+                  style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
+                </button>
+              </div>
 
-                    {/* Rich Text Editor with Formatting */}
-                    <div className="space-y-3">
-                      {/* Formatting Toolbar */}
+              {/* Rich Text Editor with Formatting */}
+              <div className="space-y-3">
+                {/* Formatting Toolbar */}
                       <div className="flex flex-wrap gap-2 p-3 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                        <button
-                          type="button"
-                          onClick={() => formatText('bold')}
+                  <button
+                    type="button"
+                    onClick={() => formatText('bold')}
                           className="px-3 py-1 rounded text-xs font-bold text-white hover:opacity-80 transition-opacity"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
-                          title="Bold"
-                        >
-                          B
-                        </button>
+                    style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                    title="Bold"
+                  >
+                    B
+                  </button>
                         <button
                           type="button"
                           onClick={() => formatText('italic')}
@@ -3147,13 +3167,13 @@ const InboxManager = () => {
                         >
                           📎 Attach
                         </label>
-                      </div>
+                </div>
 
-                      {/* Rich Text Editor */}
-                      <div
-                        contentEditable
-                        suppressContentEditableWarning={true}
-                        onInput={handleTextareaChange}
+                {/* Rich Text Editor */}
+                <div
+                  contentEditable
+                  suppressContentEditableWarning={true}
+                  onInput={handleTextareaChange}
                         onKeyDown={(e) => {
                           // Handle common keyboard shortcuts
                           if (e.ctrlKey || e.metaKey) {
@@ -3246,10 +3266,10 @@ const InboxManager = () => {
                           }
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2 focus:outline-none overflow-y-auto"
-                        style={{
+                  style={{
                           backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                          border: '1px solid rgba(255, 255, 255, 0.2)', 
-                          '--tw-ring-color': '#54FCFF',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    '--tw-ring-color': '#54FCFF',
                           minHeight: '160px'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
@@ -3276,11 +3296,11 @@ const InboxManager = () => {
                         <Send className="w-4 h-4" />
                         {isSending ? 'Sending...' : 'Send Message'}
                       </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
