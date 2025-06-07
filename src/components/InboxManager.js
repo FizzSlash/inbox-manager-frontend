@@ -3416,10 +3416,9 @@ const InboxManager = () => {
             )}
           </>
         )}
-      </div>
-    </div>
-  </div>
-  </>
+             </div>
+     </div>
+   </>
   );
 };
 
