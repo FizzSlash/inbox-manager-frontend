@@ -1,6 +1,63 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
+// Add viewport meta tag for mobile optimization
+useEffect(() => {
+  const meta = document.createElement('meta');
+  meta.name = 'viewport';
+  meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+  document.head.appendChild(meta);
+  return () => document.head.removeChild(meta);
+}, []);
+
+// Add touch-friendly styles and hooks
+const useTouchFeedback = () => {
+  const [isTouched, setIsTouched] = useState(false);
+  
+  return {
+    touchProps: {
+      onTouchStart: () => setIsTouched(true),
+      onTouchEnd: () => setIsTouched(false),
+      style: {
+        transform: isTouched ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease-in-out',
+      }
+    },
+    className: isTouched ? 'opacity-80' : ''
+  };
+};
+
+// Add mobile-specific styles
+const mobileStyles = `
+  @media (max-width: 768px) {
+    button, 
+    [role="button"],
+    a {
+      min-height: 44px;
+      min-width: 44px;
+      padding: 12px;
+      touch-action: manipulation;
+    }
+    
+    input,
+    textarea {
+      font-size: 16px !important; /* Prevent iOS zoom */
+    }
+    
+    * {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+  }
+`;
+
+useEffect(() => {
+  const style = document.createElement('style');
+  style.textContent = mobileStyles;
+  document.head.appendChild(style);
+  return () => document.head.removeChild(style);
+}, []);
+
 const InboxManager = () => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
@@ -1850,9 +1907,9 @@ const InboxManager = () => {
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+    <div className="flex flex-col md:flex-row h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
+      <div className="absolute top-0 left-0 right-0 h-auto md:h-12 bg-opacity-50 backdrop-blur-md z-20 flex flex-col md:flex-row items-center px-3 md:px-6 py-2 md:py-0 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
         <div className="flex space-x-4">
           <button
             onClick={() => setActiveTab('inbox')}
@@ -2098,7 +2155,7 @@ const InboxManager = () => {
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
+      <div className="w-full md:w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
@@ -2120,7 +2177,7 @@ const InboxManager = () => {
 
           {/* Dashboard Metrics with breathing animation */}
           {showMetrics && (
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <button
                 onClick={() => {
                   // Toggle filter - if already active, clear it
