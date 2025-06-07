@@ -2074,13 +2074,15 @@ const InboxManager = () => {
             }
           }
           
-          @media screen and (max-width: 768px) {
-            .flex.h-screen {
-              transform: scale(0.8);
-              transform-origin: top left;
-              width: 125%; /* Compensate for scale to prevent cutoff */
-            }
-          }
+                   @media screen and (max-width: 768px) {
+           #root, body, .flex.h-screen.relative.overflow-hidden {
+             transform: scale(0.8);
+             transform-origin: top left;
+             width: 125%; /* Compensate for scale to prevent cutoff */
+             height: 125vh !important; /* Ensure we have room for the scaled content */
+             overflow: auto !important;
+           }
+         }
         `}</style>
 
         {/* Add margin-top to main content to account for nav bar */}
