@@ -1,16 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
-// Add viewport meta tag for mobile optimization
-useEffect(() => {
-  const meta = document.createElement('meta');
-  meta.name = 'viewport';
-  meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-  document.head.appendChild(meta);
-  return () => document.head.removeChild(meta);
-}, []);
-
-// Add touch-friendly styles and hooks
+// Touch feedback hook - defined outside component since it's a custom hook
 const useTouchFeedback = () => {
   const [isTouched, setIsTouched] = useState(false);
   
@@ -26,37 +17,6 @@ const useTouchFeedback = () => {
     className: isTouched ? 'opacity-80' : ''
   };
 };
-
-// Add mobile-specific styles
-const mobileStyles = `
-  @media (max-width: 768px) {
-    button, 
-    [role="button"],
-    a {
-      min-height: 44px;
-      min-width: 44px;
-      padding: 12px;
-      touch-action: manipulation;
-    }
-    
-    input,
-    textarea {
-      font-size: 16px !important; /* Prevent iOS zoom */
-    }
-    
-    * {
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-  }
-`;
-
-useEffect(() => {
-  const style = document.createElement('style');
-  style.textContent = mobileStyles;
-  document.head.appendChild(style);
-  return () => document.head.removeChild(style);
-}, []);
 
 const InboxManager = () => {
   // State for leads from API
@@ -1905,6 +1865,47 @@ const InboxManager = () => {
       });
     }
   };
+
+  // Mobile styles definition
+  const mobileStyles = `
+    @media (max-width: 768px) {
+      button, 
+      [role="button"],
+      a {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 12px;
+        touch-action: manipulation;
+      }
+      
+      input,
+      textarea {
+        font-size: 16px !important; /* Prevent iOS zoom */
+      }
+      
+      * {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
+  `;
+
+  // Setup mobile viewport
+  useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(meta);
+    return () => document.head.removeChild(meta);
+  }, []);
+
+  // Setup mobile styles
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = mobileStyles;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   return (
     <div className="flex flex-col md:flex-row h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
