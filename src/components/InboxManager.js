@@ -1,84 +1,140 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
-// Touch feedback hook - defined outside component since it's a custom hook
-const useTouchFeedback = () => {
-  const [isTouched, setIsTouched] = useState(false);
-  
-  const touchProps = useMemo(() => ({
-    onTouchStart: () => setIsTouched(true),
-    onTouchEnd: () => setIsTouched(false),
-    style: {
-      transform: isTouched ? 'scale(0.98)' : 'scale(1)',
-      transition: 'transform 0.1s ease-in-out',
+// Add responsive styles
+const styles = {
+  container: {
+    maxWidth: '100%',
+    padding: '1rem',
+    '@media (max-width: 768px)': {
+      padding: '0.5rem',
     }
-  }), [isTouched]);
-
-  const className = useMemo(() => isTouched ? 'opacity-80' : '', [isTouched]);
-  
-  return { touchProps, className };
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '1rem',
+    '@media (max-width: 768px)': {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    }
+  },
+  searchBar: {
+    width: '100%',
+    maxWidth: '400px',
+    '@media (max-width: 768px)': {
+      maxWidth: '100%',
+    }
+  },
+  filterSection: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.5rem',
+    '@media (max-width: 768px)': {
+      flexDirection: 'column',
+    }
+  },
+  leadCard: {
+    padding: '1rem',
+    margin: '0.5rem 0',
+    borderRadius: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    '@media (max-width: 768px)': {
+      padding: '0.75rem',
+      margin: '0.25rem 0',
+    }
+  },
+  leadHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    '@media (max-width: 768px)': {
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: '0.5rem',
+    }
+  },
+  conversationSection: {
+    maxHeight: '500px',
+    overflowY: 'auto',
+    padding: '1rem',
+    '@media (max-width: 768px)': {
+      maxHeight: '400px',
+      padding: '0.5rem',
+    }
+  },
+  messageInput: {
+    width: '100%',
+    minHeight: '100px',
+    padding: '0.75rem',
+    '@media (max-width: 768px)': {
+      minHeight: '80px',
+      padding: '0.5rem',
+    }
+  },
+  button: {
+    padding: '0.75rem 1rem',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    '@media (max-width: 768px)': {
+      padding: '0.5rem 0.75rem',
+      width: '100%',
+      marginBottom: '0.5rem',
+    }
+  },
+  toast: {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    zIndex: 1000,
+    '@media (max-width: 768px)': {
+      bottom: '10px',
+      right: '10px',
+      left: '10px',
+      width: 'auto',
+    }
+  },
+  modal: {
+    width: '90%',
+    maxWidth: '500px',
+    '@media (max-width: 768px)': {
+      width: '95%',
+      margin: '10px',
+    }
+  },
+  tabs: {
+    display: 'flex',
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+    '&::-webkit-scrollbar': {
+      display: 'none',
+    },
+    '@media (max-width: 768px)': {
+      gap: '0.5rem',
+      padding: '0.5rem 0',
+    }
+  },
+  badge: {
+    fontSize: '0.875rem',
+    padding: '0.25rem 0.5rem',
+    '@media (max-width: 768px)': {
+      fontSize: '0.75rem',
+      padding: '0.2rem 0.4rem',
+    }
+  },
+  icon: {
+    '@media (max-width: 768px)': {
+      width: '18px',
+      height: '18px',
+    }
+  },
 };
 
 const InboxManager = () => {
-  // State declarations at the top
-  const [viewportInitialized, setViewportInitialized] = useState(false);
-  const [stylesInitialized, setStylesInitialized] = useState(false);
-
-  // Mobile styles definition - memoized to prevent recreation
-  const mobileStyles = useMemo(() => `
-    @media (max-width: 768px) {
-      button, 
-      [role="button"],
-      a {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 12px;
-        touch-action: manipulation;
-      }
-      
-      input,
-      textarea {
-        font-size: 16px !important; /* Prevent iOS zoom */
-      }
-      
-      * {
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-      }
-    }
-  `, []);
-
-  // Setup mobile viewport - with cleanup and state tracking
-  useEffect(() => {
-    if (viewportInitialized) return;
-    
-    const meta = document.createElement('meta');
-    meta.name = 'viewport';
-    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    document.head.appendChild(meta);
-    setViewportInitialized(true);
-    
-    return () => {
-      document.head.removeChild(meta);
-      setViewportInitialized(false);
-    };
-  }, [viewportInitialized]);
-
-  // Setup mobile styles - with cleanup and state tracking
-  useEffect(() => {
-    if (stylesInitialized) return;
-    
-    const style = document.createElement('style');
-    style.textContent = mobileStyles;
-    document.head.appendChild(style);
-    setStylesInitialized(true);
-    
-    return () => {
-      document.head.removeChild(style);
-      setStylesInitialized(false);
-    };
-  }, [mobileStyles, stylesInitialized]);
-
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1926,382 +1982,15 @@ const InboxManager = () => {
     }
   };
 
-  // Setup mobile viewport
-  useEffect(() => {
-    const meta = document.createElement('meta');
-    meta.name = 'viewport';
-    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-    document.head.appendChild(meta);
-    return () => document.head.removeChild(meta);
-  }, []);
-
-  // Setup mobile styles
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = mobileStyles;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
-
   return (
-    <div className="flex flex-col md:flex-row h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
-      {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-auto md:h-12 bg-opacity-50 backdrop-blur-md z-20 flex flex-col md:flex-row items-center px-3 md:px-6 py-2 md:py-0 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setActiveTab('inbox')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'inbox' ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Inbox
-            </div>
-          </button>
-          <button
-            onClick={() => setShowApiSettings(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              showApiSettings ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4" />
-              API Settings
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* API Settings Modal */}
-      {showApiSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
-            <div className="p-6 border-b border-white/10">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                  <Key className="w-5 h-5" style={{color: '#54FCFF'}} />
-                  API Settings
-                </h2>
-                <button
-                  onClick={() => setShowApiSettings(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Smartlead API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
-                  <Zap className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Smartlead API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.smartlead}
-                    onChange={(e) => handleApiKeyChange('smartlead', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Smartlead API key"
-                  />
-                  {apiTestStatus.smartlead === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Claude API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
-                  <Brain className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Claude API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.claude}
-                    onChange={(e) => handleApiKeyChange('claude', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Claude API key"
-                  />
-                  {apiTestStatus.claude === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Fullenrich API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
-                  <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Fullenrich API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.fullenrich}
-                    onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Fullenrich API key"
-                  />
-                  {apiTestStatus.fullenrich === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
-              <button
-                onClick={() => setShowApiSettings(false)}
-                className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveApiKeys}
-                disabled={isSavingApi}
-                className="px-4 py-2 rounded-lg text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
-                style={{backgroundColor: '#54FCFF'}}
-              >
-                {isSavingApi ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save API Keys
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success/Error Toast */}
-      {showApiToast && (
-        <div className="fixed top-4 right-4 z-50 animate-slideIn">
-          <div className={`rounded-lg shadow-lg p-4 text-sm font-medium flex items-center gap-2 ${
-            apiToastMessage.type === 'success' 
-              ? 'bg-green-400 text-green-900' 
-              : 'bg-red-400 text-red-900'
-          }`}>
-            {apiToastMessage.type === 'success' ? (
-              <CheckCircle className="w-4 h-4" />
-            ) : (
-              <AlertCircle className="w-4 h-4" />
-            )}
-            {apiToastMessage.message}
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notifications Container */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
-        {toasts.map(toast => (
-          <div 
-            key={toast.id}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
-            style={{
-              backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
-              border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
-              backdropFilter: 'blur(8px)',
-              animation: 'slideIn 0.2s ease-out'
-            }}
-            onClick={() => {
-              if (toast.leadId) {
-                const lead = leads.find(l => l.id === toast.leadId);
-                if (lead) {
-                  setSelectedLead(lead);
-                  removeToast(toast.id);
-                }
-              }
-            }}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 shrink-0" style={{color: '#54FCFF'}} />
-            ) : (
-              <AlertCircle className="w-5 h-5 shrink-0" style={{color: '#FF6363'}} />
-            )}
-            <span className="text-white text-sm font-medium flex-1">{toast.message}</span>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                removeToast(toast.id);
-              }}
-              className="ml-2 text-gray-400 hover:text-white shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <style jsx global>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
-
-      {/* Add margin-top to main content to account for nav bar */}
-      <div className="flex-1 flex mt-12">
-        {/* Rest of your existing content */}
-        {activeTab === 'inbox' && (
-          <>
-      {/* Animated Background Gradient */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div 
-          className="absolute inset-0 animate-pulse" 
-          style={{
-            background: `radial-gradient(circle at 20% 50%, rgba(84, 252, 255, 0.1) 0%, transparent 50%), 
-                        radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.08) 0%, transparent 50%), 
-                        radial-gradient(circle at 40% 80%, rgba(168, 85, 247, 0.06) 0%, transparent 50%)`,
-            animation: 'gradientShift 8s ease-in-out infinite'
-          }}
-        />
-      </div>
-
-      {/* Floating Particles */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(6)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 rounded-full opacity-20"
-            style={{
-              backgroundColor: '#54FCFF',
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${4 + Math.random() * 4}s ease-in-out infinite`,
-              animationDelay: `${Math.random() * 4}s`
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Sidebar - Lead List */}
-      <div className="w-full md:w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
-        {/* Header with Metrics */}
-        <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
-          {/* Glowing accent line */}
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-white relative">
-              Inbox Manager
-              <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-50" />
-            </h1>
-            <button
-              onClick={() => setShowMetrics(!showMetrics)}
-              className="text-sm transition-all duration-300 hover:scale-105 relative group"
-              style={{color: '#54FCFF'}}
-            >
-              <span className="relative z-10">{showMetrics ? 'Hide' : 'Show'} Metrics</span>
-              <div className="absolute inset-0 bg-blue-400 rounded opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
-            </button>
-          </div>
-
-          {/* Dashboard Metrics with breathing animation */}
-          {showMetrics && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('urgent-response')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['urgent-response']});
-                  }
-                  setActiveTab('all');
-                }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
-              >
-                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">🚨 URGENT</span>
-                    {activeFilters.urgency?.includes('urgent-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('needs-response')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['needs-response']});
-                  }
-                  setActiveTab('all');
-                }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
-              >
-                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
-                    {activeFilters.urgency?.includes('needs-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('needs-followup')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['needs-followup']});
-                  }
-                  setActiveTab('all');
-                }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
-              >
-                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
-                    {activeFilters.urgency?.includes('needs-followup') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
-                </div>
-              </button>
-            </div>
-          )}
-          
-          {/* Search */}
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{color: '#54FCFF'}} />
+    <div className="flex flex-col h-full" style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.searchBar}>
+          <div className="relative">
             <input
               type="text"
-              placeholder="Search leads, tags, emails..."
+              placeholder="Search leads..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2"
