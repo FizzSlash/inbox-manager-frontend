@@ -1,28 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
-// Add mobile scaling styles
-const mobileStyles = `
-  @media screen and (max-width: 428px) {
-    .mobile-scale { transform: scale(0.95); transform-origin: top left; }
-  }
-  @media screen and (max-width: 390px) {
-    .mobile-scale { transform: scale(0.9); transform-origin: top left; }
-  }
-  @media screen and (max-width: 375px) {
-    .mobile-scale { transform: scale(0.85); transform-origin: top left; }
-  }
-`;
-
 const InboxManager = () => {
-  // Add style tag to head on mount
-  useEffect(() => {
-    const styleElement = document.createElement('style');
-    styleElement.innerHTML = mobileStyles;
-    document.head.appendChild(styleElement);
-    return () => document.head.removeChild(styleElement);
-  }, []);
-
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1722,12 +1701,10 @@ const InboxManager = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="inbox-manager-container">
-        <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-          <div className="text-center p-8 rounded-2xl shadow-xl" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderColor: '#54FCFF'}}></div>
-            <p className="text-white">Loading leads...</p>
-          </div>
+      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        <div className="text-center p-8 rounded-2xl shadow-xl" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderColor: '#54FCFF'}}></div>
+          <p className="text-white">Loading leads...</p>
         </div>
       </div>
     );
@@ -1736,18 +1713,16 @@ const InboxManager = () => {
   // Error state
   if (error) {
     return (
-      <div className="inbox-manager-container">
-        <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-          <div className="text-center">
-            <p className="text-red-400 mb-6 font-medium">Error loading leads: {error}</p>
-            <button 
-              onClick={fetchLeads}
-              className="px-4 py-2 text-white rounded-lg hover:opacity-80 transition-colors"
-              style={{backgroundColor: '#54FCFF', color: '#1A1C1A', border: '1px solid white'}}
-            >
-              Retry
-            </button>
-          </div>
+      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        <div className="text-center">
+          <p className="text-red-400 mb-6 font-medium">Error loading leads: {error}</p>
+          <button 
+            onClick={fetchLeads}
+            className="px-4 py-2 text-white rounded-lg hover:opacity-80 transition-colors"
+            style={{backgroundColor: '#54FCFF', color: '#1A1C1A', border: '1px solid white'}}
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -1875,7 +1850,20 @@ const InboxManager = () => {
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden mobile-scale" style={{backgroundColor: '#1A1C1A'}}>
+    <>
+      <style>
+        {`
+          @media screen and (max-width: 768px) {
+            .inbox-manager-container {
+              transform: scale(0.8);
+              transform-origin: top left;
+              width: 125%; /* Compensate for scale to prevent cutoff */
+            }
+          }
+        `}
+      </style>
+      <div className="inbox-manager-container flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+        {/* Move all existing JSX content here */}
         {/* Top Navigation Bar */}
         <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
           <div className="flex space-x-4">
@@ -2083,6 +2071,14 @@ const InboxManager = () => {
             to {
               transform: translateX(0);
               opacity: 1;
+            }
+          }
+          
+          @media screen and (max-width: 768px) {
+            .flex.h-screen {
+              transform: scale(0.8);
+              transform-origin: top left;
+              width: 125%; /* Compensate for scale to prevent cutoff */
             }
           }
         `}</style>
@@ -3422,6 +3418,8 @@ const InboxManager = () => {
         )}
       </div>
     </div>
+  </div>
+  </>
   );
 };
 
