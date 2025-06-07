@@ -1,186 +1,58 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
-// Add responsive styles
-const styles = {
+// Add mobile-responsive styles
+const mobileStyles = {
   container: {
-    maxWidth: '100%',
-    padding: '1rem',
-    '@media (max-width: 768px)': {
-      padding: '0.5rem'
-    }
-  },
-  mainGrid: {
-    display: 'grid',
-    gridTemplateColumns: '300px 1fr',
-    gap: '1rem',
-    '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr',
-      gap: '0.5rem'
-    }
-  },
-  sidebar: {
-    '@media (max-width: 768px)': {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100%',
-      height: '100%',
-      zIndex: 1000,
-      background: 'white',
-      transform: 'translateX(-100%)',
-      transition: 'transform 0.3s ease',
-      '&.active': {
-        transform: 'translateX(0)'
-      }
-    }
-  }
-};
-
-// Add more component-specific styles
-const componentStyles = {
-  card: {
-    padding: '1.5rem',
-    '@media (max-width: 768px)': {
-      padding: '1rem'
-    }
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '0.5rem',
-    '@media (max-width: 768px)': {
-      flexDirection: 'column'
-    }
-  },
-  table: {
     width: '100%',
-    '@media (max-width: 768px)': {
-      display: 'block',
-      overflowX: 'auto'
-    }
+    maxWidth: '100vw',
+    padding: '10px',
+    boxSizing: 'border-box',
+    overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    '@media (min-width: 768px)': {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+  },
+  searchBar: {
+    width: '100%',
+    maxWidth: '100%',
+    '@media (min-width: 768px)': {
+      maxWidth: '300px',
+    },
   },
   filterSection: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '0.5rem',
-    '@media (max-width: 768px)': {
-      flexDirection: 'column'
-    }
+    gap: '8px',
+    marginBottom: '10px',
   },
-  searchBar: {
+  card: {
     width: '100%',
-    maxWidth: '400px',
-    '@media (max-width: 768px)': {
-      maxWidth: '100%'
-    }
+    margin: '10px 0',
+    padding: '15px',
+    boxSizing: 'border-box',
+    '@media (min-width: 768px)': {
+      margin: '10px',
+    },
   },
-  modal: {
-    width: '90%',
-    maxWidth: '600px',
-    '@media (max-width: 768px)': {
-      width: '95%',
-      margin: '1rem'
-    }
-  },
-  tabs: {
+  buttonGroup: {
     display: 'flex',
-    gap: '1rem',
-    '@media (max-width: 768px)': {
-      overflowX: 'auto',
-      padding: '0.5rem 0'
-    }
-  }
-};
-
-// Add mobile-friendly toast positioning
-const toastStyles = {
-  container: {
-    position: 'fixed',
-    bottom: '1rem',
-    right: '1rem',
-    zIndex: 1000,
-    '@media (max-width: 768px)': {
-      bottom: '0',
-      right: '0',
-      left: '0',
-      padding: '0.5rem'
-    }
-  }
-};
-
-// Add touch interaction helpers
-const touchInteractionStyles = {
+    flexWrap: 'wrap',
+    gap: '8px',
+    marginTop: '10px',
+  },
   button: {
-    minHeight: '44px', // Minimum touch target size
-    '@media (max-width: 768px)': {
-      padding: '0.75rem 1rem',
-      touchAction: 'manipulation'
-    }
+    minWidth: 'auto',
+    padding: '8px 12px',
+    fontSize: '14px',
+    whiteSpace: 'nowrap',
   },
-  input: {
-    '@media (max-width: 768px)': {
-      fontSize: '16px', // Prevent iOS zoom on focus
-      minHeight: '44px',
-      padding: '0.5rem'
-    }
-  },
-  select: {
-    '@media (max-width: 768px)': {
-      minHeight: '44px',
-      padding: '0.5rem 2rem 0.5rem 0.5rem' // Space for dropdown arrow
-    }
-  },
-  link: {
-    '@media (max-width: 768px)': {
-      padding: '0.5rem', // Larger touch target
-      display: 'inline-block'
-    }
-  }
-};
-
-// Add mobile gesture handlers
-const useMobileGestures = () => {
-  const touchStart = useRef(null);
-  const touchEnd = useRef(null);
-
-  const onTouchStart = (e) => {
-    touchEnd.current = null;
-    touchStart.current = {
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY
-    };
-  };
-
-  const onTouchMove = (e) => {
-    touchEnd.current = {
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY
-    };
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart.current || !touchEnd.current) return;
-
-    const distanceX = touchStart.current.x - touchEnd.current.x;
-    const distanceY = touchStart.current.y - touchEnd.current.y;
-    const isHorizontalSwipe = Math.abs(distanceX) > Math.abs(distanceY);
-
-    if (isHorizontalSwipe && Math.abs(distanceX) > 50) {
-      if (distanceX > 0) {
-        // Swipe left - close mobile menu
-        setIsMobileMenuOpen(false);
-      } else {
-        // Swipe right - open mobile menu
-        setIsMobileMenuOpen(true);
-      }
-    }
-  };
-
-  return {
-    onTouchStart,
-    onTouchMove,
-    onTouchEnd
-  };
 };
 
 const InboxManager = () => {
@@ -2031,19 +1903,19 @@ const InboxManager = () => {
     }
   };
 
-  // Add mobile menu state
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Add mobile menu toggle function
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  // Add mobile gesture handlers
-  const mobileGestures = useMobileGestures();
+  // Add viewport meta tag on component mount
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name=viewport]');
+    if (!viewport) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(meta);
+    }
+  }, []);
 
   return (
-    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+    <div className="flex h-screen relative overflow-hidden" style={{...mobileStyles.container, backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
         <div className="flex space-x-4">
