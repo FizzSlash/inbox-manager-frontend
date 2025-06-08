@@ -81,21 +81,37 @@ const InboxManager = () => {
     return replies[replies.length - 1].time;
   };
 
-  // Get response urgency level
+  // Add utility functions at the top of the component
+  const safeGetLastMessage = (lead) => {
+    if (!lead?.conversation?.length) return null;
+    return lead.conversation[lead.conversation.length - 1];
+  };
+
+  const timeDiff = (date1, date2) => {
+    try {
+      const d1 = new Date(date1);
+      const d2 = new Date(date2);
+      if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return Infinity;
+      return (d1 - d2) / (1000 * 60 * 60 * 24);
+    } catch (e) {
+      return Infinity;
+    }
+  };
+
   const getResponseUrgency = (lead) => {
-    const lastMessage = lead.conversation[lead.conversation.length - 1];
+    const lastMessage = safeGetLastMessage(lead);
+    if (!lastMessage) return 'none';
+    
     const isHighMediumIntent = lead.intent >= 4;
     const theyRepliedLast = lastMessage.type === 'REPLY';
     const weRepliedLast = lastMessage.type === 'SENT';
-    const daysSinceLastMessage = (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24);
+    const daysSinceLastMessage = timeDiff(new Date(), new Date(lastMessage.time));
     
-    // NEEDS RESPONSE: High/medium intent + they replied last
     if (isHighMediumIntent && theyRepliedLast) {
-      if (daysSinceLastMessage >= 2) return 'urgent-response';  // 2+ days = URGENT
-      return 'needs-response';  // Same day/1 day = normal priority
+      if (daysSinceLastMessage >= 2) return 'urgent-response';
+      return 'needs-response';
     }
     
-    // NEEDS FOLLOWUP: We replied last + no response for 3+ days
     if (weRepliedLast && daysSinceLastMessage >= 3) {
       return 'needs-followup';
     }
@@ -488,16 +504,33 @@ const InboxManager = () => {
     }
   };
 
-  // Handle adding filter
+  // Handle adding filter with validation
   const handleAddFilter = (category, value) => {
+    if (!category || !value || !filterOptions[category]) {
+      console.warn('Invalid filter:', { category, value });
+      return;
+    }
+
+    // Validate that the value exists in the options
+    const isValidValue = filterOptions[category].options.some(opt => opt.value === value);
+    if (!isValidValue) {
+      console.warn('Invalid filter value:', { category, value });
+      return;
+    }
+
     setActiveFilters(prev => ({
       ...prev,
-      [category]: [...(prev[category] || []), value]
+      [category]: [...new Set([...(prev[category] || []), value])]
     }));
   };
 
-  // Handle removing filter
+  // Handle removing filter with validation
   const handleRemoveFilter = (category, value) => {
+    if (!category || !value || !activeFilters[category]) {
+      console.warn('Invalid filter removal:', { category, value });
+      return;
+    }
+
     setActiveFilters(prev => {
       const updated = { ...prev };
       if (updated[category]) {
@@ -513,6 +546,8 @@ const InboxManager = () => {
   // Clear all filters
   const handleClearAllFilters = () => {
     setActiveFilters({});
+    // Reset any related filter states
+    setShowFilterPopup(false);
   };
 
   // Handle delete lead
@@ -640,34 +675,36 @@ const InboxManager = () => {
         });
       } else if (activeTab === 'recently_sent') {
         filtered = filtered.filter(lead => {
-          if (lead.conversation.length === 0) return true; // No conversation means we might have sent initial message
-          const lastMessage = lead.conversation[lead.conversation.length - 1];
-          return lastMessage.type === 'SENT' && 
-                 (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24) <= 7; // Sent within last 7 days
+          const lastMessage = safeGetLastMessage(lead);
+          if (!lastMessage) return false;
+          return lastMessage.type === 'SENT' && timeDiff(new Date(), new Date(lastMessage.time)) <= 7;
         });
       }
     }
-    // 'inbox' and 'all' tabs show everything, so no additional filtering needed
 
-    // Apply search filter (keep existing)
-    if (searchQuery) {
+    // Apply search filter with null checks
+    if (searchQuery?.trim()) {
+      const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(lead => 
-        lead.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+        (lead.first_name || '').toLowerCase().includes(query) ||
+        (lead.last_name || '').toLowerCase().includes(query) ||
+        (lead.email || '').toLowerCase().includes(query) ||
+        (lead.subject || '').toLowerCase().includes(query) ||
+        (lead.tags || []).some(tag => (tag || '').toLowerCase().includes(query))
       );
     }
 
     // Apply advanced filters
     Object.entries(activeFilters).forEach(([category, values]) => {
-      if (values.length === 0) return;
+      if (!values?.length) return;
       
       filtered = filtered.filter(lead => {
         return values.some(value => {
+          if (!value) return false;
+          
           switch (category) {
             case 'intent':
+              if (!lead?.intent) return false;
               if (value === 'high') return lead.intent >= 7;
               if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
               if (value === 'low') return lead.intent <= 3;
@@ -675,37 +712,33 @@ const InboxManager = () => {
             
             case 'urgency':
               const urgency = getResponseUrgency(lead);
-              if (value === 'urgent') return urgency === 'urgent-response';
-              if (value === 'needs-response') return urgency === 'needs-response';
-              if (value === 'needs-followup') return urgency === 'needs-followup';
-              return false;
+              return value === urgency;
             
             case 'category':
               const leadCategoryValue = lead.lead_category?.toString();
               return leadCategoryValue === value;
             
             case 'engagement':
+              if (!lead?.engagement_score) return false;
               if (value === 'high') return lead.engagement_score >= 80;
               if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
               if (value === 'low') return lead.engagement_score < 50;
               return false;
             
             case 'replies':
-              const replyCount = lead.conversation.filter(m => m.type === 'REPLY').length;
+              const replyCount = lead.conversation?.filter(m => m?.type === 'REPLY')?.length || 0;
               if (value === 'has_replies') return replyCount > 0;
               if (value === 'no_replies') return replyCount === 0;
               if (value === 'multiple_replies') return replyCount >= 2;
               return false;
             
             case 'timeframe':
-              const now = new Date();
-              const lastActivity = lead.conversation.length > 0 
-                ? new Date(lead.conversation[lead.conversation.length - 1].time)
-                : new Date(lead.created_at);
-              const daysDiff = Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24));
+              const lastMessage = safeGetLastMessage(lead);
+              const lastActivity = lastMessage ? new Date(lastMessage.time) : new Date(lead.created_at);
+              const daysDiff = timeDiff(new Date(), lastActivity);
               
-              if (value === 'today') return daysDiff === 0;
-              if (value === 'yesterday') return daysDiff === 1;
+              if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
+              if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
               if (value === 'this_week') return daysDiff <= 7;
               if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
               if (value === 'this_month') return daysDiff <= 30;
@@ -1855,6 +1888,12 @@ const InboxManager = () => {
     }
   };
 
+  // Add a helper function to get active filter count
+  const getActiveFilterCount = () => {
+    return Object.values(activeFilters)
+      .reduce((count, values) => count + (Array.isArray(values) ? values.length : 0), 0);
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2328,9 +2367,9 @@ const InboxManager = () => {
                 <div className="flex items-center gap-2">
                   <Filter className="w-4 h-4" style={{color: '#54FCFF'}} />
                   <span className="text-sm font-medium text-white">Filter</span>
-                  {Object.keys(activeFilters).length > 0 && (
+                  {getActiveFilterCount() > 0 && (
                     <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF'}}>
-                      {Object.values(activeFilters).flat().length}
+                      {getActiveFilterCount()}
                     </span>
                   )}
                 </div>
@@ -2344,7 +2383,7 @@ const InboxManager = () => {
                     <div className="flex justify-between items-center mb-3">
                       <h4 className="font-medium text-white">Filter Options</h4>
                       <div className="flex gap-2">
-                        {Object.keys(activeFilters).length > 0 && (
+                        {getActiveFilterCount() > 0 && (
                           <button
                             onClick={handleClearAllFilters}
                             className="text-xs text-red-400 hover:text-red-300"
@@ -2362,21 +2401,23 @@ const InboxManager = () => {
                     </div>
 
                     {/* Active Filters */}
-                    {Object.keys(activeFilters).length > 0 && (
+                    {getActiveFilterCount() > 0 && (
                       <div className="mb-4">
                         <h5 className="text-xs font-medium text-gray-300 mb-2">ACTIVE FILTERS</h5>
                         <div className="flex flex-wrap gap-2">
                           {Object.entries(activeFilters).map(([category, values]) =>
-                            values.map((value) => {
+                            (values || []).map((value) => {
                               const categoryOption = filterOptions[category];
                               const valueOption = categoryOption?.options.find(opt => opt.value === value);
+                              if (!valueOption) return null;
+                              
                               return (
                                 <span
                                   key={`${category}-${value}`}
                                   className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
                                   style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
                                 >
-                                  {valueOption?.label || value}
+                                  {valueOption.label}
                                   <button
                                     onClick={() => handleRemoveFilter(category, value)}
                                     className="hover:opacity-80"
