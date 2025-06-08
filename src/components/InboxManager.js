@@ -1850,261 +1850,223 @@ const InboxManager = () => {
   };
 
   return (
-    <>
-      <style>
-        {`
-          @media screen and (max-width: 768px) {
-            .inbox-manager-container {
-              transform: scale(0.8);
-              transform-origin: top left;
-              width: 125%; /* Compensate for scale to prevent cutoff */
-            }
-          }
-        `}
-      </style>
-      <div className="inbox-manager-container flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
-        {/* Move all existing JSX content here */}
-        {/* Top Navigation Bar */}
-        <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setActiveTab('inbox')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'inbox' ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Inbox
-              </div>
-            </button>
-            <button
-              onClick={() => setShowApiSettings(true)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                showApiSettings ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Key className="w-4 h-4" />
-                API Settings
-              </div>
-            </button>
-          </div>
+    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+      {/* Top Navigation Bar */}
+      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setActiveTab('inbox')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'inbox' ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              Inbox
+            </div>
+          </button>
+          <button
+            onClick={() => setShowApiSettings(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showApiSettings ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4" />
+              API Settings
+            </div>
+          </button>
         </div>
+      </div>
 
-        {/* API Settings Modal */}
-        {showApiSettings && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
-              <div className="p-6 border-b border-white/10">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                    <Key className="w-5 h-5" style={{color: '#54FCFF'}} />
-                    API Settings
-                  </h2>
-                  <button
-                    onClick={() => setShowApiSettings(false)}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                {/* Smartlead API */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-white">
-                    <Zap className="w-4 h-4" style={{color: '#54FCFF'}} />
-                    Smartlead API Key
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={apiKeys.smartlead}
-                      onChange={(e) => handleApiKeyChange('smartlead', e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                      placeholder="Enter Smartlead API key"
-                    />
-                    {apiTestStatus.smartlead === true && (
-                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Claude API */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-white">
-                    <Brain className="w-4 h-4" style={{color: '#54FCFF'}} />
-                    Claude API Key
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={apiKeys.claude}
-                      onChange={(e) => handleApiKeyChange('claude', e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                      placeholder="Enter Claude API key"
-                    />
-                    {apiTestStatus.claude === true && (
-                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Fullenrich API */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-white">
-                    <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
-                    Fullenrich API Key
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={apiKeys.fullenrich}
-                      onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                      placeholder="Enter Fullenrich API key"
-                    />
-                    {apiTestStatus.fullenrich === true && (
-                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
+      {/* API Settings Modal */}
+      {showApiSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
+            <div className="p-6 border-b border-white/10">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Key className="w-5 h-5" style={{color: '#54FCFF'}} />
+                  API Settings
+                </h2>
                 <button
                   onClick={() => setShowApiSettings(false)}
-                  className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
+                  className="text-gray-400 hover:text-white transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveApiKeys}
-                  disabled={isSavingApi}
-                  className="px-4 py-2 rounded-lg text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
-                  style={{backgroundColor: '#54FCFF'}}
-                >
-                  {isSavingApi ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Save API Keys
-                    </>
-                  )}
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
-          </div>
-        )}
+            
+            <div className="p-6 space-y-6">
+              {/* Smartlead API */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-white">
+                  <Zap className="w-4 h-4" style={{color: '#54FCFF'}} />
+                  Smartlead API Key
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={apiKeys.smartlead}
+                    onChange={(e) => handleApiKeyChange('smartlead', e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                    placeholder="Enter Smartlead API key"
+                  />
+                  {apiTestStatus.smartlead === true && (
+                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                  )}
+                </div>
+              </div>
 
-        {/* Success/Error Toast */}
-        {showApiToast && (
-          <div className="fixed top-4 right-4 z-50 animate-slideIn">
-            <div className={`rounded-lg shadow-lg p-4 text-sm font-medium flex items-center gap-2 ${
-              apiToastMessage.type === 'success' 
-                ? 'bg-green-400 text-green-900' 
-                : 'bg-red-400 text-red-900'
-            }`}>
-              {apiToastMessage.type === 'success' ? (
-                <CheckCircle className="w-4 h-4" />
-              ) : (
-                <AlertCircle className="w-4 h-4" />
-              )}
-              {apiToastMessage.message}
+              {/* Claude API */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-white">
+                  <Brain className="w-4 h-4" style={{color: '#54FCFF'}} />
+                  Claude API Key
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={apiKeys.claude}
+                    onChange={(e) => handleApiKeyChange('claude', e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                    placeholder="Enter Claude API key"
+                  />
+                  {apiTestStatus.claude === true && (
+                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Fullenrich API */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-white">
+                  <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
+                  Fullenrich API Key
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={apiKeys.fullenrich}
+                    onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                    placeholder="Enter Fullenrich API key"
+                  />
+                  {apiTestStatus.fullenrich === true && (
+                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Toast Notifications Container */}
-        <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
-          {toasts.map(toast => (
-            <div 
-              key={toast.id}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
-              style={{
-                backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
-                border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
-                backdropFilter: 'blur(8px)',
-                animation: 'slideIn 0.2s ease-out'
-              }}
-              onClick={() => {
-                if (toast.leadId) {
-                  const lead = leads.find(l => l.id === toast.leadId);
-                  if (lead) {
-                    setSelectedLead(lead);
-                    removeToast(toast.id);
-                  }
-                }
-              }}
-            >
-              {toast.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 shrink-0" style={{color: '#54FCFF'}} />
-              ) : (
-                <AlertCircle className="w-5 h-5 shrink-0" style={{color: '#FF6363'}} />
-              )}
-              <span className="text-white text-sm font-medium flex-1">{toast.message}</span>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeToast(toast.id);
-                }}
-                className="ml-2 text-gray-400 hover:text-white shrink-0"
+            <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
+              <button
+                onClick={() => setShowApiSettings(false)}
+                className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
               >
-                <X className="w-4 h-4" />
+                Cancel
+              </button>
+              <button
+                onClick={saveApiKeys}
+                disabled={isSavingApi}
+                className="px-4 py-2 rounded-lg text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
+                style={{backgroundColor: '#54FCFF'}}
+              >
+                {isSavingApi ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save API Keys
+                  </>
+                )}
               </button>
             </div>
-          ))}
+          </div>
         </div>
+      )}
 
-        <style jsx global>{`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
+      {/* Success/Error Toast */}
+      {showApiToast && (
+        <div className="fixed top-4 right-4 z-50 animate-slideIn">
+          <div className={`rounded-lg shadow-lg p-4 text-sm font-medium flex items-center gap-2 ${
+            apiToastMessage.type === 'success' 
+              ? 'bg-green-400 text-green-900' 
+              : 'bg-red-400 text-red-900'
+          }`}>
+            {apiToastMessage.type === 'success' ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <AlertCircle className="w-4 h-4" />
+            )}
+            {apiToastMessage.message}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications Container */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id}
+            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
+            style={{
+              backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
+              border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
+              backdropFilter: 'blur(8px)',
+              animation: 'slideIn 0.2s ease-out'
+            }}
+            onClick={() => {
+              if (toast.leadId) {
+                const lead = leads.find(l => l.id === toast.leadId);
+                if (lead) {
+                  setSelectedLead(lead);
+                  removeToast(toast.id);
+                }
+              }
+            }}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 shrink-0" style={{color: '#54FCFF'}} />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0" style={{color: '#FF6363'}} />
+            )}
+            <span className="text-white text-sm font-medium flex-1">{toast.message}</span>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                removeToast(toast.id);
+              }}
+              className="ml-2 text-gray-400 hover:text-white shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
           }
-          
-                   @media screen and (max-width: 768px) {
-           #root {
-             width: 100vw;
-             height: 100vh;
-             overflow: hidden;
-           }
-           .flex.h-screen.relative.overflow-hidden {
-             width: 100%;
-             height: 100%;
-             display: flex;
-             flex-direction: column;
-             overflow: hidden;
-           }
-           .flex-1.flex.mt-12 {
-             flex: 1;
-             overflow: auto;
-             width: 100%;
-           }
-           /* Make all content fit within viewport */
-           * {
-             max-width: 100vw;
-             box-sizing: border-box;
-           }
-         }
-        `}</style>
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
 
-        {/* Add margin-top to main content to account for nav bar */}
-        <div className="flex-1 flex mt-12">
-          {/* Rest of your existing content */}
-          {activeTab === 'inbox' && (
-            <>
+      {/* Add margin-top to main content to account for nav bar */}
+      <div className="flex-1 flex mt-12">
+        {/* Rest of your existing content */}
+        {activeTab === 'inbox' && (
+          <>
       {/* Animated Background Gradient */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div 
@@ -2958,9 +2920,9 @@ const InboxManager = () => {
                                   <div className="col-span-3 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
                                     <div className="grid grid-cols-3 gap-8">
                                       <div>
-                                        <span className="text-gray-400">Engagement Score</span>
-                                        <p className={`text-2xl font-bold mt-1 ${getEngagementColor(selectedLead.engagement_score)}`}>
-                                          {selectedLead.engagement_score}%
+                                        <span className="text-gray-400">Avg Response Time</span>
+                                        <p className="text-2xl font-bold mt-1 text-white">
+                                          {formatResponseTime(selectedLead.response_time_avg)}
                                         </p>
                                       </div>
                                       <div>
@@ -3433,9 +3395,8 @@ const InboxManager = () => {
             )}
           </>
         )}
-             </div>
-     </div>
-   </>
+      </div>
+    </div>
   );
 };
 
