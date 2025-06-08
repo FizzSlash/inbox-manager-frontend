@@ -2467,8 +2467,16 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'all' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              disabled={isLoading}
             >
-              All Leads
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : (
+                'All Leads'
+              )}
             </button>
             <button
               onClick={() => setActiveTab('need_response')}
@@ -2478,16 +2486,22 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'need_response' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              disabled={isLoading}
             >
-              Need Response
-              {activeTab !== 'need_response' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
-                  {leads.filter(lead => {
-                    if (lead.conversation.length === 0) return false;
-                    const lastMessage = lead.conversation[lead.conversation.length - 1];
-                    return lastMessage.type === 'REPLY';
-                  }).length}
-                </span>
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : (
+                <>
+                  Need Response
+                  {activeTab !== 'need_response' && (
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                      {leads.filter(lead => checkNeedsReply(lead.conversation)).length}
+                    </span>
+                  )}
+                </>
               )}
             </button>
             <button
@@ -2498,16 +2512,27 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'recently_sent' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              disabled={isLoading}
             >
-              Recently Sent
-              {activeTab !== 'recently_sent' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
-                  {leads.filter(lead => {
-                    if (lead.conversation.length === 0) return true;
-                    const lastMessage = lead.conversation[lead.conversation.length - 1];
-                    return lastMessage.type === 'SENT';
-                  }).length}
-                </span>
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : (
+                <>
+                  Recently Sent
+                  {activeTab !== 'recently_sent' && (
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                      {leads.filter(lead => {
+                        if (lead.conversation.length === 0) return false;
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+                        return lastMessage.type === 'SENT' && timeSinceLastMessage <= 24;
+                      }).length}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           </div>
