@@ -2165,63 +2165,65 @@ const InboxManager = () => {
             <div className="grid grid-cols-3 gap-4 mb-6">
               <button
                 onClick={() => handleUrgencyFilter('urgent-response')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                  activeFilters.urgency?.includes('urgent-response')
-                    ? 'opacity-100'
-                    : 'opacity-80 hover:opacity-90'
-                }`}
-                style={{
-                  backgroundColor: activeFilters.urgency?.includes('urgent-response') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  color: activeFilters.urgency?.includes('urgent-response') ? '#54FCFF' : 'white',
-                  border: '1px solid rgba(255, 255, 255, 0.2)'
-                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
               >
-                Urgent
-                {!activeFilters.urgency?.includes('urgent-response') && (
-                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold text-sm">🚨 URGENT</span>
+                    {activeFilters.urgency?.includes('urgent-response') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-bold text-white">
                     {leads.filter(lead => getResponseUrgency(lead) === 'urgent-response').length}
-                  </span>
-                )}
+                  </div>
+                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
+                </div>
               </button>
+
               <button
                 onClick={() => handleUrgencyFilter('needs-response')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                  activeFilters.urgency?.includes('needs-response')
-                    ? 'opacity-100'
-                    : 'opacity-80 hover:opacity-90'
-                }`}
-                style={{
-                  backgroundColor: activeFilters.urgency?.includes('needs-response') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  color: activeFilters.urgency?.includes('needs-response') ? '#54FCFF' : 'white',
-                  border: '1px solid rgba(255, 255, 255, 0.2)'
-                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
               >
-                Needs Response
-                {!activeFilters.urgency?.includes('needs-response') && (
-                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
+                    {activeFilters.urgency?.includes('needs-response') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-bold text-white">
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-response').length}
-                  </span>
-                )}
+                  </div>
+                  <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
+                </div>
               </button>
+
               <button
                 onClick={() => handleUrgencyFilter('needs-followup')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                  activeFilters.urgency?.includes('needs-followup')
-                    ? 'opacity-100'
-                    : 'opacity-80 hover:opacity-90'
-                }`}
-                style={{
-                  backgroundColor: activeFilters.urgency?.includes('needs-followup') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  color: activeFilters.urgency?.includes('needs-followup') ? '#54FCFF' : 'white',
-                  border: '1px solid rgba(255, 255, 255, 0.2)'
-                }}
+                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
+                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
               >
-                Needs Followup
-                {!activeFilters.urgency?.includes('needs-followup') && (
-                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                    {activeFilters.urgency?.includes('needs-followup') && (
+                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                    )}
+                  </div>
+                  <div className="text-2xl font-bold text-white">
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
-                  </span>
-                )}
+                  </div>
+                  <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
+                </div>
               </button>
             </div>
           )}
