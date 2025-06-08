@@ -664,7 +664,8 @@ const InboxManager = () => {
 
   // Enhanced filter and sort leads
   const filteredAndSortedLeads = useMemo(() => {
-    let filtered = leads;
+    if (!leads) return [];
+    let filtered = [...leads];
 
     // Apply tab filter first (who sent last message)
     if (activeTab !== 'inbox' && activeTab !== 'all') {
@@ -710,13 +711,14 @@ const InboxManager = () => {
               if (value === 'low') return lead.intent <= 3;
               return false;
             
-            case 'urgency':
+            case 'urgency': {
               const urgency = getResponseUrgency(lead);
+              // Match exact values from filterOptions
               return value === urgency;
+            }
             
             case 'category':
-              const leadCategoryValue = lead.lead_category?.toString();
-              return leadCategoryValue === value;
+              return lead.lead_category?.toString() === value;
             
             case 'engagement':
               if (!lead?.engagement_score) return false;
@@ -732,7 +734,7 @@ const InboxManager = () => {
               if (value === 'multiple_replies') return replyCount >= 2;
               return false;
             
-            case 'timeframe':
+            case 'timeframe': {
               const lastMessage = safeGetLastMessage(lead);
               const lastActivity = lastMessage ? new Date(lastMessage.time) : new Date(lead.created_at);
               const daysDiff = timeDiff(new Date(), lastActivity);
@@ -744,6 +746,7 @@ const InboxManager = () => {
               if (value === 'this_month') return daysDiff <= 30;
               if (value === 'older') return daysDiff > 30;
               return false;
+            }
             
             default:
               return false;
@@ -752,25 +755,8 @@ const InboxManager = () => {
       });
     });
 
-    // Apply advanced sorting
-    activeSorts.forEach(({ field, direction }) => {
-      const sortOption = sortOptions.find(opt => opt.field === field);
-      if (!sortOption) return;
-      
-      filtered.sort((a, b) => {
-        const aVal = sortOption.getValue(a);
-        const bVal = sortOption.getValue(b);
-        
-        let comparison = 0;
-        if (aVal > bVal) comparison = 1;
-        if (aVal < bVal) comparison = -1;
-        
-        return direction === 'desc' ? -comparison : comparison;
-      });
-    });
-
     return filtered;
-  }, [leads, searchQuery, activeFilters, activeSorts, activeTab]);
+  }, [leads, searchQuery, activeFilters, activeTab]);
 
   // Auto-populate email fields when lead is selected
   useEffect(() => {
@@ -1894,6 +1880,17 @@ const InboxManager = () => {
       .reduce((count, values) => count + (Array.isArray(values) ? values.length : 0), 0);
   };
 
+  // Update the urgency filter buttons
+  const handleUrgencyFilter = (urgencyType) => {
+    // If this urgency is already active, clear it
+    if (activeFilters.urgency?.includes(urgencyType)) {
+      handleRemoveFilter('urgency', urgencyType);
+    } else {
+      // Otherwise, set only this urgency
+      handleAddFilter('urgency', urgencyType);
+    }
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
       {/* Top Navigation Bar */}
@@ -2167,82 +2164,64 @@ const InboxManager = () => {
           {showMetrics && (
             <div className="grid grid-cols-3 gap-4 mb-6">
               <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('urgent-response')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['urgent-response']});
-                  }
-                  setActiveTab('all');
+                onClick={() => handleUrgencyFilter('urgent-response')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
+                  activeFilters.urgency?.includes('urgent-response')
+                    ? 'opacity-100'
+                    : 'opacity-80 hover:opacity-90'
+                }`}
+                style={{
+                  backgroundColor: activeFilters.urgency?.includes('urgent-response') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  color: activeFilters.urgency?.includes('urgent-response') ? '#54FCFF' : 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(239, 68, 68, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">🚨 URGENT</span>
-                    {activeFilters.urgency?.includes('urgent-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.urgentResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
-                </div>
+                Urgent
+                {!activeFilters.urgency?.includes('urgent-response') && (
+                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                    {leads.filter(lead => getResponseUrgency(lead) === 'urgent-response').length}
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('needs-response')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['needs-response']});
-                  }
-                  setActiveTab('all');
+                onClick={() => handleUrgencyFilter('needs-response')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
+                  activeFilters.urgency?.includes('needs-response')
+                    ? 'opacity-100'
+                    : 'opacity-80 hover:opacity-90'
+                }`}
+                style={{
+                  backgroundColor: activeFilters.urgency?.includes('needs-response') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  color: activeFilters.urgency?.includes('needs-response') ? '#54FCFF' : 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(234, 179, 8, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
-                    {activeFilters.urgency?.includes('needs-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsResponse}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
-                </div>
+                Needs Response
+                {!activeFilters.urgency?.includes('needs-response') && (
+                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-response').length}
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => {
-                  // Toggle filter - if already active, clear it
-                  if (activeFilters.urgency?.includes('needs-followup')) {
-                    setActiveFilters({});
-                  } else {
-                    setActiveFilters({urgency: ['needs-followup']});
-                  }
-                  setActiveTab('all');
+                onClick={() => handleUrgencyFilter('needs-followup')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
+                  activeFilters.urgency?.includes('needs-followup')
+                    ? 'opacity-100'
+                    : 'opacity-80 hover:opacity-90'
+                }`}
+                style={{
+                  backgroundColor: activeFilters.urgency?.includes('needs-followup') ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  color: activeFilters.urgency?.includes('needs-followup') ? '#54FCFF' : 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.2)'
                 }}
-                className="p-6 rounded-xl shadow-lg backdrop-blur-sm flex-1 text-left hover:scale-105 transition-all duration-300 cursor-pointer relative group active:animate-gradient-flash"
-                style={{backgroundColor: 'rgba(34, 197, 94, 0.5)'}}
               >
-                <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
-                    {activeFilters.urgency?.includes('needs-followup') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold text-white">{dashboardMetrics.needsFollowup}</div>
-                  <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
-                </div>
+                Needs Followup
+                {!activeFilters.urgency?.includes('needs-followup') && (
+                  <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
+                  </span>
+                )}
               </button>
             </div>
           )}
