@@ -632,20 +632,22 @@ const InboxManager = () => {
     let filtered = leads;
 
     // Apply tab filter first (who sent last message)
-    if (activeTab === 'need_response') {
-      filtered = filtered.filter(lead => {
-        if (lead.conversation.length === 0) return false;
-        const lastMessage = lead.conversation[lead.conversation.length - 1];
-        return lastMessage.type === 'REPLY'; // They replied last, so we need to respond
-      });
-    } else if (activeTab === 'recently_sent') {
-      filtered = filtered.filter(lead => {
-        if (lead.conversation.length === 0) return true; // No conversation means we might have sent initial message
-        const lastMessage = lead.conversation[lead.conversation.length - 1];
-        return lastMessage.type === 'SENT'; // We sent last message
-      });
+    if (activeTab !== 'inbox' && activeTab !== 'all') {
+      if (activeTab === 'need_response') {
+        filtered = filtered.filter(lead => {
+          const urgency = getResponseUrgency(lead);
+          return urgency === 'urgent-response' || urgency === 'needs-response';
+        });
+      } else if (activeTab === 'recently_sent') {
+        filtered = filtered.filter(lead => {
+          if (lead.conversation.length === 0) return true; // No conversation means we might have sent initial message
+          const lastMessage = lead.conversation[lead.conversation.length - 1];
+          return lastMessage.type === 'SENT' && 
+                 (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24) <= 7; // Sent within last 7 days
+        });
+      }
     }
-    // 'all' tab shows everything, so no additional filtering needed
+    // 'inbox' and 'all' tabs show everything, so no additional filtering needed
 
     // Apply search filter (keep existing)
     if (searchQuery) {
@@ -672,7 +674,11 @@ const InboxManager = () => {
               return false;
             
             case 'urgency':
-              return getResponseUrgency(lead) === value;
+              const urgency = getResponseUrgency(lead);
+              if (value === 'urgent') return urgency === 'urgent-response';
+              if (value === 'needs-response') return urgency === 'needs-response';
+              if (value === 'needs-followup') return urgency === 'needs-followup';
+              return false;
             
             case 'category':
               const leadCategoryValue = lead.lead_category?.toString();
