@@ -2075,18 +2075,27 @@ const InboxManager = () => {
           }
           
                    @media screen and (max-width: 768px) {
-           #root, body, .flex.h-screen.relative.overflow-hidden {
-             transform: scale(0.8);
-             transform-origin: top left;
-             width: 125%; /* Compensate for scale to prevent cutoff */
-             min-height: 100vh !important;
-             max-height: 100vh !important;
-             overflow: hidden !important;
+           #root {
+             width: 100vw;
+             height: 100vh;
+             overflow: hidden;
            }
-           /* Ensure the content container doesn't scroll unnecessarily */
+           .flex.h-screen.relative.overflow-hidden {
+             width: 100%;
+             height: 100%;
+             display: flex;
+             flex-direction: column;
+             overflow: hidden;
+           }
            .flex-1.flex.mt-12 {
+             flex: 1;
              overflow: auto;
-             height: calc(100vh - 48px);
+             width: 100%;
+           }
+           /* Make all content fit within viewport */
+           * {
+             max-width: 100vw;
+             box-sizing: border-box;
            }
          }
         `}</style>
