@@ -133,6 +133,28 @@ const InboxManager = () => {
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
 
+  // Bulk operations state
+  const [selectedLeads, setSelectedLeads] = useState(new Set());
+  const [selectAllMode, setSelectAllMode] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+
+  // Virtual scrolling state
+  const [virtualStart, setVirtualStart] = useState(0);
+  const [virtualEnd, setVirtualEnd] = useState(50);
+  const [scrollTop, setScrollTop] = useState(0);
+  const leadListRef = useRef(null);
+  const ITEM_HEIGHT = 200; // Approximate height of each lead card
+
+  // Advanced search state
+  const [advancedSearch, setAdvancedSearch] = useState({
+    content: '',
+    dateRange: 'all',
+    customStartDate: '',
+    customEndDate: '',
+    combinedFilters: [],
+    showAdvanced: false
+  });
+
   // Clean up all timeouts on unmount
   useEffect(() => {
     return () => {
@@ -157,6 +179,11 @@ const InboxManager = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showRecentDropdown]);
+
+  // Clear selection when filters change
+  useEffect(() => {
+    clearSelection();
+  }, [activeTab, searchQuery, advancedSearch, activeFilters]);
 
   // Auto-save drafts with debouncing
   const draftTimeoutRef = useRef(null);
@@ -201,6 +228,88 @@ const InboxManager = () => {
     
     setRecentlyViewed(newRecent);
     localStorage.setItem('inbox_manager_recent_leads', JSON.stringify(newRecent));
+  };
+
+  // Virtual scrolling calculations
+  const calculateVirtualRange = (scrollTop, containerHeight, totalItems) => {
+    const start = Math.floor(scrollTop / ITEM_HEIGHT);
+    const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT);
+    const buffer = 5; // Render extra items for smooth scrolling
+    
+    return {
+      start: Math.max(0, start - buffer),
+      end: Math.min(totalItems, start + visibleCount + buffer * 2)
+    };
+  };
+
+  // Bulk operations helpers
+  const toggleLeadSelection = (leadId) => {
+    const newSelected = new Set(selectedLeads);
+    if (newSelected.has(leadId)) {
+      newSelected.delete(leadId);
+    } else {
+      newSelected.add(leadId);
+    }
+    setSelectedLeads(newSelected);
+    setShowBulkActions(newSelected.size > 0);
+  };
+
+  const selectAllVisible = () => {
+    if (selectAllMode) {
+      setSelectedLeads(new Set());
+      setSelectAllMode(false);
+    } else {
+      const allIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
+      setSelectedLeads(allIds);
+      setSelectAllMode(true);
+    }
+    setShowBulkActions(!selectAllMode);
+  };
+
+  const clearSelection = () => {
+    setSelectedLeads(new Set());
+    setSelectAllMode(false);
+    setShowBulkActions(false);
+  };
+
+  // Bulk operations
+  const bulkDeleteLeads = async () => {
+    if (selectedLeads.size === 0) return;
+    
+    const confirmation = window.confirm(`Are you sure you want to delete ${selectedLeads.size} leads? This action cannot be undone.`);
+    if (!confirmation) return;
+
+    try {
+      const leadsToDelete = filteredAndSortedLeads.filter(lead => selectedLeads.has(lead.id));
+      
+      // Delete each lead (you can optimize this with a bulk API endpoint later)
+      for (const lead of leadsToDelete) {
+        await fetch('https://reidsickels.app.n8n.cloud/webhook/bfffab96-188f-4a4a-9ae2-62aa9e0a02f4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...lead,
+            smartlead_api_key: apiKeys.smartlead,
+            claude_api_key: apiKeys.claude,
+            fullenrich_api_key: apiKeys.fullenrich
+          })
+        });
+      }
+
+      // Remove from local state
+      setLeads(prevLeads => prevLeads.filter(lead => !selectedLeads.has(lead.id)));
+      
+      // Clear selection if deleted lead was selected
+      if (selectedLead && selectedLeads.has(selectedLead.id)) {
+        setSelectedLead(null);
+      }
+      
+      clearSelection();
+      showToast(`Successfully deleted ${selectedLeads.size} leads`, 'success');
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      showToast('Error deleting leads', 'error');
+    }
   };
 
 
@@ -885,7 +994,7 @@ const InboxManager = () => {
     return 'text-red-600';
   };
 
-  // Enhanced filter and sort leads
+  // Enhanced filter and sort leads with advanced search
   const filteredAndSortedLeads = useMemo(() => {
     try {
       if (!leads || !Array.isArray(leads)) {
@@ -926,7 +1035,7 @@ const InboxManager = () => {
         });
       }
 
-      // Apply search filter
+      // Apply basic search filter
       if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         filtered = filtered.filter(lead => {
@@ -957,7 +1066,71 @@ const InboxManager = () => {
         });
       }
 
-      // Apply advanced filters
+      // Apply advanced content search
+      if (advancedSearch.content && advancedSearch.content.trim()) {
+        const contentQuery = advancedSearch.content.toLowerCase().trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation)) return false;
+            
+            // Search within conversation content
+            return lead.conversation.some(message => {
+              const content = (message.content || '').toLowerCase();
+              return content.includes(contentQuery);
+            });
+          } catch (e) {
+            console.warn('Error in content search:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply advanced date range filter
+      if (advancedSearch.dateRange !== 'all') {
+        filtered = filtered.filter(lead => {
+          try {
+            let lastActivity;
+            if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
+              const lastMessage = lead.conversation[lead.conversation.length - 1];
+              lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
+            } else {
+              lastActivity = new Date(lead.created_at || Date.now());
+            }
+
+            const now = new Date();
+            const daysDiff = (now - lastActivity) / (1000 * 60 * 60 * 24);
+
+            switch (advancedSearch.dateRange) {
+              case 'today':
+                return daysDiff >= 0 && daysDiff < 1;
+              case 'yesterday':
+                return daysDiff >= 1 && daysDiff < 2;
+              case 'this_week':
+                return daysDiff <= 7;
+              case 'last_week':
+                return daysDiff > 7 && daysDiff <= 14;
+              case 'this_month':
+                return daysDiff <= 30;
+              case 'last_month':
+                return daysDiff > 30 && daysDiff <= 60;
+              case 'custom':
+                if (advancedSearch.customStartDate && advancedSearch.customEndDate) {
+                  const startDate = new Date(advancedSearch.customStartDate);
+                  const endDate = new Date(advancedSearch.customEndDate);
+                  return lastActivity >= startDate && lastActivity <= endDate;
+                }
+                return true;
+              default:
+                return true;
+            }
+          } catch (e) {
+            console.warn('Error in date range filter:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply existing advanced filters
       if (activeFilters && typeof activeFilters === 'object') {
         for (const [category, values] of Object.entries(activeFilters)) {
           if (!values || !Array.isArray(values) || values.length === 0) continue;
@@ -1052,7 +1225,27 @@ const InboxManager = () => {
       console.error('Error in filteredAndSortedLeads:', e);
       return leads || [];
     }
-  }, [leads, searchQuery, activeFilters, activeTab]);
+  }, [leads, searchQuery, activeFilters, activeTab, advancedSearch]);
+
+  // Virtual scrolling implementation
+  const virtualizedLeads = useMemo(() => {
+    if (filteredAndSortedLeads.length <= 100) {
+      // Don't virtualize for small lists
+      return filteredAndSortedLeads;
+    }
+    
+    return filteredAndSortedLeads.slice(virtualStart, virtualEnd);
+  }, [filteredAndSortedLeads, virtualStart, virtualEnd]);
+
+  // Update virtual range when scrolling
+  useEffect(() => {
+    if (leadListRef.current && filteredAndSortedLeads.length > 100) {
+      const containerHeight = leadListRef.current.clientHeight;
+      const range = calculateVirtualRange(scrollTop, containerHeight, filteredAndSortedLeads.length);
+      setVirtualStart(range.start);
+      setVirtualEnd(range.end);
+    }
+  }, [scrollTop, filteredAndSortedLeads.length]);
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
@@ -2549,6 +2742,10 @@ const InboxManager = () => {
           0% { opacity: 0.5; }
           100% { opacity: 1; }
         }
+
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
+        }
         
         /* Theme transition animations */
         * {
@@ -2700,21 +2897,144 @@ const InboxManager = () => {
           )}
           
           {/* Search */}
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
-            <input
-              type="text"
-              placeholder="Search leads, tags, emails..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg backdrop-blur-sm focus:ring-2 transition-colors duration-300"
-              style={{
-                backgroundColor: themeStyles.tertiaryBg, 
-                border: `1px solid ${themeStyles.border}`, 
-                color: themeStyles.textPrimary,
-                '--tw-ring-color': themeStyles.accent
-              }}
-            />
+          <div className="mb-6">
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
+              <input
+                type="text"
+                placeholder="Search leads, tags, emails..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg backdrop-blur-sm focus:ring-2 transition-colors duration-300"
+                style={{
+                  backgroundColor: themeStyles.tertiaryBg, 
+                  border: `1px solid ${themeStyles.border}`, 
+                  color: themeStyles.textPrimary,
+                  '--tw-ring-color': themeStyles.accent
+                }}
+              />
+            </div>
+
+            {/* Advanced Search Toggle */}
+            <button
+              onClick={() => setAdvancedSearch(prev => ({ ...prev, showAdvanced: !prev.showAdvanced }))}
+              className="text-sm transition-colors duration-300 hover:opacity-80 flex items-center gap-2"
+              style={{color: themeStyles.accent}}
+            >
+              <Filter className="w-3 h-3" />
+              Advanced Search
+              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${advancedSearch.showAdvanced ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Advanced Search Panel */}
+            {advancedSearch.showAdvanced && (
+              <div className="mt-3 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="space-y-4">
+                  {/* Content Search */}
+                  <div>
+                    <label className="text-xs font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                      Search in Conversation Content
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Search within messages..."
+                      value={advancedSearch.content}
+                      onChange={(e) => setAdvancedSearch(prev => ({ ...prev, content: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                      style={{
+                        backgroundColor: themeStyles.secondaryBg, 
+                        border: `1px solid ${themeStyles.border}`, 
+                        color: themeStyles.textPrimary,
+                        '--tw-ring-color': themeStyles.accent
+                      }}
+                    />
+                  </div>
+
+                  {/* Date Range */}
+                  <div>
+                    <label className="text-xs font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                      Last Activity
+                    </label>
+                    <select
+                      value={advancedSearch.dateRange}
+                      onChange={(e) => setAdvancedSearch(prev => ({ ...prev, dateRange: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                      style={{
+                        backgroundColor: themeStyles.secondaryBg, 
+                        border: `1px solid ${themeStyles.border}`, 
+                        color: themeStyles.textPrimary,
+                        '--tw-ring-color': themeStyles.accent
+                      }}
+                    >
+                      <option value="all">All Time</option>
+                      <option value="today">Today</option>
+                      <option value="yesterday">Yesterday</option>
+                      <option value="this_week">This Week</option>
+                      <option value="last_week">Last Week</option>
+                      <option value="this_month">This Month</option>
+                      <option value="last_month">Last Month</option>
+                      <option value="custom">Custom Range</option>
+                    </select>
+                  </div>
+
+                  {/* Custom Date Range */}
+                  {advancedSearch.dateRange === 'custom' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium mb-1 block transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                          From
+                        </label>
+                        <input
+                          type="date"
+                          value={advancedSearch.customStartDate}
+                          onChange={(e) => setAdvancedSearch(prev => ({ ...prev, customStartDate: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                          style={{
+                            backgroundColor: themeStyles.secondaryBg, 
+                            border: `1px solid ${themeStyles.border}`, 
+                            color: themeStyles.textPrimary,
+                            '--tw-ring-color': themeStyles.accent
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium mb-1 block transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                          To
+                        </label>
+                        <input
+                          type="date"
+                          value={advancedSearch.customEndDate}
+                          onChange={(e) => setAdvancedSearch(prev => ({ ...prev, customEndDate: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                          style={{
+                            backgroundColor: themeStyles.secondaryBg, 
+                            border: `1px solid ${themeStyles.border}`, 
+                            color: themeStyles.textPrimary,
+                            '--tw-ring-color': themeStyles.accent
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clear Advanced Search */}
+                  <button
+                    onClick={() => setAdvancedSearch({
+                      content: '',
+                      dateRange: 'all',
+                      customStartDate: '',
+                      customEndDate: '',
+                      combinedFilters: [],
+                      showAdvanced: true
+                    })}
+                    className="text-xs px-3 py-1 rounded-lg transition-colors duration-300 hover:opacity-80"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                  >
+                    Clear Advanced Search
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sort and Filter Buttons */}
@@ -3025,18 +3345,101 @@ const InboxManager = () => {
             </button>
           </div>
 
+          {/* Bulk Selection Controls */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectAllMode}
+                  onChange={selectAllVisible}
+                  className="rounded transition-colors duration-300"
+                  style={{accentColor: themeStyles.accent}}
+                />
+                <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  Select All ({filteredAndSortedLeads.length})
+                </span>
+              </label>
+              {selectedLeads.size > 0 && (
+                <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                  {selectedLeads.size} selected
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {filteredAndSortedLeads.length > 100 && (
+                <span className="text-xs px-2 py-1 rounded-full transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, color: themeStyles.accent}}>
+                  Virtual scrolling
+                </span>
+              )}
+              <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                Showing {filteredAndSortedLeads.length > 100 ? `${virtualEnd - virtualStart}` : filteredAndSortedLeads.length} of {filteredAndSortedLeads.length} leads
+              </span>
+            </div>
+          </div>
+
+          {/* Bulk Actions Toolbar */}
+          {showBulkActions && (
+            <div className="mb-4 p-3 rounded-lg transition-all duration-300 animate-slideIn" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.accent}30`}}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  {selectedLeads.size} leads selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={bulkDeleteLeads}
+                    className="px-3 py-1 rounded-lg text-sm font-medium transition-all duration-300 hover:opacity-80 flex items-center gap-2"
+                    style={{backgroundColor: themeStyles.error, color: '#FFFFFF'}}
+                  >
+                    <X className="w-3 h-3" />
+                    Delete ({selectedLeads.size})
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="px-3 py-1 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
 
         </div>
 
-        {/* Lead List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
-          <div className="pb-4">
-            {filteredAndSortedLeads.length === 0 ? (
-              <div className="text-center p-8 text-white">
-                <p>No leads found for current filter</p>
-              </div>
-            ) : null}
-            {filteredAndSortedLeads.map((lead, index) => {
+        {/* Lead List with Virtual Scrolling */}
+        <div 
+          ref={leadListRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden" 
+          style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`, minHeight: 0}}
+          onScroll={(e) => {
+            setScrollTop(e.target.scrollTop);
+          }}
+        >
+          {/* Virtual Scrolling Container */}
+          <div 
+            style={{
+              height: filteredAndSortedLeads.length > 100 ? filteredAndSortedLeads.length * ITEM_HEIGHT : 'auto',
+              position: 'relative'
+            }}
+          >
+            {/* Spacer for virtual scrolling */}
+            {filteredAndSortedLeads.length > 100 && (
+              <div style={{ height: virtualStart * ITEM_HEIGHT }} />
+            )}
+            
+            <div className="pb-4">
+              {filteredAndSortedLeads.length === 0 ? (
+                <div className="text-center p-8 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <p>No leads found for current filter</p>
+                </div>
+              ) : null}
+              
+              {(filteredAndSortedLeads.length > 100 ? virtualizedLeads : filteredAndSortedLeads).map((lead, virtualIndex) => {
+                const actualIndex = filteredAndSortedLeads.length > 100 ? virtualStart + virtualIndex : virtualIndex;
             try {
               const intentStyle = getIntentStyle(lead.intent);
               const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
@@ -3093,21 +3496,34 @@ const InboxManager = () => {
                   {getResponseBadge()}
                   
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} flex items-center gap-2`}
-                        style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
-                      <span>{lead.first_name} {lead.last_name}</span>
-                      {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
-                      {drafts[lead.id] && (
-                        <span 
-                          className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
-                          style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
-                          title="Has unsaved draft"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          Draft
-                        </span>
-                      )}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      {/* Bulk Selection Checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={selectedLeads.has(lead.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleLeadSelection(lead.id);
+                        }}
+                        className="rounded transition-colors duration-300"
+                        style={{accentColor: themeStyles.accent}}
+                      />
+                      <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} flex items-center gap-2`}
+                          style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
+                        <span>{lead.first_name} {lead.last_name}</span>
+                        {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
+                        {drafts[lead.id] && (
+                          <span 
+                            className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
+                            style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
+                            title="Has unsaved draft"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            Draft
+                          </span>
+                        )}
+                      </h3>
+                    </div>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
                             style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
@@ -3195,7 +3611,13 @@ const InboxManager = () => {
                 </div>
               );
             }
-          })}
+              })}
+            </div>
+            
+            {/* Spacer for virtual scrolling end */}
+            {filteredAndSortedLeads.length > 100 && (
+              <div style={{ height: (filteredAndSortedLeads.length - virtualEnd) * ITEM_HEIGHT }} />
+            )}
           </div>
         </div>
       </div>
