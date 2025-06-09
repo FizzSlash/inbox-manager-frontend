@@ -628,6 +628,9 @@ const InboxManager = () => {
   // Add state for collapsible sections - default to all open
   const [activeSection, setActiveSection] = useState(['general', 'enrichment', 'engagement']);
   
+  // Analytics state
+  const [analyticsDateRange, setAnalyticsDateRange] = useState('30'); // days
+  
   // New state for editable email fields
   const [editableToEmail, setEditableToEmail] = useState('');
   const [editableCcEmails, setEditableCcEmails] = useState('');
@@ -872,6 +875,157 @@ const InboxManager = () => {
       needsFollowup
     };
   }, [leads]);
+
+  // Calculate analytics data
+  const analyticsData = useMemo(() => {
+    if (!leads.length) return null;
+
+    // Filter leads by date range
+    const daysBack = parseInt(analyticsDateRange);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+    
+    const filteredLeads = leads.filter(lead => {
+      const leadDate = new Date(lead.created_at);
+      return leadDate >= cutoffDate;
+    });
+
+    // Overall metrics
+    const totalLeads = filteredLeads.length;
+    const leadsWithReplies = filteredLeads.filter(lead => 
+      lead.conversation.some(msg => msg.type === 'REPLY')
+    ).length;
+    const overallResponseRate = totalLeads > 0 ? (leadsWithReplies / totalLeads * 100) : 0;
+
+    // Response time analysis
+    const responseTimesByLead = filteredLeads.map(lead => lead.response_time_avg).filter(time => time > 0);
+    const avgResponseTime = responseTimesByLead.length > 0 
+      ? responseTimesByLead.reduce((sum, time) => sum + time, 0) / responseTimesByLead.length 
+      : 0;
+
+    // Response time distribution
+    const responseTimeDistribution = {
+      under1h: responseTimesByLead.filter(time => time < 1).length,
+      '1to4h': responseTimesByLead.filter(time => time >= 1 && time < 4).length,
+      '4to24h': responseTimesByLead.filter(time => time >= 4 && time < 24).length,
+      over24h: responseTimesByLead.filter(time => time >= 24).length
+    };
+
+    // Campaign performance
+    const campaignPerformance = filteredLeads.reduce((acc, lead) => {
+      const campaignId = lead.campaign_id || 'Unknown Campaign';
+      if (!acc[campaignId]) {
+        acc[campaignId] = {
+          name: `Campaign ${campaignId}`,
+          totalLeads: 0,
+          responses: 0,
+          totalIntent: 0,
+          totalEngagement: 0,
+          responseTimes: []
+        };
+      }
+      
+      acc[campaignId].totalLeads++;
+      acc[campaignId].totalIntent += lead.intent;
+      acc[campaignId].totalEngagement += lead.engagement_score;
+      
+      if (lead.conversation.some(msg => msg.type === 'REPLY')) {
+        acc[campaignId].responses++;
+      }
+      
+      if (lead.response_time_avg > 0) {
+        acc[campaignId].responseTimes.push(lead.response_time_avg);
+      }
+      
+      return acc;
+    }, {});
+
+    // Calculate campaign averages and sort by response rate
+    const campaignStats = Object.values(campaignPerformance)
+      .map(campaign => ({
+        ...campaign,
+        responseRate: campaign.totalLeads > 0 ? (campaign.responses / campaign.totalLeads * 100) : 0,
+        avgIntent: campaign.totalLeads > 0 ? (campaign.totalIntent / campaign.totalLeads) : 0,
+        avgEngagement: campaign.totalLeads > 0 ? (campaign.totalEngagement / campaign.totalLeads) : 0,
+        avgResponseTime: campaign.responseTimes.length > 0 
+          ? campaign.responseTimes.reduce((sum, time) => sum + time, 0) / campaign.responseTimes.length 
+          : 0
+      }))
+      .sort((a, b) => b.responseRate - a.responseRate);
+
+    // Lead category performance
+    const categoryPerformance = filteredLeads.reduce((acc, lead) => {
+      const category = lead.tags && lead.tags[0] ? lead.tags[0] : 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = { totalLeads: 0, responses: 0 };
+      }
+      
+      acc[category].totalLeads++;
+      if (lead.conversation.some(msg => msg.type === 'REPLY')) {
+        acc[category].responses++;
+      }
+      
+      return acc;
+    }, {});
+
+    const categoryStats = Object.entries(categoryPerformance)
+      .map(([category, data]) => ({
+        category,
+        ...data,
+        responseRate: data.totalLeads > 0 ? (data.responses / data.totalLeads * 100) : 0
+      }))
+      .sort((a, b) => b.responseRate - a.responseRate);
+
+    // Intent vs Response correlation
+    const intentCorrelation = [
+      { intent: 'High (7-10)', responseRate: filteredLeads.filter(l => l.intent >= 7).length > 0 
+        ? (filteredLeads.filter(l => l.intent >= 7 && l.conversation.some(m => m.type === 'REPLY')).length / 
+           filteredLeads.filter(l => l.intent >= 7).length * 100) : 0 },
+      { intent: 'Medium (4-6)', responseRate: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length > 0 
+        ? (filteredLeads.filter(l => l.intent >= 4 && l.intent < 7 && l.conversation.some(m => m.type === 'REPLY')).length / 
+           filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length * 100) : 0 },
+      { intent: 'Low (1-3)', responseRate: filteredLeads.filter(l => l.intent < 4).length > 0 
+        ? (filteredLeads.filter(l => l.intent < 4 && l.conversation.some(m => m.type === 'REPLY')).length / 
+           filteredLeads.filter(l => l.intent < 4).length * 100) : 0 }
+    ];
+
+    // Response trends (daily)
+    const last30Days = Array.from({ length: Math.min(daysBack, 30) }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date.toISOString().split('T')[0];
+    }).reverse();
+
+    const responseTrends = last30Days.map(dateStr => {
+      const dayLeads = filteredLeads.filter(lead => {
+        return lead.created_at.split('T')[0] === dateStr;
+      });
+      
+      const dayResponses = dayLeads.filter(lead => 
+        lead.conversation.some(msg => msg.type === 'REPLY')
+      ).length;
+      
+      return {
+        date: dateStr,
+        totalLeads: dayLeads.length,
+        responses: dayResponses,
+        responseRate: dayLeads.length > 0 ? (dayResponses / dayLeads.length * 100) : 0
+      };
+    });
+
+    return {
+      totalLeads,
+      leadsWithReplies,
+      overallResponseRate,
+      avgResponseTime,
+      responseTimeDistribution,
+      campaignStats: campaignStats.slice(0, 10), // Top 10 campaigns
+      categoryStats,
+      intentCorrelation,
+      responseTrends,
+      dateRange: daysBack
+    };
+  }, [leads, analyticsDateRange]);
 
   // Get intent color and label - NO COLORS, only for circles
   const getIntentStyle = (intent) => {
@@ -2256,6 +2410,22 @@ const InboxManager = () => {
               </div>
             </button>
 
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'analytics' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'analytics' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'analytics' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Analytics
+              </div>
+            </button>
+
             {/* Recently Viewed Dropdown */}
             {recentlyViewed.length > 0 && (
               <div className="relative recent-dropdown">
@@ -2577,6 +2747,250 @@ const InboxManager = () => {
 
       {/* Add margin-top to main content to account for nav bar */}
       <div className="flex-1 flex mt-12">
+        {/* Analytics Dashboard */}
+        {activeTab === 'analytics' && (
+          <div className="flex-1 p-8 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+            <div className="max-w-7xl mx-auto space-y-8">
+              {/* Analytics Header */}
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    Analytics Dashboard
+                  </h1>
+                  <p className="mt-2 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                    Insights and performance metrics for your lead management
+                  </p>
+                </div>
+                
+                {/* Date Range Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Show data for:</span>
+                  <select
+                    value={analyticsDateRange}
+                    onChange={(e) => setAnalyticsDateRange(e.target.value)}
+                    className="px-3 py-2 rounded-lg text-sm transition-colors duration-300"
+                    style={{
+                      backgroundColor: themeStyles.secondaryBg,
+                      border: `1px solid ${themeStyles.border}`,
+                      color: themeStyles.textPrimary
+                    }}
+                  >
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="365">Last year</option>
+                  </select>
+                </div>
+              </div>
+
+              {analyticsData ? (
+                <>
+                  {/* KPI Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Total Leads</p>
+                          <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                            {analyticsData.totalLeads.toLocaleString()}
+                          </p>
+                        </div>
+                        <Users className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.accent}} />
+                      </div>
+                    </div>
+
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Response Rate</p>
+                          <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.success}}>
+                            {analyticsData.overallResponseRate.toFixed(1)}%
+                          </p>
+                        </div>
+                        <TrendingUp className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.success}} />
+                      </div>
+                    </div>
+
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Avg Response Time</p>
+                          <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.accent}}>
+                            {formatResponseTime(analyticsData.avgResponseTime)}
+                          </p>
+                        </div>
+                        <Clock className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.accent}} />
+                      </div>
+                    </div>
+
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Leads with Replies</p>
+                          <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                            {analyticsData.leadsWithReplies.toLocaleString()}
+                          </p>
+                        </div>
+                        <MessageSquare className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.accent}} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Charts Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Response Time Distribution */}
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <h3 className="text-xl font-bold mb-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                        Response Time Distribution
+                      </h3>
+                      <div className="space-y-3">
+                        {Object.entries(analyticsData.responseTimeDistribution).map(([timeRange, count]) => {
+                          const total = Object.values(analyticsData.responseTimeDistribution).reduce((sum, val) => sum + val, 0);
+                          const percentage = total > 0 ? (count / total * 100) : 0;
+                          const label = {
+                            'under1h': 'Under 1 hour',
+                            '1to4h': '1-4 hours',
+                            '4to24h': '4-24 hours',
+                            'over24h': 'Over 24 hours'
+                          }[timeRange];
+                          
+                          return (
+                            <div key={timeRange} className="flex items-center justify-between">
+                              <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{label}</span>
+                              <div className="flex items-center gap-3">
+                                <div className="w-32 rounded-full h-2 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                                  <div 
+                                    className="h-2 rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${percentage}%`,
+                                      backgroundColor: themeStyles.accent
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-sm font-medium w-12 text-right transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                  {count}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Intent vs Response Rate */}
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <h3 className="text-xl font-bold mb-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                        Response Rate by Intent Level
+                      </h3>
+                      <div className="space-y-4">
+                        {analyticsData.intentCorrelation.map((item, index) => (
+                          <div key={index} className="flex items-center justify-between">
+                            <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{item.intent}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="w-32 rounded-full h-3 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                                <div 
+                                  className="h-3 rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${item.responseRate}%`,
+                                    backgroundColor: index === 0 ? themeStyles.success : index === 1 ? themeStyles.warning : themeStyles.error
+                                  }}
+                                />
+                              </div>
+                              <span className="text-sm font-bold w-12 text-right transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                {item.responseRate.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Campaign Performance Table */}
+                  <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h3 className="text-xl font-bold mb-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      Top Performing Campaigns
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Campaign</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Leads</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Response Rate</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Intent</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Response Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analyticsData.campaignStats.slice(0, 5).map((campaign, index) => (
+                            <tr key={index} className="border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{campaign.name}</td>
+                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{campaign.totalLeads}</td>
+                              <td className="py-3 px-4">
+                                <span className="px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300" 
+                                      style={{
+                                        backgroundColor: campaign.responseRate >= 40 ? `${themeStyles.success}20` : 
+                                                        campaign.responseRate >= 20 ? `${themeStyles.warning}20` : `${themeStyles.error}20`,
+                                        color: campaign.responseRate >= 40 ? themeStyles.success : 
+                                               campaign.responseRate >= 20 ? themeStyles.warning : themeStyles.error
+                                      }}>
+                                  {campaign.responseRate.toFixed(1)}%
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{campaign.avgIntent.toFixed(1)}</td>
+                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                {campaign.avgResponseTime > 0 ? formatResponseTime(campaign.avgResponseTime) : 'N/A'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Category Performance */}
+                  <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h3 className="text-xl font-bold mb-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      Performance by Lead Category
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {analyticsData.categoryStats.map((category, index) => (
+                        <div key={index} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{category.category}</span>
+                            <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>{category.totalLeads} leads</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 rounded-full h-2 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                              <div 
+                                className="h-2 rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${category.responseRate}%`,
+                                  backgroundColor: themeStyles.accent
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                              {category.responseRate.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <BarChart3 className="w-16 h-16 mx-auto mb-4 opacity-50 transition-colors duration-300" style={{color: themeStyles.textMuted}} />
+                  <p className="text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>No data available</p>
+                  <p className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Lead data will appear here once you have conversations</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Rest of your existing content */}
         {(activeTab === 'inbox' || activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') && (
           <>
