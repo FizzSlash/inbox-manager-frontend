@@ -3019,27 +3019,27 @@ const InboxManager = () => {
         {selectedLead ? (
           <>
             {/* Lead Header */}
-            <div className="p-8 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
+            <div className="p-8 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}>
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-3xl font-bold text-white">
+                  <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                     {selectedLead.first_name} {selectedLead.last_name}
                   </h2>
-                  <p className="text-gray-300 mt-2 font-medium">{selectedLead.email}</p>
+                  <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
                   {selectedLead.phone ? (
-                    <p className="text-sm mt-2 flex items-center gap-2" style={{color: '#54FCFF'}}>
+                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.accent}}>
                       <Phone className="w-3 h-3" />
                       <span className="font-medium">{selectedLead.phone}</span>
                     </p>
                   ) : (
-                    <p className="text-sm mt-2 text-gray-400 flex items-center gap-2">
+                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                       <Phone className="w-3 h-3" />
                       <span>No phone number found</span>
                     </p>
                   )}
                   {selectedLead.website && (
                     <p className="text-sm mt-2">
-                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{color: '#54FCFF'}}>
+                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-colors duration-300" style={{color: themeStyles.accent}}>
                         {selectedLead.website}
                         <ExternalLink className="w-3 h-3" />
                       </a>
@@ -3050,24 +3050,24 @@ const InboxManager = () => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className="px-3 py-1 rounded-full text-sm font-medium text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                      <span className="px-3 py-1 rounded-full text-sm font-medium transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
                   })()}
                   <button
                     onClick={() => showDeleteConfirmation(selectedLead)}
-                    className="px-3 py-2 text-white hover:text-white rounded-lg transition-colors flex items-center gap-2 text-sm hover:bg-white/5"
+                    className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm hover:opacity-80"
                     title="Delete lead"
-                    style={{border: '1px solid rgba(255, 255, 255, 0.2)', backgroundColor: 'rgba(255, 255, 255, 0.05)'}}
+                    style={{border: `1px solid ${themeStyles.border}`, backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                   >
                     <X className="w-4 h-4" />
                     Delete
                   </button>
                   <button
                     onClick={() => setSelectedLead(null)}
-                    className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5"
-                    style={{border: '1px solid rgba(255, 255, 255, 0.2)', backgroundColor: 'rgba(255, 255, 255, 0.05)'}}
+                    className="p-2 rounded-lg transition-colors duration-300 hover:opacity-80"
+                    style={{border: `1px solid ${themeStyles.border}`, backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -3076,13 +3076,13 @@ const InboxManager = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
+            <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
               <div className="space-y-8">
                       {/* Unified Lead Information Section */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                         <div className="flex justify-between items-center mb-6">
-                          <h3 className="font-bold text-white flex items-center text-lg">
-                    <User className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                          <h3 className="font-bold flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    <User className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
                     Lead Information
                   </h3>
                           <div className="flex items-center gap-2">
@@ -3090,11 +3090,11 @@ const InboxManager = () => {
                               onClick={() => findPhoneNumber(selectedLead)}
                               disabled={searchingPhoneLeads.has(selectedLead.id)}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                              style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
                             >
                               {searchingPhoneLeads.has(selectedLead.id) ? (
                                 <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: themeStyles.accent}} />
                                   Searching...
                                 </>
                               ) : (
@@ -3108,11 +3108,11 @@ const InboxManager = () => {
                               onClick={() => enrichLeadData(selectedLead)}
                               disabled={enrichingLeads.has(selectedLead.id)}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-                              style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF', border: '1px solid rgba(84, 252, 255, 0.3)'}}
+                              style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
                             >
                               {enrichingLeads.has(selectedLead.id) ? (
                                 <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: '#54FCFF'}} />
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2" style={{borderColor: themeStyles.accent}} />
                                   Enriching...
                                 </>
                               ) : (
@@ -3161,42 +3161,42 @@ const InboxManager = () => {
 
                         <div className="space-y-2">
                           {/* General Info Subsection */}
-                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
+                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: themeStyles.tertiaryBg}}>
                             <button 
                               onClick={() => toggleSection('general')}
-                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+                              className="w-full px-4 py-3 flex items-center justify-between hover:opacity-80 transition-colors duration-300"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
                                   className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('general') ? 'rotate-90' : ''}`} 
-                                  style={{color: '#54FCFF'}} 
+                                  style={{color: themeStyles.accent}} 
                                 />
-                                <span className="text-white font-medium">General Information</span>
+                                <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>General Information</span>
                               </div>
                             </button>
                             {activeSection.includes('general') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm pl-6">
                     <div>
-                      <span className="text-gray-300">Subject:</span>
-                      <p className="font-medium text-white">{selectedLead.subject}</p>
+                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Subject:</span>
+                      <p className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.subject}</p>
                     </div>
                     <div>
-                      <span className="text-gray-300">Website:</span>
+                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Website:</span>
                       <p className="font-medium">
                         {selectedLead.website ? (
-                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1" style={{color: '#54FCFF'}}>
+                          <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 flex items-center gap-1 transition-colors duration-300" style={{color: themeStyles.accent}}>
                             {selectedLead.website}
                             <ExternalLink className="w-3 h-3" />
                           </a>
-                        ) : <span className="text-white">N/A</span>}
+                        ) : <span className="transition-colors duration-300" style={{color: themeStyles.textPrimary}}>N/A</span>}
                       </p>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-300">Tags:</span>
+                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {selectedLead.tags.map(tag => (
-                          <span key={tag} className="text-xs px-2 py-1 rounded-full text-white" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                          <span key={tag} className="text-xs px-2 py-1 rounded-full transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                             {tag}
                           </span>
                         ))}
@@ -3328,124 +3328,127 @@ const InboxManager = () => {
                 </div>
 
                 {/* Conversation History */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                    <MessageSquare className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <h3 className="font-bold mb-4 flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    <MessageSquare className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
-                  <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)'}}>
-                    {selectedLead.conversation.map((message, index) => (
-                      <div key={index} className={`p-5 rounded-xl border shadow-sm ${
-                        message.type === 'SENT' 
-                          ? 'border-blue-400' 
-                          : 'border-gray-400'
-                      }`} style={{
-                        backgroundColor: message.type === 'SENT' 
-                          ? 'rgba(84, 252, 255, 0.08)' 
-                          : 'rgba(255, 255, 255, 0.03)',
-                        borderColor: message.type === 'SENT' 
-                          ? 'rgba(84, 252, 255, 0.3)' 
-                          : 'rgba(255, 255, 255, 0.2)'
-                      }}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="text-sm">
-                            <span className={`font-medium ${message.type === 'SENT' ? 'text-blue-300' : 'text-white'}`}>
-                              {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
-                            </span>
-                            <span className="text-gray-300 ml-2">
-                              {formatTime(message.time)}
-                            </span>
-                            {message.response_time && (
-                              <span className="text-green-400 ml-2 text-xs">
-                                • {formatResponseTime(message.response_time)} response
+                  <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
+                                          {selectedLead.conversation.map((message, index) => (
+                        <div key={index} className={`p-5 rounded-xl border shadow-sm transition-colors duration-300`} style={{
+                          backgroundColor: message.type === 'SENT' 
+                            ? `${themeStyles.accent}08` 
+                            : themeStyles.tertiaryBg,
+                          borderColor: message.type === 'SENT' 
+                            ? `${themeStyles.accent}30` 
+                            : themeStyles.border
+                        }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="text-sm">
+                              <span className={`font-medium transition-colors duration-300`} style={{color: message.type === 'SENT' ? themeStyles.accent : themeStyles.textPrimary}}>
+                                {message.type === 'SENT' ? 'Outbound' : 'Reply'} 
                               </span>
+                              <span className="ml-2 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                                {formatTime(message.time)}
+                              </span>
+                              {message.response_time && (
+                                <span className="ml-2 text-xs transition-colors duration-300" style={{color: themeStyles.success}}>
+                                  • {formatResponseTime(message.response_time)} response
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 text-xs rounded-full transition-colors duration-300`} style={{
+                                backgroundColor: message.type === 'SENT' 
+                                  ? `${themeStyles.accent}15` 
+                                  : themeStyles.tertiaryBg,
+                                border: `1px solid ${themeStyles.border}`,
+                                color: message.type === 'SENT' ? themeStyles.accent : themeStyles.textPrimary
+                              }}>
+                                {message.type}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Email routing information */}
+                          <div className="mb-3 text-xs space-y-1 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            <div className="flex flex-wrap gap-4">
+                              <span><strong>From:</strong> {message.from || 'N/A'}</span>
+                              <span><strong>To:</strong> {message.to || 'N/A'}</span>
+                            </div>
+                            {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
+                              <div>
+                                <strong>CC:</strong> {message.cc.map(cc => {
+                                  if (typeof cc === 'string') return cc;
+                                  if (cc && cc.address) return cc.address;
+                                  if (cc && cc.name && cc.name.trim() !== '') return cc.name;
+                                  return '';
+                                }).filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                            {message.subject && (
+                              <div>
+                                <strong>Subject:</strong> {message.subject}
+                              </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              message.type === 'SENT' 
-                                ? 'text-blue-300' 
-                                : 'text-white'
-                            }`} style={{
-                              backgroundColor: message.type === 'SENT' 
-                                ? 'rgba(84, 252, 255, 0.15)' 
-                                : 'rgba(255, 255, 255, 0.08)',
-                              border: '1px solid rgba(255, 255, 255, 0.2)'
-                            }}>
-                              {message.type}
-                            </span>
+
+                          <div className="text-sm whitespace-pre-wrap leading-relaxed transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                            {message.content}
                           </div>
                         </div>
-
-                        {/* Email routing information */}
-                        <div className="mb-3 text-xs text-gray-400 space-y-1">
-                          <div className="flex flex-wrap gap-4">
-                            <span><strong>From:</strong> {message.from || 'N/A'}</span>
-                            <span><strong>To:</strong> {message.to || 'N/A'}</span>
-                          </div>
-                          {message.cc && Array.isArray(message.cc) && message.cc.length > 0 && (
-                            <div>
-                              <strong>CC:</strong> {message.cc.map(cc => {
-                                if (typeof cc === 'string') return cc;
-                                if (cc && cc.address) return cc.address;
-                                if (cc && cc.name && cc.name.trim() !== '') return cc.name;
-                                return '';
-                              }).filter(Boolean).join(', ')}
-                            </div>
-                          )}
-                          {message.subject && (
-                            <div>
-                              <strong>Subject:</strong> {message.subject}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">
-                          {message.content}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
 
                 {/* Response Section */}
-                <div className="rounded-2xl p-6 shadow-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
-                  <h3 className="font-bold text-white mb-4 flex items-center text-lg">
-                    <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <h3 className="font-bold mb-4 flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
                     Compose Response
                   </h3>
                   
                   <div className="space-y-6">
                     {/* Editable Email Recipients */}
-                    <div className="bg-white/5 p-4 rounded-lg border border-white/10">
-                      <h4 className="text-white font-medium mb-3 flex items-center text-sm">
-                        <Mail className="w-4 h-4 mr-2" style={{color: '#54FCFF'}} />
+                    <div className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <h4 className="font-medium mb-3 flex items-center text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                        <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
                         Email Recipients
                       </h4>
                       <div className="grid grid-cols-1 gap-3">
                         <div>
-                          <label className="text-gray-300 text-xs block mb-1">To:</label>
+                          <label className="text-xs block mb-1 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>To:</label>
                           <input
                             type="email"
                             value={editableToEmail}
                             onChange={(e) => setEditableToEmail(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                            style={{
+                              backgroundColor: themeStyles.secondaryBg, 
+                              border: `1px solid ${themeStyles.border}`, 
+                              color: themeStyles.textPrimary,
+                              '--tw-ring-color': themeStyles.accent
+                            }}
                             placeholder="Primary recipient email"
                           />
                         </div>
                         <div>
-                          <label className="text-gray-300 text-xs block mb-1">CC: (separate multiple emails with commas)</label>
+                          <label className="text-xs block mb-1 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>CC: (separate multiple emails with commas)</label>
                           <input
                             type="text"
                             value={editableCcEmails}
                             onChange={(e) => setEditableCcEmails(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 text-sm focus:ring-2"
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+                            className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                            style={{
+                              backgroundColor: themeStyles.secondaryBg, 
+                              border: `1px solid ${themeStyles.border}`, 
+                              color: themeStyles.textPrimary,
+                              '--tw-ring-color': themeStyles.accent
+                            }}
                             placeholder="CC recipients (optional)"
                           />
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                           Auto-populated based on conversation. Edit as needed before sending.
                         </div>
                       </div>
@@ -3455,8 +3458,8 @@ const InboxManager = () => {
                       <button
                         onClick={generateDraft}
                         disabled={isGeneratingDraft}
-                        className="px-4 py-2 text-white rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
-                        style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
+                        className="px-4 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
+                        style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                       >
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
@@ -3466,12 +3469,12 @@ const InboxManager = () => {
                     {/* Rich Text Editor with Formatting */}
                     <div className="space-y-3">
                       {/* Formatting Toolbar */}
-                      <div className="flex flex-wrap gap-2 p-3 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                      <div className="flex flex-wrap gap-2 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                         <button
                           type="button"
                           onClick={() => formatText('bold')}
-                          className="px-3 py-1 rounded text-xs font-bold text-white hover:opacity-80 transition-opacity"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs font-bold hover:opacity-80 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Bold"
                         >
                           B
@@ -3479,8 +3482,8 @@ const InboxManager = () => {
                         <button
                           type="button"
                           onClick={() => formatText('italic')}
-                          className="px-3 py-1 rounded text-xs italic text-white hover:opacity-80 transition-opacity"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs italic hover:opacity-80 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Italic"
                         >
                           I
@@ -3488,8 +3491,8 @@ const InboxManager = () => {
                         <button
                           type="button"
                           onClick={() => formatText('underline')}
-                          className="px-3 py-1 rounded text-xs underline text-white hover:opacity-80 transition-opacity"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs underline hover:opacity-80 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Underline"
                         >
                           U
@@ -3497,8 +3500,8 @@ const InboxManager = () => {
                         <button
                           type="button"
                           onClick={insertLink}
-                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity flex items-center gap-1"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300 flex items-center gap-1"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Insert Link"
                         >
                           🔗 Link
@@ -3506,13 +3509,13 @@ const InboxManager = () => {
                         <button
                           type="button"
                           onClick={insertList}
-                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Bullet List"
                         >
                           • List
                         </button>
-                        <div className="border-l border-white/20 mx-2"></div>
+                        <div className="mx-2" style={{borderLeft: `1px solid ${themeStyles.border}`}}></div>
                         <input
                           type="file"
                           multiple
@@ -3522,8 +3525,8 @@ const InboxManager = () => {
                         />
                         <label
                           htmlFor="attachment-input"
-                          className="px-3 py-1 rounded text-xs text-white hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-1"
-                          style={{backgroundColor: 'rgba(255, 255, 255, 0.1)'}}
+                          className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300 cursor-pointer flex items-center gap-1"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
                           title="Attach File"
                         >
                           📎 Attach
@@ -3626,11 +3629,12 @@ const InboxManager = () => {
                             }
                           }
                         }}
-                        className="w-full h-40 p-3 rounded-lg resize-none text-white placeholder-gray-400 focus:ring-2 focus:outline-none overflow-y-auto"
+                        className="w-full h-40 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
                         style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                          border: '1px solid rgba(255, 255, 255, 0.2)', 
-                          '--tw-ring-color': '#54FCFF',
+                          backgroundColor: themeStyles.secondaryBg, 
+                          border: `1px solid ${themeStyles.border}`, 
+                          color: themeStyles.textPrimary,
+                          '--tw-ring-color': themeStyles.accent,
                           minHeight: '160px'
                         }}
                         data-placeholder="Generated draft will appear here, or write your own response..."
@@ -3639,8 +3643,8 @@ const InboxManager = () => {
                       {/* Show HTML preview for debugging */}
                       {draftHtml && (
                         <details className="text-xs">
-                          <summary className="text-gray-400 cursor-pointer">HTML Preview</summary>
-                          <pre className="mt-2 p-2 rounded text-gray-300 whitespace-pre-wrap" style={{backgroundColor: 'rgba(255, 255, 255, 0.05)'}}>
+                          <summary className="cursor-pointer transition-colors duration-300" style={{color: themeStyles.textMuted}}>HTML Preview</summary>
+                          <pre className="mt-2 p-2 rounded whitespace-pre-wrap transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textSecondary}}>
                             {draftHtml}
                           </pre>
                         </details>
@@ -3651,8 +3655,8 @@ const InboxManager = () => {
                       <button
                         onClick={sendMessage}
                         disabled={!draftResponse.trim() || isSending}
-                        className="px-6 py-2 text-white rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
-                        style={{backgroundColor: '#22c55e'}}
+                        className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
+                        style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
                       >
                         <Send className="w-4 h-4" />
                         {isSending ? 'Sending...' : 'Send Message'}
