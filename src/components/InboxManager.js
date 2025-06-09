@@ -671,14 +671,15 @@ const InboxManager = () => {
     if (activeTab !== 'inbox' && activeTab !== 'all') {
       if (activeTab === 'need_response') {
         filtered = filtered.filter(lead => {
-          const urgency = getResponseUrgency(lead);
-          return urgency === 'urgent-response' || urgency === 'needs-response';
+          if (!lead.conversation || lead.conversation.length === 0) return false;
+          return checkNeedsReply(lead.conversation);
         });
       } else if (activeTab === 'recently_sent') {
         filtered = filtered.filter(lead => {
-          const lastMessage = safeGetLastMessage(lead);
-          if (!lastMessage) return false;
-          return lastMessage.type === 'SENT' && timeDiff(new Date(), new Date(lastMessage.time)) <= 7;
+          if (!lead.conversation || lead.conversation.length === 0) return false;
+          const lastMessage = lead.conversation[lead.conversation.length - 1];
+          const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+          return lastMessage.type === 'SENT' && timeSinceLastMessage <= 24;
         });
       }
     }
@@ -852,8 +853,9 @@ const InboxManager = () => {
 
   // Check if lead needs reply (they replied last)
   const checkNeedsReply = (conversation) => {
+    if (!conversation || conversation.length === 0) return false;
     const lastMessage = conversation[conversation.length - 1];
-    return lastMessage.type === 'REPLY';
+    return lastMessage && lastMessage.type === 'REPLY';
   };
 
   // Auto-generate tags based on conversation - DISABLED
