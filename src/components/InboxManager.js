@@ -13,7 +13,7 @@ const InboxManager = () => {
   const [showEnrichmentPopup, setShowEnrichmentPopup] = useState(false);
 
   // Add new state for API settings and tab management
-  const [activeTab, setActiveTab] = useState('inbox');
+  const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState({
     smartlead: localStorage.getItem('smartlead_api_key') || '',
@@ -1971,9 +1971,9 @@ const InboxManager = () => {
       <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
         <div className="flex space-x-4">
           <button
-            onClick={() => setActiveTab('inbox')}
+            onClick={() => setActiveTab('all')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'inbox' ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
+              (activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -2181,7 +2181,7 @@ const InboxManager = () => {
       {/* Add margin-top to main content to account for nav bar */}
       <div className="flex-1 flex mt-12">
         {/* Rest of your existing content */}
-        {activeTab === 'inbox' && (
+        {(activeTab === 'inbox' || activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') && (
           <>
       {/* Animated Background Gradient */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
@@ -2214,7 +2214,7 @@ const InboxManager = () => {
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '2px solid rgba(84, 252, 255, 0.5)', minHeight: '600px'}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
@@ -2615,9 +2615,8 @@ const InboxManager = () => {
         </div>
 
         {/* Lead List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: '400px', height: '100%'}}>
-          <div className="pb-4" style={{minHeight: '200px', backgroundColor: 'rgba(255, 0, 0, 0.1)', border: '1px solid red'}}>
-            <div className="text-white p-4">Total leads to render: {filteredAndSortedLeads.length}</div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
+          <div className="pb-4">
             {filteredAndSortedLeads.length === 0 ? (
               <div className="text-center p-8 text-white">
                 <p>No leads found for current filter</p>
@@ -2625,7 +2624,6 @@ const InboxManager = () => {
             ) : null}
             {filteredAndSortedLeads.map((lead, index) => {
             try {
-              console.log('Rendering lead:', lead.first_name, index);
               const intentStyle = getIntentStyle(lead.intent);
               const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
               const urgency = getResponseUrgency(lead);
