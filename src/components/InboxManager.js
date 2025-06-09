@@ -2617,11 +2617,18 @@ const InboxManager = () => {
         {/* Lead List */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
           <div className="pb-4">
+            {filteredAndSortedLeads.length === 0 ? (
+              <div className="text-center p-8 text-white">
+                <p>No leads found for current filter</p>
+              </div>
+            ) : null}
             {filteredAndSortedLeads.map((lead, index) => {
-            const intentStyle = getIntentStyle(lead.intent);
-            const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
-            const urgency = getResponseUrgency(lead);
-            const displayTags = generateAutoTags(lead.conversation, lead);
+            try {
+              console.log('Rendering lead:', lead.first_name, index);
+              const intentStyle = getIntentStyle(lead.intent);
+              const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
+              const urgency = getResponseUrgency(lead);
+              const displayTags = generateAutoTags(lead.conversation, lead);
             
             // Get the response badge for top of card
             const getResponseBadge = () => {
@@ -2755,6 +2762,14 @@ const InboxManager = () => {
                 </div>
               </div>
             );
+            } catch (error) {
+              console.error('Error rendering lead:', lead.first_name, error);
+              return (
+                <div key={lead.id || index} className="p-4 m-2 bg-red-500/20 text-white rounded">
+                  Error rendering {lead.first_name || 'Unknown'}: {error.message}
+                </div>
+              );
+            }
           })}
           </div>
         </div>
