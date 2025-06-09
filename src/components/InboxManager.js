@@ -216,59 +216,6 @@ const InboxManager = () => {
     }
   }, [selectedLead?.id]);
 
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Don't trigger shortcuts when typing in inputs
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
-        // Allow Ctrl+Enter in contenteditable for sending
-        if (e.ctrlKey && e.key === 'Enter' && e.target.contentEditable === 'true') {
-          e.preventDefault();
-          if (selectedLead && draftResponse.trim() && !isSending) {
-            sendMessage();
-          }
-        }
-        return;
-      }
-      
-      // Escape to close lead details
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSelectedLead(null);
-        setShowRecentDropdown(false);
-        setShowApiSettings(false);
-        setShowSortPopup(false);
-        setShowFilterPopup(false);
-      }
-      
-      // Ctrl+F to focus search
-      if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-      
-      // Arrow key navigation (only when a lead is selected)
-      if (selectedLead) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          navigateToLead('next');
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          navigateToLead('prev');
-        }
-      }
-      
-      // R for recently viewed toggle
-      if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        setShowRecentDropdown(!showRecentDropdown);
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLead, draftResponse, isSending, showRecentDropdown, filteredAndSortedLeads]);
-
   // Theme CSS variables
   const themeStyles = isDarkMode ? {
     // Dark mode colors
@@ -2338,6 +2285,59 @@ const InboxManager = () => {
       handleAddFilter('urgency', urgencyType);
     }
   };
+
+  // Global keyboard shortcuts (moved here after all dependencies are defined)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+        // Allow Ctrl+Enter in contenteditable for sending
+        if (e.ctrlKey && e.key === 'Enter' && e.target.contentEditable === 'true') {
+          e.preventDefault();
+          if (selectedLead && draftResponse.trim() && !isSending) {
+            sendMessage();
+          }
+        }
+        return;
+      }
+      
+      // Escape to close lead details
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedLead(null);
+        setShowRecentDropdown(false);
+        setShowApiSettings(false);
+        setShowSortPopup(false);
+        setShowFilterPopup(false);
+      }
+      
+      // Ctrl+F to focus search
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      
+      // Arrow key navigation (only when a lead is selected)
+      if (selectedLead && filteredAndSortedLeads.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          navigateToLead('next');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          navigateToLead('prev');
+        }
+      }
+      
+      // R for recently viewed toggle
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setShowRecentDropdown(!showRecentDropdown);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, draftResponse, isSending, showRecentDropdown, filteredAndSortedLeads, sendMessage, navigateToLead]);
 
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
