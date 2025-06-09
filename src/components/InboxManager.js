@@ -876,12 +876,12 @@ const InboxManager = () => {
     };
   }, [leads]);
 
-  // Message patterns that indicate success
-  const POSITIVE_PATTERNS = {
-    questions: ['?', 'what', 'how', 'when', 'where', 'why', 'could', 'would'],
-    engagement_words: ['thanks', 'thank you', 'great', 'interested', 'yes', 'sure', 'sounds good'],
-    ctas: ['call', 'meeting', 'schedule', 'discuss', 'chat', 'talk', 'meet'],
-    value_props: ['help', 'improve', 'increase', 'reduce', 'save', 'better', 'solution']
+  // Message patterns for our outbound messages
+  const MESSAGE_PATTERNS = {
+    questions: ['?', 'what', 'how', 'when', 'where', 'why', 'could', 'would', 'interested', 'thoughts'],
+    calls: ['call', 'meeting', 'schedule', 'discuss', 'chat', 'talk', 'meet', 'zoom', 'teams', 'connect'],
+    pricing: ['price', 'cost', 'budget', 'investment', 'pricing', 'package', 'quote', 'plan', 'rate'],
+    value_props: ['help', 'improve', 'increase', 'reduce', 'save', 'better', 'solution', 'roi', 'results', 'benefit']
   };
 
   // Calculate analytics data
@@ -906,11 +906,11 @@ const InboxManager = () => {
           const content = msg.content.toLowerCase();
           const wordCount = content.split(/\s+/).length;
           
-          // Check for pattern matches
-          const hasQuestion = POSITIVE_PATTERNS.questions.some(q => content.includes(q));
-          const engagementWords = POSITIVE_PATTERNS.engagement_words.filter(w => content.includes(w)).length;
-          const ctaWords = POSITIVE_PATTERNS.ctas.filter(c => content.includes(c)).length;
-          const valueProps = POSITIVE_PATTERNS.value_props.filter(v => content.includes(v)).length;
+          // Check for pattern matches in our outbound messages
+          const hasQuestion = MESSAGE_PATTERNS.questions.some(q => content.includes(q));
+          const hasCall = MESSAGE_PATTERNS.calls.some(c => content.includes(c));
+          const hasPricing = MESSAGE_PATTERNS.pricing.some(p => content.includes(p));
+          const hasValueProp = MESSAGE_PATTERNS.value_props.some(v => content.includes(v));
           
           // Get next message if exists
           const msgIndex = lead.conversation.indexOf(msg);
@@ -921,9 +921,9 @@ const InboxManager = () => {
           return {
             wordCount,
             hasQuestion,
-            engagementWords,
-            ctaWords,
-            valueProps,
+            hasCall,
+            hasPricing,
+            hasValueProp,
             gotReply,
             replyTime
           };
@@ -937,22 +937,22 @@ const InboxManager = () => {
       avgWordCount: messageAnalysis.reduce((sum, m) => sum + m.wordCount, 0) / messageAnalysis.length,
       
       // Pattern success rates
-      withQuestions: {
-        total: messageAnalysis.filter(m => m.hasQuestion).length,
-        success: messageAnalysis.filter(m => m.hasQuestion && m.gotReply).length
-      },
-      withEngagement: {
-        total: messageAnalysis.filter(m => m.engagementWords > 0).length,
-        success: messageAnalysis.filter(m => m.engagementWords > 0 && m.gotReply).length
-      },
-      withCTA: {
-        total: messageAnalysis.filter(m => m.ctaWords > 0).length,
-        success: messageAnalysis.filter(m => m.ctaWords > 0 && m.gotReply).length
-      },
-      withValueProps: {
-        total: messageAnalysis.filter(m => m.valueProps > 0).length,
-        success: messageAnalysis.filter(m => m.valueProps > 0 && m.gotReply).length
-      },
+             withQuestions: {
+         total: messageAnalysis.filter(m => m.hasQuestion).length,
+         success: messageAnalysis.filter(m => m.hasQuestion && m.gotReply).length
+       },
+       withCalls: {
+         total: messageAnalysis.filter(m => m.hasCall).length,
+         success: messageAnalysis.filter(m => m.hasCall && m.gotReply).length
+       },
+       withPricing: {
+         total: messageAnalysis.filter(m => m.hasPricing).length,
+         success: messageAnalysis.filter(m => m.hasPricing && m.gotReply).length
+       },
+       withValueProps: {
+         total: messageAnalysis.filter(m => m.hasValueProp).length,
+         success: messageAnalysis.filter(m => m.hasValueProp && m.gotReply).length
+       },
       
       // Length effectiveness
       lengthBreakdown: [
@@ -982,10 +982,12 @@ const InboxManager = () => {
       avgReplyTime: {
         withQuestion: messageAnalysis.filter(m => m.hasQuestion && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) / 
                      messageAnalysis.filter(m => m.hasQuestion && m.replyTime).length / (1000 * 60 * 60), // Convert to hours
-        withCTA: messageAnalysis.filter(m => m.ctaWords > 0 && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
-                messageAnalysis.filter(m => m.ctaWords > 0 && m.replyTime).length / (1000 * 60 * 60),
-        withValueProp: messageAnalysis.filter(m => m.valueProps > 0 && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
-                      messageAnalysis.filter(m => m.valueProps > 0 && m.replyTime).length / (1000 * 60 * 60)
+        withCall: messageAnalysis.filter(m => m.hasCall && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
+                 messageAnalysis.filter(m => m.hasCall && m.replyTime).length / (1000 * 60 * 60),
+        withPricing: messageAnalysis.filter(m => m.hasPricing && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
+                    messageAnalysis.filter(m => m.hasPricing && m.replyTime).length / (1000 * 60 * 60),
+        withValueProp: messageAnalysis.filter(m => m.hasValueProp && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
+                      messageAnalysis.filter(m => m.hasValueProp && m.replyTime).length / (1000 * 60 * 60)
       }
     };
 
@@ -3191,10 +3193,10 @@ const InboxManager = () => {
                       <h4 className="text-sm font-medium mb-4 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Message Pattern Success</h4>
                       <div className="space-y-4">
                         {[
-                          { label: 'Messages with Questions', data: analyticsData.copyInsights.withQuestions },
-                          { label: 'Engagement Words', data: analyticsData.copyInsights.withEngagement },
-                          { label: 'Clear Call-to-Action', data: analyticsData.copyInsights.withCTA },
-                          { label: 'Value Propositions', data: analyticsData.copyInsights.withValueProps }
+                          { label: 'Contains Questions', data: analyticsData.copyInsights.withQuestions },
+                          { label: 'Suggests Call/Meeting', data: analyticsData.copyInsights.withCalls },
+                          { label: 'Discusses Pricing', data: analyticsData.copyInsights.withPricing },
+                          { label: 'Value Proposition', data: analyticsData.copyInsights.withValueProps }
                         ].map((pattern, index) => {
                           const successRate = pattern.data.total > 0 
                             ? (pattern.data.success / pattern.data.total * 100)
@@ -3228,11 +3230,12 @@ const InboxManager = () => {
                     {/* Response Time Analysis */}
                     <div>
                       <h4 className="text-sm font-medium mb-4 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Average Response Time by Pattern</h4>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-4 gap-4">
                         {[
-                          { label: 'With Questions', time: analyticsData.copyInsights.avgReplyTime.withQuestion },
-                          { label: 'With CTA', time: analyticsData.copyInsights.avgReplyTime.withCTA },
-                          { label: 'With Value Prop', time: analyticsData.copyInsights.avgReplyTime.withValueProp }
+                          { label: 'Questions', time: analyticsData.copyInsights.avgReplyTime.withQuestion },
+                          { label: 'Call/Meeting', time: analyticsData.copyInsights.avgReplyTime.withCall },
+                          { label: 'Pricing', time: analyticsData.copyInsights.avgReplyTime.withPricing },
+                          { label: 'Value Prop', time: analyticsData.copyInsights.avgReplyTime.withValueProp }
                         ].map((timing, index) => (
                           <div key={index} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
                             <div className="text-sm mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{timing.label}</div>
