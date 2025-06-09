@@ -80,13 +80,14 @@ const InboxManager = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState({
-    smartlead: decryptApiKey(localStorage.getItem('smartlead_api_key_enc') || ''),
-    claude: decryptApiKey(localStorage.getItem('claude_api_key_enc') || ''),
+    esp: {
+      provider: localStorage.getItem('esp_provider') || '',
+      key: decryptApiKey(localStorage.getItem('esp_api_key_enc') || '')
+    },
     fullenrich: decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '')
   });
   const [apiTestStatus, setApiTestStatus] = useState({
-    smartlead: null,
-    claude: null,
+    esp: null,
     fullenrich: null
   });
   const [isSavingApi, setIsSavingApi] = useState(false);
@@ -2412,23 +2413,41 @@ const InboxManager = () => {
 
   // Function to handle API key updates
   const handleApiKeyChange = (key, value) => {
-    setApiKeys(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setApiKeys(prev => {
+      if (key === 'esp') {
+        // For ESP, we need to handle both provider and key
+        return {
+          ...prev,
+          esp: value
+        };
+      }
+      // For other keys, direct update
+      return {
+        ...prev,
+        [key]: value
+      };
+    });
   };
 
   // Function to save API keys (with encryption)
   const saveApiKeys = () => {
     setIsSavingApi(true);
     try {
-      // Encrypt and save to localStorage
-      Object.entries(apiKeys).forEach(([key, value]) => {
-        const encryptedValue = encryptApiKey(value);
-        localStorage.setItem(`${key}_api_key_enc`, encryptedValue);
-        
-        // Remove old unencrypted keys if they exist
-        localStorage.removeItem(`${key}_api_key`);
+      // Save ESP settings
+      if (apiKeys.esp.provider) {
+        localStorage.setItem('esp_provider', apiKeys.esp.provider);
+        const encryptedEspKey = encryptApiKey(apiKeys.esp.key);
+        localStorage.setItem('esp_api_key_enc', encryptedEspKey);
+      }
+
+      // Save Full Enrich key
+      const encryptedFullEnrich = encryptApiKey(apiKeys.fullenrich);
+      localStorage.setItem('fullenrich_api_key_enc', encryptedFullEnrich);
+
+      // Remove old keys if they exist
+      ['smartlead', 'claude'].forEach(oldKey => {
+        localStorage.removeItem(`${oldKey}_api_key`);
+        localStorage.removeItem(`${oldKey}_api_key_enc`);
       });
 
       // Show success toast
@@ -2715,63 +2734,79 @@ const InboxManager = () => {
                 <p className="text-xs text-green-300 mt-1">API keys are encrypted before storage for enhanced security</p>
               </div>
 
-              {/* Smartlead API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
-                  <Zap className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Smartlead API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.smartlead}
-                    onChange={(e) => handleApiKeyChange('smartlead', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Smartlead API key"
-                  />
-                  {apiTestStatus.smartlead === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
+              {/* Email Service Provider Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-white">
+                  <Mail className="w-4 h-4" style={{color: '#54FCFF'}} />
+                  <h3 className="font-medium">Email Service Provider</h3>
                 </div>
+
+                {/* ESP Selection */}
+                <div className="grid grid-cols-3 gap-3">
+                  {['Email Bison', 'Smartlead', 'Instantly'].map(provider => (
+                    <button
+                      key={provider}
+                      onClick={() => handleApiKeyChange('esp', { ...apiKeys.esp, provider: provider.toLowerCase() })}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        apiKeys.esp.provider === provider.toLowerCase() 
+                          ? 'bg-cyan-400/20 border-cyan-400/50' 
+                          : 'bg-white/5 border-white/10 hover:bg-white/10'
+                      }`}
+                      style={{border: '1px solid'}}
+                    >
+                      {provider}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ESP API Key Input */}
+                {apiKeys.esp.provider && (
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">
+                      {apiKeys.esp.provider.charAt(0).toUpperCase() + apiKeys.esp.provider.slice(1)} API Key
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="password"
+                        value={apiKeys.esp.key}
+                        onChange={(e) => handleApiKeyChange('esp', { ...apiKeys.esp, key: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                        placeholder={`Enter ${apiKeys.esp.provider} API key`}
+                      />
+                      {apiTestStatus.esp === true && (
+                        <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Claude API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
-                  <Brain className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Claude API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.claude}
-                    onChange={(e) => handleApiKeyChange('claude', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Claude API key"
-                  />
-                  {apiTestStatus.claude === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Fullenrich API */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-white">
+              {/* Data Enrichment Section */}
+              <div className="space-y-4 pt-6 mt-6 border-t border-white/10">
+                <div className="flex items-center gap-2 text-white">
                   <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  Fullenrich API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={apiKeys.fullenrich}
-                    onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                    placeholder="Enter Fullenrich API key"
-                  />
-                  {apiTestStatus.fullenrich === true && (
-                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
-                  )}
+                  <h3 className="font-medium">Data Enrichment</h3>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-400">
+                    Full Enrich API Key
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={apiKeys.fullenrich}
+                      onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
+                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                      placeholder="Enter Full Enrich API key"
+                    />
+                    {apiTestStatus.fullenrich === true && (
+                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Used for finding phone numbers, company data, and social profiles
+                  </p>
                 </div>
               </div>
             </div>
