@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 // Security utilities for API key encryption
@@ -160,58 +160,7 @@ const InboxManager = () => {
     }, 3000); // Save after 3 seconds of inactivity
   };
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ctrl+Enter or Cmd+Enter to send message
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedLead && draftResponse.trim()) {
-        e.preventDefault();
-        sendMessage();
-        return;
-      }
-      
-      // Escape to close lead details
-      if (e.key === 'Escape') {
-        if (selectedLead) {
-          e.preventDefault();
-          setSelectedLead(null);
-          return;
-        }
-      }
-      
-      // Ctrl+F or Cmd+F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-          searchInputRef.current.select();
-        }
-        return;
-      }
-      
-      // Arrow key navigation (only when not typing in inputs)
-      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.contentEditable) {
-        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
-        
-        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
-          e.preventDefault();
-          const nextLead = filteredAndSortedLeads[currentIndex + 1];
-          setSelectedLead(nextLead);
-          setCurrentLeadIndex(currentIndex + 1);
-        }
-        
-        if (e.key === 'ArrowUp' && currentIndex > 0) {
-          e.preventDefault();
-          const prevLead = filteredAndSortedLeads[currentIndex - 1];
-          setSelectedLead(prevLead);
-          setCurrentLeadIndex(currentIndex - 1);
-        }
-      }
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLead, draftResponse, filteredAndSortedLeads]);
 
   // Update current lead index when selected lead changes
   useEffect(() => {
@@ -1896,8 +1845,8 @@ const InboxManager = () => {
     }
   };
 
-  // Handle send message
-  const sendMessage = async () => {
+  // Handle send message (wrapped in useCallback to prevent re-renders)
+  const sendMessage = useCallback(async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
     const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
     const htmlContent = sanitizeHtml(rawHtmlContent);
@@ -2037,7 +1986,60 @@ const InboxManager = () => {
     } finally {
       setIsSending(false);
     }
-  };
+  }, [selectedLead, editableToEmail, editableCcEmails, draftResponse, apiKeys, savedDrafts]);
+
+  // Keyboard shortcuts (defined after sendMessage to avoid reference errors)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Enter or Cmd+Enter to send message
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedLead && draftResponse.trim()) {
+        e.preventDefault();
+        sendMessage();
+        return;
+      }
+      
+      // Escape to close lead details
+      if (e.key === 'Escape') {
+        if (selectedLead) {
+          e.preventDefault();
+          setSelectedLead(null);
+          return;
+        }
+      }
+      
+      // Ctrl+F or Cmd+F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+        return;
+      }
+      
+      // Arrow key navigation (only when not typing in inputs)
+      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.contentEditable) {
+        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
+        
+        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
+          e.preventDefault();
+          const nextLead = filteredAndSortedLeads[currentIndex + 1];
+          setSelectedLead(nextLead);
+          setCurrentLeadIndex(currentIndex + 1);
+        }
+        
+        if (e.key === 'ArrowUp' && currentIndex > 0) {
+          e.preventDefault();
+          const prevLead = filteredAndSortedLeads[currentIndex - 1];
+          setSelectedLead(prevLead);
+          setCurrentLeadIndex(currentIndex - 1);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, draftResponse, filteredAndSortedLeads, sendMessage]);
 
   // Add enrichment function
   const enrichLeadData = async (lead) => {
