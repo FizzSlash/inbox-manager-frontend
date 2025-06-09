@@ -664,99 +664,170 @@ const InboxManager = () => {
 
   // Enhanced filter and sort leads
   const filteredAndSortedLeads = useMemo(() => {
-    if (!leads) return [];
-    let filtered = [...leads];
+    try {
+      if (!leads || !Array.isArray(leads)) return [];
+      
+      let filtered = leads.slice(); // Create a copy
 
-    // Apply tab filter first (who sent last message)
-    if (activeTab !== 'inbox' && activeTab !== 'all') {
+      // Apply tab filter first
       if (activeTab === 'need_response') {
         filtered = filtered.filter(lead => {
-          if (!lead.conversation || lead.conversation.length === 0) return false;
-          return checkNeedsReply(lead.conversation);
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
+              return false;
+            }
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            return lastMessage && lastMessage.type === 'REPLY';
+          } catch (e) {
+            console.warn('Error filtering need_response:', e);
+            return false;
+          }
         });
       } else if (activeTab === 'recently_sent') {
         filtered = filtered.filter(lead => {
-          if (!lead.conversation || lead.conversation.length === 0) return false;
-          const lastMessage = lead.conversation[lead.conversation.length - 1];
-          const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-          return lastMessage.type === 'SENT' && timeSinceLastMessage <= 24;
-        });
-      }
-    }
-
-    // Apply search filter with null checks
-    if (searchQuery?.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(lead => 
-        (lead.first_name || '').toLowerCase().includes(query) ||
-        (lead.last_name || '').toLowerCase().includes(query) ||
-        (lead.email || '').toLowerCase().includes(query) ||
-        (lead.subject || '').toLowerCase().includes(query) ||
-        (lead.tags || []).some(tag => (tag || '').toLowerCase().includes(query))
-      );
-    }
-
-    // Apply advanced filters
-    Object.entries(activeFilters).forEach(([category, values]) => {
-      if (!values?.length) return;
-      
-      filtered = filtered.filter(lead => {
-        return values.some(value => {
-          if (!value) return false;
-          
-          switch (category) {
-            case 'intent':
-              if (!lead?.intent) return false;
-              if (value === 'high') return lead.intent >= 7;
-              if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
-              if (value === 'low') return lead.intent <= 3;
-              return false;
-            
-            case 'urgency': {
-              const urgency = getResponseUrgency(lead);
-              // Match exact values from filterOptions
-              return value === urgency;
-            }
-            
-            case 'category':
-              return lead.lead_category?.toString() === value;
-            
-            case 'engagement':
-              if (!lead?.engagement_score) return false;
-              if (value === 'high') return lead.engagement_score >= 80;
-              if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
-              if (value === 'low') return lead.engagement_score < 50;
-              return false;
-            
-            case 'replies':
-              const replyCount = lead.conversation?.filter(m => m?.type === 'REPLY')?.length || 0;
-              if (value === 'has_replies') return replyCount > 0;
-              if (value === 'no_replies') return replyCount === 0;
-              if (value === 'multiple_replies') return replyCount >= 2;
-              return false;
-            
-            case 'timeframe': {
-              const lastMessage = safeGetLastMessage(lead);
-              const lastActivity = lastMessage ? new Date(lastMessage.time) : new Date(lead.created_at);
-              const daysDiff = timeDiff(new Date(), lastActivity);
-              
-              if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
-              if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
-              if (value === 'this_week') return daysDiff <= 7;
-              if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
-              if (value === 'this_month') return daysDiff <= 30;
-              if (value === 'older') return daysDiff > 30;
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
               return false;
             }
-            
-            default:
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
               return false;
+            }
+            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+            return timeSinceLastMessage <= 24;
+          } catch (e) {
+            console.warn('Error filtering recently_sent:', e);
+            return false;
           }
         });
-      });
-    });
+      }
 
-    return filtered;
+      // Apply search filter
+      if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead) return false;
+            
+            const firstName = (lead.first_name || '').toLowerCase();
+            const lastName = (lead.last_name || '').toLowerCase();
+            const email = (lead.email || '').toLowerCase();
+            const subject = (lead.subject || '').toLowerCase();
+            
+            let tagsMatch = false;
+            if (lead.tags && Array.isArray(lead.tags)) {
+              tagsMatch = lead.tags.some(tag => {
+                return tag && typeof tag === 'string' && tag.toLowerCase().includes(query);
+              });
+            }
+            
+            return firstName.includes(query) || 
+                   lastName.includes(query) || 
+                   email.includes(query) || 
+                   subject.includes(query) || 
+                   tagsMatch;
+          } catch (e) {
+            console.warn('Error in search filter:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply advanced filters
+      if (activeFilters && typeof activeFilters === 'object') {
+        for (const [category, values] of Object.entries(activeFilters)) {
+          if (!values || !Array.isArray(values) || values.length === 0) continue;
+          
+          filtered = filtered.filter(lead => {
+            try {
+              if (!lead) return false;
+              
+              return values.some(value => {
+                if (!value) return false;
+                
+                switch (category) {
+                  case 'intent':
+                    if (typeof lead.intent !== 'number') return false;
+                    if (value === 'high') return lead.intent >= 7;
+                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
+                    if (value === 'low') return lead.intent <= 3;
+                    return false;
+                  
+                  case 'urgency':
+                    try {
+                      const urgency = getResponseUrgency(lead);
+                      return value === urgency;
+                    } catch (e) {
+                      console.warn('Error checking urgency:', e);
+                      return false;
+                    }
+                  
+                  case 'category':
+                    return lead.lead_category && lead.lead_category.toString() === value;
+                  
+                  case 'engagement':
+                    if (typeof lead.engagement_score !== 'number') return false;
+                    if (value === 'high') return lead.engagement_score >= 80;
+                    if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
+                    if (value === 'low') return lead.engagement_score < 50;
+                    return false;
+                  
+                  case 'replies':
+                    try {
+                      let replyCount = 0;
+                      if (lead.conversation && Array.isArray(lead.conversation)) {
+                        replyCount = lead.conversation.filter(m => m && m.type === 'REPLY').length;
+                      }
+                      if (value === 'has_replies') return replyCount > 0;
+                      if (value === 'no_replies') return replyCount === 0;
+                      if (value === 'multiple_replies') return replyCount >= 2;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking replies:', e);
+                      return false;
+                    }
+                  
+                  case 'timeframe':
+                    try {
+                      let lastActivity;
+                      if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
+                      } else {
+                        lastActivity = new Date(lead.created_at || Date.now());
+                      }
+                      
+                      const daysDiff = (new Date() - lastActivity) / (1000 * 60 * 60 * 24);
+                      
+                      if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
+                      if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
+                      if (value === 'this_week') return daysDiff <= 7;
+                      if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
+                      if (value === 'this_month') return daysDiff <= 30;
+                      if (value === 'older') return daysDiff > 30;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking timeframe:', e);
+                      return false;
+                    }
+                  
+                  default:
+                    return false;
+                }
+              });
+            } catch (e) {
+              console.warn('Error in advanced filter:', e);
+              return false;
+            }
+          });
+        }
+      }
+
+      return filtered;
+    } catch (e) {
+      console.error('Error in filteredAndSortedLeads:', e);
+      return leads || [];
+    }
   }, [leads, searchQuery, activeFilters, activeTab]);
 
   // Auto-populate email fields when lead is selected
