@@ -203,54 +203,7 @@ const InboxManager = () => {
     localStorage.setItem('inbox_manager_recent_leads', JSON.stringify(newRecent));
   };
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ctrl+Enter to send message (when focused in editor)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        const editor = document.querySelector('[contenteditable]');
-        if (editor && document.activeElement === editor && selectedLead && draftResponse.trim()) {
-          e.preventDefault();
-          sendMessage();
-        }
-      }
-      
-      // Escape to close lead details
-      if (e.key === 'Escape') {
-        if (selectedLead) {
-          e.preventDefault();
-          setSelectedLead(null);
-        }
-      }
-      
-      // Ctrl+F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        const searchInput = document.querySelector('input[placeholder*="Search"]');
-        if (searchInput) {
-          e.preventDefault();
-          searchInput.focus();
-        }
-      }
-      
-      // Arrow keys to navigate leads (when not in an input)
-      if (!document.activeElement || !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
-        
-        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
-          e.preventDefault();
-          setSelectedLead(filteredAndSortedLeads[currentIndex + 1]);
-        }
-        
-        if (e.key === 'ArrowUp' && currentIndex > 0) {
-          e.preventDefault();
-          setSelectedLead(filteredAndSortedLeads[currentIndex - 1]);
-        }
-      }
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLead, filteredAndSortedLeads, draftResponse]);
 
   // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
   useEffect(() => {
@@ -2374,15 +2327,6 @@ const InboxManager = () => {
                 API Settings
               </div>
             </button>
-          </div>
-
-          {/* Keyboard Shortcuts Hint */}
-          <div className="hidden lg:flex items-center gap-4 px-3 py-1 rounded-lg text-xs transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-            <span>Shortcuts:</span>
-            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+F</kbd> Search</span>
-            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>↑↓</kbd> Navigate</span>
-            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Esc</kbd> Close</span>
-            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+Enter</kbd> Send</span>
           </div>
 
           {/* Theme Toggle */}
