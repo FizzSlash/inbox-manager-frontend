@@ -3126,12 +3126,12 @@ const InboxManager = () => {
                         </div>
 
                         {/* Communication Timeline */}
-                        <div className="mb-6 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                        <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-6">
                               <div>
-                                <span className="text-gray-400">Last Reply</span>
-                                <p className="text-white font-medium mt-1">
+                                <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Last Reply</span>
+                                <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                                   {(() => {
                                     const lastReply = getLastResponseFromThem(selectedLead.conversation);
                                     return lastReply ? formatTime(lastReply) : 'No replies yet';
@@ -3139,8 +3139,8 @@ const InboxManager = () => {
                                 </p>
                               </div>
                               <div>
-                                <span className="text-gray-400">Last Followup</span>
-                                <p className="text-white font-medium mt-1">
+                                <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Last Followup</span>
+                                <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                                   {(() => {
                                     const lastSent = selectedLead.conversation.filter(m => m.type === 'SENT');
                                     return lastSent.length > 0 ? formatTime(lastSent[lastSent.length - 1].time) : 'N/A';
@@ -3148,13 +3148,13 @@ const InboxManager = () => {
                                 </p>
                               </div>
                               <div>
-                                <span className="text-gray-400">Avg Response</span>
-                                <p className="text-white font-medium mt-1">{formatResponseTime(selectedLead.response_time_avg)}</p>
+                                <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Avg Response</span>
+                                <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{formatResponseTime(selectedLead.response_time_avg)}</p>
                               </div>
                             </div>
-                            <div className="px-3 py-1 rounded-full text-sm" style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(84, 252, 255, 0.2)'}}>
-                              <span className="text-white font-medium">{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</span>
-                              <span className="text-gray-400"> replies</span>
+                            <div className="px-3 py-1 rounded-full text-sm transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.accent}20`}}>
+                              <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.conversation.filter(m => m.type === 'REPLY').length}</span>
+                              <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}> replies</span>
                             </div>
                           </div>
                         </div>
@@ -3208,71 +3208,71 @@ const InboxManager = () => {
                 </div>
 
                           {/* Enrichment Data Subsection */}
-                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
+                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: themeStyles.tertiaryBg}}>
                             <button 
                               onClick={() => toggleSection('enrichment')}
-                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+                              className="w-full px-4 py-3 flex items-center justify-between hover:opacity-80 transition-colors duration-300"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
                                   className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('enrichment') ? 'rotate-90' : ''}`} 
-                                  style={{color: '#54FCFF'}} 
+                                  style={{color: themeStyles.accent}} 
                                 />
-                                <span className="text-white font-medium">Enrichment Data</span>
+                                <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Enrichment Data</span>
                       </div>
                               {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) && (
-                                <span className="text-xs text-gray-400">No data yet</span>
+                                <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>No data yet</span>
                               )}
                             </button>
                             {activeSection.includes('enrichment') && (
                               <div className="px-4 pb-4">
                                 {(!selectedLead.role && !selectedLead.company_data && !selectedLead.personal_linkedin_url && !selectedLead.business_linkedin_url) ? (
-                                  <div className="text-center py-6 text-gray-400 rounded-lg border border-white/10 mx-6">
+                                  <div className="text-center py-6 rounded-lg mx-6 transition-colors duration-300" style={{color: themeStyles.textMuted, border: `1px solid ${themeStyles.border}`}}>
                                     <Zap className="w-8 h-8 mx-auto mb-3 opacity-50" />
                                     <p className="text-sm">Click the Enrich button above to fetch additional data</p>
                       </div>
                                 ) : (
                                   <div className="grid grid-cols-2 gap-4 text-sm pl-6">
                                     <div>
-                                      <span className="text-gray-300">Role:</span>
-                                      <p className="font-medium text-white">{selectedLead.role || 'N/A'}</p>
+                                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Role:</span>
+                                      <p className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.role || 'N/A'}</p>
                     </div>
                                     <div className="col-span-2">
-                                      <span className="text-gray-300">Company Summary:</span>
-                                      <p className="font-medium text-white mt-1">{selectedLead.company_data || 'N/A'}</p>
+                                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Company Summary:</span>
+                                      <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.company_data || 'N/A'}</p>
                       </div>
                                     <div>
-                                      <span className="text-gray-300">Personal LinkedIn:</span>
+                                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Personal LinkedIn:</span>
                                       {selectedLead.personal_linkedin_url ? (
                                         <a
                                           href={selectedLead.personal_linkedin_url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="font-medium hover:opacity-80 flex items-center gap-1"
-                                          style={{color: '#54FCFF'}}
+                                          className="font-medium hover:opacity-80 flex items-center gap-1 transition-colors duration-300"
+                                          style={{color: themeStyles.accent}}
                                         >
                                           View Profile
                                           <ExternalLink className="w-3 h-3" />
                                         </a>
                                       ) : (
-                                        <p className="font-medium text-white">N/A</p>
+                                        <p className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>N/A</p>
                                       )}
                       </div>
                                     <div>
-                                      <span className="text-gray-300">Company LinkedIn:</span>
+                                      <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Company LinkedIn:</span>
                                       {selectedLead.business_linkedin_url ? (
                                         <a
                                           href={selectedLead.business_linkedin_url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="font-medium hover:opacity-80 flex items-center gap-1"
-                                          style={{color: '#54FCFF'}}
+                                          className="font-medium hover:opacity-80 flex items-center gap-1 transition-colors duration-300"
+                                          style={{color: themeStyles.accent}}
                                         >
                                           View Company
                                           <ExternalLink className="w-3 h-3" />
                                         </a>
                                       ) : (
-                                        <p className="font-medium text-white">N/A</p>
+                                        <p className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>N/A</p>
                                       )}
                     </div>
                                   </div>
@@ -3282,39 +3282,39 @@ const InboxManager = () => {
                           </div>
 
                           {/* Engagement Metrics Subsection */}
-                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)'}}>
+                          <div className="rounded-lg overflow-hidden transition-all duration-200" style={{backgroundColor: themeStyles.tertiaryBg}}>
                             <button 
                               onClick={() => toggleSection('engagement')}
-                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+                              className="w-full px-4 py-3 flex items-center justify-between hover:opacity-80 transition-colors duration-300"
                             >
                               <div className="flex items-center gap-2">
                                 <ChevronRight 
                                   className={`w-4 h-4 transition-transform duration-200 ${activeSection.includes('engagement') ? 'rotate-90' : ''}`} 
-                                  style={{color: '#54FCFF'}} 
+                                  style={{color: themeStyles.accent}} 
                                 />
-                                <span className="text-white font-medium">Engagement Metrics</span>
+                                <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Engagement Metrics</span>
                               </div>
                             </button>
                             {activeSection.includes('engagement') && (
                               <div className="px-4 pb-4">
                                 <div className="grid grid-cols-3 gap-4 text-sm pl-6">
-                                  <div className="col-span-3 p-4 rounded-lg" style={{backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.1)'}}>
+                                  <div className="col-span-3 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                                     <div className="grid grid-cols-3 gap-8">
                                       <div>
-                                        <span className="text-gray-400">Avg Response Time</span>
-                                        <p className="text-2xl font-bold mt-1 text-white">
+                                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Avg Response Time</span>
+                                        <p className="text-2xl font-bold mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                                           {formatResponseTime(selectedLead.response_time_avg)}
                                         </p>
                                       </div>
                                       <div>
-                                        <span className="text-gray-400">Intent Score</span>
-                                        <p className="text-2xl font-bold mt-1" style={{color: '#54FCFF'}}>
+                                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Intent Score</span>
+                                        <p className="text-2xl font-bold mt-1 transition-colors duration-300" style={{color: themeStyles.accent}}>
                                           {selectedLead.intent}/10
                                         </p>
                                       </div>
                                       <div>
-                                        <span className="text-gray-400">Reply Rate</span>
-                                        <p className="text-2xl font-bold mt-1 text-white">
+                                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Reply Rate</span>
+                                        <p className="text-2xl font-bold mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                         {selectedLead.conversation.filter(msg => msg.type === 'REPLY').length}/{selectedLead.conversation.filter(msg => msg.type === 'SENT').length}
                                         </p>
                       </div>
