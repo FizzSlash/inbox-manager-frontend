@@ -116,6 +116,10 @@ const InboxManager = () => {
       Object.values(toastsTimeoutRef.current).forEach(timeout => {
         clearTimeout(timeout);
       });
+      // Clean up draft save timeout
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -154,6 +158,116 @@ const InboxManager = () => {
     localStorage.setItem('inbox_manager_theme', newTheme ? 'dark' : 'light');
     showToast(`Switched to ${newTheme ? 'dark' : 'light'} mode`, 'success');
   };
+
+  // Auto-save draft when content changes
+  useEffect(() => {
+    if (!selectedLead || !draftResponse) return;
+    
+    setDraftSaveStatus('unsaved');
+    
+    // Clear existing timeout
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+    
+    // Set new timeout to save after 3 seconds of inactivity
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      setDraftSaveStatus('saving');
+      saveDraftToStorage(selectedLead.id, draftResponse, draftHtml);
+    }, 3000);
+    
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [draftResponse, draftHtml, selectedLead]);
+
+  // Load draft when lead is selected
+  useEffect(() => {
+    if (!selectedLead) return;
+    
+    // Add to recently viewed
+    addToRecentlyViewed(selectedLead);
+    
+    // Load existing draft if available
+    const existingDraft = loadDraftFromStorage(selectedLead.id);
+    if (existingDraft) {
+      setDraftResponse(existingDraft.text);
+      setDraftHtml(existingDraft.html || '');
+      
+      // Update contenteditable div
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        editor.innerHTML = existingDraft.html || convertToHtml(existingDraft.text);
+      }
+      
+      setDraftSaveStatus('saved');
+      showToast(`Draft restored for ${selectedLead.first_name}`, 'success');
+    } else {
+      // Clear draft fields for new lead
+      setDraftResponse('');
+      setDraftHtml('');
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        editor.innerHTML = '';
+      }
+      setDraftSaveStatus('saved');
+    }
+  }, [selectedLead?.id]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+        // Allow Ctrl+Enter in contenteditable for sending
+        if (e.ctrlKey && e.key === 'Enter' && e.target.contentEditable === 'true') {
+          e.preventDefault();
+          if (selectedLead && draftResponse.trim() && !isSending) {
+            sendMessage();
+          }
+        }
+        return;
+      }
+      
+      // Escape to close lead details
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedLead(null);
+        setShowRecentDropdown(false);
+        setShowApiSettings(false);
+        setShowSortPopup(false);
+        setShowFilterPopup(false);
+      }
+      
+      // Ctrl+F to focus search
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      
+      // Arrow key navigation (only when a lead is selected)
+      if (selectedLead) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          navigateToLead('next');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          navigateToLead('prev');
+        }
+      }
+      
+      // R for recently viewed toggle
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setShowRecentDropdown(!showRecentDropdown);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, draftResponse, isSending, showRecentDropdown, filteredAndSortedLeads]);
 
   // Theme CSS variables
   const themeStyles = isDarkMode ? {
@@ -208,6 +322,83 @@ const InboxManager = () => {
     }
     
     setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
+  };
+
+  // Auto-save draft functionality
+  const saveDraftToStorage = (leadId, draftText, draftHtml) => {
+    if (!leadId) return;
+    
+    const newDrafts = {
+      ...savedDrafts,
+      [leadId]: {
+        text: draftText,
+        html: draftHtml,
+        timestamp: Date.now()
+      }
+    };
+    
+    setSavedDrafts(newDrafts);
+    localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
+    setDraftSaveStatus('saved');
+  };
+
+  const loadDraftFromStorage = (leadId) => {
+    if (!leadId || !savedDrafts[leadId]) return null;
+    return savedDrafts[leadId];
+  };
+
+  const clearDraftFromStorage = (leadId) => {
+    if (!leadId) return;
+    
+    const newDrafts = { ...savedDrafts };
+    delete newDrafts[leadId];
+    
+    setSavedDrafts(newDrafts);
+    localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
+  };
+
+  const hasDraft = (leadId) => {
+    return leadId && savedDrafts[leadId] && savedDrafts[leadId].text.trim() !== '';
+  };
+
+  // Recently viewed leads functionality
+  const addToRecentlyViewed = (lead) => {
+    if (!lead) return;
+    
+    const recentLead = {
+      id: lead.id,
+      first_name: lead.first_name,
+      last_name: lead.last_name,
+      email: lead.email,
+      subject: lead.subject,
+      timestamp: Date.now()
+    };
+    
+    const newRecent = [recentLead, ...recentlyViewedLeads.filter(r => r.id !== lead.id)].slice(0, 8);
+    setRecentlyViewedLeads(newRecent);
+    localStorage.setItem('inbox_manager_recent_leads', JSON.stringify(newRecent));
+  };
+
+  const clearRecentlyViewed = () => {
+    setRecentlyViewedLeads([]);
+    localStorage.removeItem('inbox_manager_recent_leads');
+  };
+
+  // Keyboard navigation
+  const navigateToLead = (direction) => {
+    if (!selectedLead || filteredAndSortedLeads.length === 0) return;
+    
+    const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead.id);
+    if (currentIndex === -1) return;
+    
+    let newIndex;
+    if (direction === 'next') {
+      newIndex = currentIndex + 1 >= filteredAndSortedLeads.length ? 0 : currentIndex + 1;
+    } else {
+      newIndex = currentIndex - 1 < 0 ? filteredAndSortedLeads.length - 1 : currentIndex - 1;
+    }
+    
+    setSelectedLead(filteredAndSortedLeads[newIndex]);
   };
 
   // Helper functions (moved up before they're used)
@@ -538,6 +729,32 @@ const InboxManager = () => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
+  
+  // Auto-save draft states
+  const [savedDrafts, setSavedDrafts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('inbox_manager_drafts');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [draftSaveStatus, setDraftSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
+  const draftSaveTimeoutRef = useRef(null);
+  
+  // Recently viewed leads state
+  const [recentlyViewedLeads, setRecentlyViewedLeads] = useState(() => {
+    try {
+      const recent = localStorage.getItem('inbox_manager_recent_leads');
+      return recent ? JSON.parse(recent) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+  
+  // Search input ref for keyboard shortcuts
+  const searchInputRef = useRef(null);
   
   // Add state for collapsible sections - default to all open
   const [activeSection, setActiveSection] = useState(['general', 'enrichment', 'engagement']);
@@ -1860,6 +2077,10 @@ const InboxManager = () => {
         editor.innerHTML = '';
       }
       
+      // Clear saved draft from storage
+      clearDraftFromStorage(selectedLead.id);
+      setDraftSaveStatus('saved');
+      
       // Clear file input
       if (attachmentInput) {
         attachmentInput.value = '';
@@ -2139,6 +2360,102 @@ const InboxManager = () => {
                 Inbox
               </div>
             </button>
+            
+            {/* Recently Viewed Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowRecentDropdown(!showRecentDropdown)}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+                style={{
+                  backgroundColor: showRecentDropdown ? `${themeStyles.accent}20` : 'transparent',
+                  color: showRecentDropdown ? themeStyles.accent : themeStyles.textPrimary
+                }}
+                title="Recently viewed leads (Press R)"
+              >
+                <Clock className="w-4 h-4" />
+                Recent
+                {recentlyViewedLeads.length > 0 && (
+                  <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
+                    {recentlyViewedLeads.length}
+                  </span>
+                )}
+                <ChevronDown className={`w-3 h-3 transition-transform ${showRecentDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {/* Recently Viewed Dropdown */}
+              {showRecentDropdown && (
+                <div className="absolute top-full left-0 mt-2 w-80 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
+                      <div className="flex gap-2">
+                        {recentlyViewedLeads.length > 0 && (
+                          <button
+                            onClick={clearRecentlyViewed}
+                            className="text-xs hover:opacity-80 transition-colors duration-300"
+                            style={{color: themeStyles.error}}
+                          >
+                            Clear All
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowRecentDropdown(false)}
+                          className="hover:opacity-80 transition-colors duration-300"
+                          style={{color: themeStyles.textMuted}}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {recentlyViewedLeads.length === 0 ? (
+                      <div className="text-center py-4 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                        <Clock className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No recently viewed leads</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {recentlyViewedLeads.map((recentLead) => (
+                          <button
+                            key={recentLead.id}
+                            onClick={() => {
+                              const fullLead = leads.find(l => l.id === recentLead.id);
+                              if (fullLead) {
+                                setSelectedLead(fullLead);
+                                setShowRecentDropdown(false);
+                              }
+                            }}
+                            className="w-full text-left p-3 rounded-lg hover:opacity-80 transition-all duration-300"
+                            style={{
+                              backgroundColor: selectedLead?.id === recentLead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                              border: selectedLead?.id === recentLead.id ? `1px solid ${themeStyles.accent}40` : `1px solid ${themeStyles.border}`
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                  {recentLead.first_name} {recentLead.last_name}
+                                </p>
+                                <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{recentLead.email}</p>
+                                <p className="text-xs mt-1 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                                  {recentLead.subject}
+                                </p>
+                              </div>
+                              {hasDraft(recentLead.id) && (
+                                <div className="px-2 py-1 rounded-full text-xs transition-colors duration-300" style={{backgroundColor: `${themeStyles.warning}20`, color: themeStyles.warning}}>
+                                  Draft
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <button
               onClick={() => setShowApiSettings(true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -2156,25 +2473,38 @@ const InboxManager = () => {
             </button>
           </div>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
-            style={{color: themeStyles.textPrimary}}
-            title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
-          >
-            {isDarkMode ? (
-              <>
-                <span className="text-lg">☀️</span>
-                <span className="hidden sm:inline">Light</span>
-              </>
-            ) : (
-              <>
-                <span className="text-lg">🌙</span>
-                <span className="hidden sm:inline">Dark</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Keyboard Shortcuts Help */}
+            <div className="hidden md:block text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+              <span>Shortcuts: </span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+F</kbd>
+              <span> search, </span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>↑↓</kbd>
+              <span> navigate, </span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Esc</kbd>
+              <span> close</span>
+            </div>
+            
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+              style={{color: themeStyles.textPrimary}}
+              title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+            >
+              {isDarkMode ? (
+                <>
+                  <span className="text-lg">☀️</span>
+                  <span className="hidden sm:inline">Light</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg">🌙</span>
+                  <span className="hidden sm:inline">Dark</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2530,8 +2860,9 @@ const InboxManager = () => {
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search leads, tags, emails..."
+              placeholder="Search leads, tags, emails... (Ctrl+F)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg backdrop-blur-sm focus:ring-2 transition-colors duration-300"
@@ -2926,6 +3257,13 @@ const InboxManager = () => {
                       {urgency !== 'none' && <span className="ml-2 text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
                     </h3>
                     <div className="flex items-center gap-1">
+                      {hasDraft(lead.id) && (
+                        <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
+                              style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}40`, color: themeStyles.warning}}
+                              title="Has unsaved draft">
+                          📝 Draft
+                        </span>
+                      )}
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
                             style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                         {lead.intent}
@@ -3406,10 +3744,37 @@ const InboxManager = () => {
 
                 {/* Response Section */}
                 <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
-                  <h3 className="font-bold mb-4 flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                    <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
-                    Compose Response
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
+                      Compose Response
+                    </h3>
+                    
+                    {/* Auto-save Status */}
+                    <div className="flex items-center gap-2 text-xs">
+                      {draftSaveStatus === 'saving' && (
+                        <div className="flex items-center gap-1 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2" style={{borderColor: themeStyles.accent}} />
+                          Saving draft...
+                        </div>
+                      )}
+                      {draftSaveStatus === 'saved' && draftResponse.trim() && (
+                        <div className="flex items-center gap-1 transition-colors duration-300" style={{color: themeStyles.success}}>
+                          <CheckCircle className="w-3 h-3" />
+                          Draft saved
+                        </div>
+                      )}
+                      {draftSaveStatus === 'unsaved' && (
+                        <div className="flex items-center gap-1 transition-colors duration-300" style={{color: themeStyles.warning}}>
+                          <Clock className="w-3 h-3" />
+                          Unsaved changes
+                        </div>
+                      )}
+                      <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                        <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+Enter</kbd> to send
+                      </div>
+                    </div>
+                  </div>
                   
                   <div className="space-y-6">
                     {/* Editable Email Recipients */}
