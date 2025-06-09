@@ -890,12 +890,18 @@ const InboxManager = () => {
       return leadDate >= cutoffDate;
     });
 
-    // Overall metrics
+    // Overall metrics (meaningful for response inbox)
     const totalLeads = filteredLeads.length;
-    const leadsWithReplies = filteredLeads.filter(lead => 
-      lead.conversation.some(msg => msg.type === 'REPLY')
+    const leadsWithMultipleReplies = filteredLeads.filter(lead => 
+      lead.conversation.filter(msg => msg.type === 'REPLY').length >= 2
     ).length;
-    const overallResponseRate = totalLeads > 0 ? (leadsWithReplies / totalLeads * 100) : 0;
+    const engagementRate = totalLeads > 0 ? (leadsWithMultipleReplies / totalLeads * 100) : 0;
+    
+    // Average replies per lead (more meaningful than response rate)
+    const totalReplies = filteredLeads.reduce((sum, lead) => 
+      sum + lead.conversation.filter(msg => msg.type === 'REPLY').length, 0
+    );
+    const avgRepliesPerLead = totalLeads > 0 ? (totalReplies / totalLeads) : 0;
 
     // Response time analysis
     const responseTimesByLead = filteredLeads.map(lead => lead.response_time_avg).filter(time => time > 0);
@@ -911,17 +917,18 @@ const InboxManager = () => {
       over24h: responseTimesByLead.filter(time => time >= 24).length
     };
 
-    // Campaign performance
+    // Campaign performance (meaningful metrics for response inbox)
     const campaignPerformance = filteredLeads.reduce((acc, lead) => {
       const campaignId = lead.campaign_id || 'Unknown Campaign';
       if (!acc[campaignId]) {
         acc[campaignId] = {
           name: `Campaign ${campaignId}`,
           totalLeads: 0,
-          responses: 0,
+          totalReplies: 0,
           totalIntent: 0,
           totalEngagement: 0,
-          responseTimes: []
+          responseTimes: [],
+          conversationDepths: []
         };
       }
       
@@ -929,9 +936,9 @@ const InboxManager = () => {
       acc[campaignId].totalIntent += lead.intent;
       acc[campaignId].totalEngagement += lead.engagement_score;
       
-      if (lead.conversation.some(msg => msg.type === 'REPLY')) {
-        acc[campaignId].responses++;
-      }
+      const replyCount = lead.conversation.filter(msg => msg.type === 'REPLY').length;
+      acc[campaignId].totalReplies += replyCount;
+      acc[campaignId].conversationDepths.push(lead.conversation.length);
       
       if (lead.response_time_avg > 0) {
         acc[campaignId].responseTimes.push(lead.response_time_avg);
@@ -940,29 +947,42 @@ const InboxManager = () => {
       return acc;
     }, {});
 
-    // Calculate campaign averages and sort by response rate
+    // Calculate campaign averages and sort by engagement score
     const campaignStats = Object.values(campaignPerformance)
       .map(campaign => ({
         ...campaign,
-        responseRate: campaign.totalLeads > 0 ? (campaign.responses / campaign.totalLeads * 100) : 0,
+        avgRepliesPerLead: campaign.totalLeads > 0 ? (campaign.totalReplies / campaign.totalLeads) : 0,
         avgIntent: campaign.totalLeads > 0 ? (campaign.totalIntent / campaign.totalLeads) : 0,
         avgEngagement: campaign.totalLeads > 0 ? (campaign.totalEngagement / campaign.totalLeads) : 0,
         avgResponseTime: campaign.responseTimes.length > 0 
           ? campaign.responseTimes.reduce((sum, time) => sum + time, 0) / campaign.responseTimes.length 
+          : 0,
+        avgConversationDepth: campaign.conversationDepths.length > 0
+          ? campaign.conversationDepths.reduce((sum, depth) => sum + depth, 0) / campaign.conversationDepths.length
           : 0
       }))
-      .sort((a, b) => b.responseRate - a.responseRate);
+      .sort((a, b) => b.avgEngagement - a.avgEngagement);
 
-    // Lead category performance
+    // Lead category performance (meaningful metrics for response inbox)
     const categoryPerformance = filteredLeads.reduce((acc, lead) => {
       const category = lead.tags && lead.tags[0] ? lead.tags[0] : 'Uncategorized';
       if (!acc[category]) {
-        acc[category] = { totalLeads: 0, responses: 0 };
+        acc[category] = { 
+          totalLeads: 0, 
+          totalReplies: 0, 
+          totalEngagement: 0,
+          responseTimes: [],
+          conversationDepths: []
+        };
       }
       
       acc[category].totalLeads++;
-      if (lead.conversation.some(msg => msg.type === 'REPLY')) {
-        acc[category].responses++;
+      acc[category].totalReplies += lead.conversation.filter(msg => msg.type === 'REPLY').length;
+      acc[category].totalEngagement += lead.engagement_score;
+      acc[category].conversationDepths.push(lead.conversation.length);
+      
+      if (lead.response_time_avg > 0) {
+        acc[category].responseTimes.push(lead.response_time_avg);
       }
       
       return acc;
@@ -971,25 +991,66 @@ const InboxManager = () => {
     const categoryStats = Object.entries(categoryPerformance)
       .map(([category, data]) => ({
         category,
-        ...data,
-        responseRate: data.totalLeads > 0 ? (data.responses / data.totalLeads * 100) : 0
+        totalLeads: data.totalLeads,
+        avgRepliesPerLead: data.totalLeads > 0 ? (data.totalReplies / data.totalLeads) : 0,
+        avgEngagement: data.totalLeads > 0 ? (data.totalEngagement / data.totalLeads) : 0,
+        avgResponseTime: data.responseTimes.length > 0
+          ? data.responseTimes.reduce((sum, time) => sum + time, 0) / data.responseTimes.length
+          : 0,
+        avgConversationDepth: data.conversationDepths.length > 0
+          ? data.conversationDepths.reduce((sum, depth) => sum + depth, 0) / data.conversationDepths.length
+          : 0
       }))
-      .sort((a, b) => b.responseRate - a.responseRate);
+      .sort((a, b) => b.avgEngagement - a.avgEngagement);
 
-    // Intent vs Response correlation
+    // Intent vs Engagement correlation (more meaningful than response rate)
     const intentCorrelation = [
-      { intent: 'High (7-10)', responseRate: filteredLeads.filter(l => l.intent >= 7).length > 0 
-        ? (filteredLeads.filter(l => l.intent >= 7 && l.conversation.some(m => m.type === 'REPLY')).length / 
-           filteredLeads.filter(l => l.intent >= 7).length * 100) : 0 },
-      { intent: 'Medium (4-6)', responseRate: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length > 0 
-        ? (filteredLeads.filter(l => l.intent >= 4 && l.intent < 7 && l.conversation.some(m => m.type === 'REPLY')).length / 
-           filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length * 100) : 0 },
-      { intent: 'Low (1-3)', responseRate: filteredLeads.filter(l => l.intent < 4).length > 0 
-        ? (filteredLeads.filter(l => l.intent < 4 && l.conversation.some(m => m.type === 'REPLY')).length / 
-           filteredLeads.filter(l => l.intent < 4).length * 100) : 0 }
+      { intent: 'High (7-10)', 
+        avgReplies: filteredLeads.filter(l => l.intent >= 7).length > 0
+          ? filteredLeads.filter(l => l.intent >= 7)
+              .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
+            filteredLeads.filter(l => l.intent >= 7).length : 0,
+        count: filteredLeads.filter(l => l.intent >= 7).length },
+      { intent: 'Medium (4-6)', 
+        avgReplies: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length > 0
+          ? filteredLeads.filter(l => l.intent >= 4 && l.intent < 7)
+              .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
+            filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length : 0,
+        count: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length },
+      { intent: 'Low (1-3)', 
+        avgReplies: filteredLeads.filter(l => l.intent < 4).length > 0
+          ? filteredLeads.filter(l => l.intent < 4)
+              .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
+            filteredLeads.filter(l => l.intent < 4).length : 0,
+        count: filteredLeads.filter(l => l.intent < 4).length }
     ];
 
-    // Response trends (daily)
+    // Time/Day heatmap analysis
+    const replyMessages = filteredLeads.flatMap(lead => 
+      lead.conversation.filter(msg => msg.type === 'REPLY')
+        .map(msg => ({
+          ...msg,
+          date: new Date(msg.time),
+          hour: new Date(msg.time).getHours(),
+          dayOfWeek: new Date(msg.time).getDay() // 0=Sunday, 1=Monday, etc
+        }))
+    );
+
+    // Create heatmap data structure
+    const heatmapData = Array.from({ length: 7 }, (_, day) => 
+      Array.from({ length: 24 }, (_, hour) => ({
+        day,
+        hour,
+        count: replyMessages.filter(msg => msg.dayOfWeek === day && msg.hour === hour).length,
+        dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day]
+      }))
+    ).flat();
+
+    // Peak activity times
+    const maxCount = Math.max(...heatmapData.map(d => d.count));
+    const peakHour = heatmapData.find(d => d.count === maxCount);
+
+    // Response trends (daily) - showing engagement trends instead
     const last30Days = Array.from({ length: Math.min(daysBack, 30) }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -997,32 +1058,34 @@ const InboxManager = () => {
     }).reverse();
 
     const responseTrends = last30Days.map(dateStr => {
-      const dayLeads = filteredLeads.filter(lead => {
-        return lead.created_at.split('T')[0] === dateStr;
-      });
-      
-      const dayResponses = dayLeads.filter(lead => 
-        lead.conversation.some(msg => msg.type === 'REPLY')
-      ).length;
+      const dayReplies = replyMessages.filter(msg => 
+        msg.time.split('T')[0] === dateStr
+      );
       
       return {
         date: dateStr,
-        totalLeads: dayLeads.length,
-        responses: dayResponses,
-        responseRate: dayLeads.length > 0 ? (dayResponses / dayLeads.length * 100) : 0
+        replyCount: dayReplies.length,
+        avgResponseTime: dayReplies.length > 0 
+          ? dayReplies.reduce((sum, msg) => sum + (msg.response_time || 0), 0) / dayReplies.length 
+          : 0
       };
     });
 
     return {
       totalLeads,
-      leadsWithReplies,
-      overallResponseRate,
+      leadsWithMultipleReplies,
+      engagementRate,
+      avgRepliesPerLead,
       avgResponseTime,
       responseTimeDistribution,
       campaignStats: campaignStats.slice(0, 10), // Top 10 campaigns
       categoryStats,
       intentCorrelation,
       responseTrends,
+      heatmapData,
+      peakHour,
+      maxCount,
+      totalReplies,
       dateRange: daysBack
     };
   }, [leads, analyticsDateRange]);
@@ -2802,9 +2865,12 @@ const InboxManager = () => {
                     <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Response Rate</p>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Engagement Rate</p>
                           <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.success}}>
-                            {analyticsData.overallResponseRate.toFixed(1)}%
+                            {analyticsData.engagementRate.toFixed(1)}%
+                          </p>
+                          <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            Leads with 2+ replies
                           </p>
                         </div>
                         <TrendingUp className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.success}} />
@@ -2826,9 +2892,12 @@ const InboxManager = () => {
                     <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Leads with Replies</p>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Avg Replies per Lead</p>
                           <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                            {analyticsData.leadsWithReplies.toLocaleString()}
+                            {analyticsData.avgRepliesPerLead.toFixed(1)}
+                          </p>
+                          <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            {analyticsData.totalReplies} total replies
                           </p>
                         </div>
                         <MessageSquare className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.accent}} />
@@ -2877,31 +2946,113 @@ const InboxManager = () => {
                       </div>
                     </div>
 
-                    {/* Intent vs Response Rate */}
+                    {/* Average Replies by Intent Level */}
                     <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                       <h3 className="text-xl font-bold mb-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                        Response Rate by Intent Level
+                        Average Replies by Intent Level
                       </h3>
                       <div className="space-y-4">
                         {analyticsData.intentCorrelation.map((item, index) => (
                           <div key={index} className="flex items-center justify-between">
-                            <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{item.intent}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{item.intent}</span>
+                              <span className="text-xs px-2 py-1 rounded-full transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
+                                {item.count} leads
+                              </span>
+                            </div>
                             <div className="flex items-center gap-3">
                               <div className="w-32 rounded-full h-3 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
                                 <div 
                                   className="h-3 rounded-full transition-all duration-500"
                                   style={{
-                                    width: `${item.responseRate}%`,
-                                    backgroundColor: index === 0 ? themeStyles.success : index === 1 ? themeStyles.warning : themeStyles.error
+                                    width: `${Math.min(item.avgReplies * 20, 100)}%`, // Scale for visual
+                                    backgroundColor: index === 0 ? themeStyles.success : index === 1 ? themeStyles.warning : themeStyles.accent
                                   }}
                                 />
                               </div>
                               <span className="text-sm font-bold w-12 text-right transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                                {item.responseRate.toFixed(1)}%
+                                {item.avgReplies.toFixed(1)}
                               </span>
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reply Activity Heatmap */}
+                  <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                        Reply Activity Heatmap
+                      </h3>
+                      {analyticsData.peakHour && analyticsData.maxCount > 0 && (
+                        <div className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                          Peak: {analyticsData.peakHour.dayName} at {analyticsData.peakHour.hour}:00 ({analyticsData.maxCount} replies)
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Heatmap Grid */}
+                    <div className="relative">
+                      {/* Hour labels */}
+                      <div className="flex mb-2 ml-16">
+                        {Array.from({ length: 24 }, (_, hour) => (
+                          <div key={hour} className="flex-1 text-center text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            {hour % 4 === 0 ? `${hour}:00` : ''}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Heatmap rows */}
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((dayName, dayIndex) => (
+                        <div key={dayName} className="flex items-center mb-1">
+                          <div className="w-14 text-xs text-right mr-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            {dayName.slice(0, 3)}
+                          </div>
+                          <div className="flex flex-1 gap-1">
+                            {Array.from({ length: 24 }, (_, hour) => {
+                              const dataPoint = analyticsData.heatmapData.find(d => 
+                                d.day === ((dayIndex + 1) % 7) && d.hour === hour // Adjust for Sunday=0
+                              );
+                              const intensity = analyticsData.maxCount > 0 ? (dataPoint?.count || 0) / analyticsData.maxCount : 0;
+                              
+                              return (
+                                <div
+                                  key={hour}
+                                  className="flex-1 h-6 rounded-sm transition-all duration-300 hover:scale-110 cursor-pointer"
+                                  style={{
+                                    backgroundColor: intensity > 0 
+                                      ? `${themeStyles.accent}${Math.floor(intensity * 255).toString(16).padStart(2, '0')}`
+                                      : themeStyles.tertiaryBg,
+                                    border: `1px solid ${themeStyles.border}`
+                                  }}
+                                  title={`${dayName} ${hour}:00 - ${dataPoint?.count || 0} replies`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Legend */}
+                      <div className="flex items-center justify-center mt-4 gap-4">
+                        <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>Less</span>
+                        <div className="flex gap-1">
+                          {[0, 0.2, 0.4, 0.6, 0.8, 1].map((intensity, i) => (
+                            <div
+                              key={i}
+                              className="w-3 h-3 rounded-sm"
+                              style={{
+                                backgroundColor: intensity > 0 
+                                  ? `${themeStyles.accent}${Math.floor(intensity * 255).toString(16).padStart(2, '0')}`
+                                  : themeStyles.tertiaryBg,
+                                border: `1px solid ${themeStyles.border}`
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>More</span>
                       </div>
                     </div>
                   </div>
@@ -2917,8 +3068,8 @@ const InboxManager = () => {
                           <tr className="border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
                             <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Campaign</th>
                             <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Leads</th>
-                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Response Rate</th>
-                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Intent</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Engagement</th>
+                            <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Replies</th>
                             <th className="text-left py-3 px-4 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Avg Response Time</th>
                           </tr>
                         </thead>
@@ -2930,15 +3081,15 @@ const InboxManager = () => {
                               <td className="py-3 px-4">
                                 <span className="px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300" 
                                       style={{
-                                        backgroundColor: campaign.responseRate >= 40 ? `${themeStyles.success}20` : 
-                                                        campaign.responseRate >= 20 ? `${themeStyles.warning}20` : `${themeStyles.error}20`,
-                                        color: campaign.responseRate >= 40 ? themeStyles.success : 
-                                               campaign.responseRate >= 20 ? themeStyles.warning : themeStyles.error
+                                        backgroundColor: campaign.avgEngagement >= 80 ? `${themeStyles.success}20` : 
+                                                        campaign.avgEngagement >= 50 ? `${themeStyles.warning}20` : `${themeStyles.error}20`,
+                                        color: campaign.avgEngagement >= 80 ? themeStyles.success : 
+                                               campaign.avgEngagement >= 50 ? themeStyles.warning : themeStyles.error
                                       }}>
-                                  {campaign.responseRate.toFixed(1)}%
+                                  {campaign.avgEngagement.toFixed(0)}%
                                 </span>
                               </td>
-                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{campaign.avgIntent.toFixed(1)}</td>
+                              <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{campaign.avgRepliesPerLead.toFixed(1)}</td>
                               <td className="py-3 px-4 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                                 {campaign.avgResponseTime > 0 ? formatResponseTime(campaign.avgResponseTime) : 'N/A'}
                               </td>
@@ -2961,18 +3112,33 @@ const InboxManager = () => {
                             <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{category.category}</span>
                             <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>{category.totalLeads} leads</span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          
+                          {/* Engagement Score */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>Engagement:</span>
                             <div className="flex-1 rounded-full h-2 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
                               <div 
                                 className="h-2 rounded-full transition-all duration-500"
                                 style={{
-                                  width: `${category.responseRate}%`,
-                                  backgroundColor: themeStyles.accent
+                                  width: `${category.avgEngagement}%`,
+                                  backgroundColor: themeStyles.success
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                              {category.responseRate.toFixed(1)}%
+                            <span className="text-xs font-bold w-10 text-right transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                              {category.avgEngagement.toFixed(0)}%
+                            </span>
+                          </div>
+                          
+                          {/* Average Replies */}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                              Avg replies: <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{category.avgRepliesPerLead.toFixed(1)}</span>
+                            </span>
+                            <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                              Avg response: <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                {category.avgResponseTime > 0 ? formatResponseTime(category.avgResponseTime) : 'N/A'}
+                              </span>
                             </span>
                           </div>
                         </div>
