@@ -666,37 +666,25 @@ const InboxManager = () => {
   const filteredAndSortedLeads = useMemo(() => {
     try {
       if (!leads || !Array.isArray(leads)) {
-        console.log('No leads data available');
         return [];
       }
-      
-      console.log('Filtering with activeTab:', activeTab, 'Total leads:', leads.length);
       let filtered = leads.slice(); // Create a copy
 
       // Apply tab filter first
       if (activeTab === 'need_response') {
-        console.log('Filtering for need_response...');
-        const beforeCount = filtered.length;
         filtered = filtered.filter(lead => {
           try {
             if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
               return false;
             }
             const lastMessage = lead.conversation[lead.conversation.length - 1];
-            const result = lastMessage && lastMessage.type === 'REPLY';
-            if (result) {
-              console.log('Found need_response lead:', lead.first_name, 'last message type:', lastMessage.type);
-            }
-            return result;
+            return lastMessage && lastMessage.type === 'REPLY';
           } catch (e) {
             console.warn('Error filtering need_response:', e);
             return false;
           }
         });
-        console.log('need_response filter: before:', beforeCount, 'after:', filtered.length);
       } else if (activeTab === 'recently_sent') {
-        console.log('Filtering for recently_sent...');
-        const beforeCount = filtered.length;
         filtered = filtered.filter(lead => {
           try {
             if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
@@ -707,17 +695,12 @@ const InboxManager = () => {
               return false;
             }
             const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-            const result = timeSinceLastMessage <= 24;
-            if (result) {
-              console.log('Found recently_sent lead:', lead.first_name, 'hours ago:', timeSinceLastMessage);
-            }
-            return result;
+            return timeSinceLastMessage <= 24;
           } catch (e) {
             console.warn('Error filtering recently_sent:', e);
             return false;
           }
         });
-        console.log('recently_sent filter: before:', beforeCount, 'after:', filtered.length);
       }
 
       // Apply search filter
@@ -841,7 +824,6 @@ const InboxManager = () => {
         }
       }
 
-      console.log('Final filtered results:', filtered.length, 'leads');
       return filtered;
     } catch (e) {
       console.error('Error in filteredAndSortedLeads:', e);
@@ -2637,7 +2619,7 @@ const InboxManager = () => {
           <div className="pb-4">
             {filteredAndSortedLeads.map((lead, index) => {
             const intentStyle = getIntentStyle(lead.intent);
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
             const urgency = getResponseUrgency(lead);
             const displayTags = generateAutoTags(lead.conversation, lead);
             
@@ -2716,7 +2698,7 @@ const InboxManager = () => {
                     <span className="transition-all duration-300 group-hover:scale-105" style={{color: '#54FCFF'}}>
                       {lead.conversation.filter(m => m.type === 'REPLY').length} replies
                     </span>
-                    {urgency !== 'none' && (
+                    {urgency !== 'none' && lastMessage && (
                       <span className="text-red-400 font-bold animate-pulse transition-all duration-300 group-hover:scale-105">
                         {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
                       </span>
