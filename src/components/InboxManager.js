@@ -2747,9 +2747,9 @@ const InboxManager = () => {
                     <button
                       key={provider}
                       onClick={() => handleApiKeyChange('esp', { ...apiKeys.esp, provider: provider.toLowerCase() })}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all text-white ${
                         apiKeys.esp.provider === provider.toLowerCase() 
-                          ? 'bg-[#54FCFF]/10 border-[#54FCFF]' 
+                          ? 'bg-[#54FCFF]/10 border-[#54FCFF] text-[#54FCFF]' 
                           : 'bg-[#1A1C1A] border-white/10 hover:bg-[#1A1C1A]/80'
                       }`}
                       style={{border: '1px solid'}}
