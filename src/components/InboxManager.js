@@ -2214,7 +2214,7 @@ const InboxManager = () => {
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '2px solid rgba(84, 252, 255, 0.5)', minHeight: '600px'}}>
         {/* Header with Metrics */}
         <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
           {/* Glowing accent line */}
@@ -2615,8 +2615,9 @@ const InboxManager = () => {
         </div>
 
         {/* Lead List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
-          <div className="pb-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: '400px', height: '100%'}}>
+          <div className="pb-4" style={{minHeight: '200px', backgroundColor: 'rgba(255, 0, 0, 0.1)', border: '1px solid red'}}>
+            <div className="text-white p-4">Total leads to render: {filteredAndSortedLeads.length}</div>
             {filteredAndSortedLeads.length === 0 ? (
               <div className="text-center p-8 text-white">
                 <p>No leads found for current filter</p>
