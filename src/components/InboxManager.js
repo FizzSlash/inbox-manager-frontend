@@ -65,6 +65,19 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
+// Lead category mapping (declare before component to avoid initialization errors)
+const leadCategoryMap = {
+  1: 'Interested',
+  2: 'Meeting Request', 
+  3: 'Not Interested',
+  4: 'Do Not Contact',
+  5: 'Information Request',
+  6: 'Out Of Office',
+  7: 'Wrong Person',
+  8: 'Uncategorizable by AI',
+  9: 'Sender Originated Bounce'
+};
+
 const InboxManager = () => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
@@ -138,6 +151,34 @@ const InboxManager = () => {
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
 
+  // Auto-save drafts refs (declare early to avoid initialization errors)
+  const draftTimeoutRef = useRef(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+
+  // Toast helper functions (declare early to avoid initialization errors)
+  const showToast = (message, type = 'success', leadId = null) => {
+    const id = Date.now(); // Unique ID for each toast
+    const newToast = { id, message, type, leadId };
+    
+    setToasts(currentToasts => [...currentToasts, newToast]);
+    
+    // Store the timeout reference
+    toastsTimeoutRef.current[id] = setTimeout(() => {
+      removeToast(id);
+    }, 10000);
+  };
+
+  // Remove specific toast
+  const removeToast = (id) => {
+    // Clear the timeout
+    if (toastsTimeoutRef.current[id]) {
+      clearTimeout(toastsTimeoutRef.current[id]);
+      delete toastsTimeoutRef.current[id];
+    }
+    
+    setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
+  };
+
   // Clean up all timeouts on unmount
   useEffect(() => {
     return () => {
@@ -171,6 +212,175 @@ const InboxManager = () => {
     }
   }, [bulkSelectMode]);
 
+  // Enhanced filter and sort leads (declare early to avoid initialization errors)
+  const filteredAndSortedLeads = useMemo(() => {
+    try {
+      if (!leads || !Array.isArray(leads)) {
+        return [];
+      }
+      let filtered = leads.slice(); // Create a copy
+
+      // Apply tab filter first
+      if (activeTab === 'need_response') {
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
+              return false;
+            }
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            return lastMessage && lastMessage.type === 'REPLY';
+          } catch (e) {
+            console.warn('Error filtering need_response:', e);
+            return false;
+          }
+        });
+      } else if (activeTab === 'recently_sent') {
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
+              return false;
+            }
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
+              return false;
+            }
+            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+            return timeSinceLastMessage <= 24;
+          } catch (e) {
+            console.warn('Error filtering recently_sent:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply search filter
+      if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead) return false;
+            
+            const firstName = (lead.first_name || '').toLowerCase();
+            const lastName = (lead.last_name || '').toLowerCase();
+            const email = (lead.email || '').toLowerCase();
+            const subject = (lead.subject || '').toLowerCase();
+            
+            let tagsMatch = false;
+            if (lead.tags && Array.isArray(lead.tags)) {
+              tagsMatch = lead.tags.some(tag => {
+                return tag && typeof tag === 'string' && tag.toLowerCase().includes(query);
+              });
+            }
+            
+            return firstName.includes(query) || 
+                   lastName.includes(query) || 
+                   email.includes(query) || 
+                   subject.includes(query) || 
+                   tagsMatch;
+          } catch (e) {
+            console.warn('Error in search filter:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply advanced filters
+      if (activeFilters && typeof activeFilters === 'object') {
+        for (const [category, values] of Object.entries(activeFilters)) {
+          if (!values || !Array.isArray(values) || values.length === 0) continue;
+          
+          filtered = filtered.filter(lead => {
+            try {
+              if (!lead) return false;
+              
+              return values.some(value => {
+                if (!value) return false;
+                
+                switch (category) {
+                  case 'intent':
+                    if (typeof lead.intent !== 'number') return false;
+                    if (value === 'high') return lead.intent >= 7;
+                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
+                    if (value === 'low') return lead.intent <= 3;
+                    return false;
+                  
+                  case 'urgency':
+                    try {
+                      const urgency = getResponseUrgency(lead);
+                      return value === urgency;
+                    } catch (e) {
+                      console.warn('Error checking urgency:', e);
+                      return false;
+                    }
+                  
+                  case 'category':
+                    return lead.lead_category && lead.lead_category.toString() === value;
+                  
+                  case 'engagement':
+                    if (typeof lead.engagement_score !== 'number') return false;
+                    if (value === 'high') return lead.engagement_score >= 80;
+                    if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
+                    if (value === 'low') return lead.engagement_score < 50;
+                    return false;
+                  
+                  case 'replies':
+                    try {
+                      let replyCount = 0;
+                      if (lead.conversation && Array.isArray(lead.conversation)) {
+                        replyCount = lead.conversation.filter(m => m && m.type === 'REPLY').length;
+                      }
+                      if (value === 'has_replies') return replyCount > 0;
+                      if (value === 'no_replies') return replyCount === 0;
+                      if (value === 'multiple_replies') return replyCount >= 2;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking replies:', e);
+                      return false;
+                    }
+                  
+                  case 'timeframe':
+                    try {
+                      let lastActivity;
+                      if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
+                      } else {
+                        lastActivity = new Date(lead.created_at || Date.now());
+                      }
+                      
+                      const daysDiff = (new Date() - lastActivity) / (1000 * 60 * 60 * 24);
+                      
+                      if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
+                      if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
+                      if (value === 'this_week') return daysDiff <= 7;
+                      if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
+                      if (value === 'this_month') return daysDiff <= 30;
+                      if (value === 'older') return daysDiff > 30;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking timeframe:', e);
+                      return false;
+                    }
+                  
+                  default:
+                    return false;
+                }
+              });
+            } catch (e) {
+              console.warn('Error in advanced filter:', e);
+              return false;
+            }
+          });
+        }
+      }
+
+      return filtered;
+    } catch (e) {
+      console.error('Error in filteredAndSortedLeads:', e);
+      return leads || [];
+    }
+  }, [leads, searchQuery, activeFilters, activeTab]);
+
   // Remove selected leads that are no longer in filtered results
   useEffect(() => {
     const currentLeadIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
@@ -183,9 +393,6 @@ const InboxManager = () => {
   }, [filteredAndSortedLeads]);
 
   // Auto-save drafts with debouncing
-  const draftTimeoutRef = useRef(null);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
-  
   const saveDraft = (leadId, content, htmlContent) => {
     if (draftTimeoutRef.current) {
       clearTimeout(draftTimeoutRef.current);
@@ -296,29 +503,7 @@ const InboxManager = () => {
     error: '#DC2626',
   };
 
-  // Modified toast helper function
-  const showToast = (message, type = 'success', leadId = null) => {
-    const id = Date.now(); // Unique ID for each toast
-    const newToast = { id, message, type, leadId };
-    
-    setToasts(currentToasts => [...currentToasts, newToast]);
-    
-    // Store the timeout reference
-    toastsTimeoutRef.current[id] = setTimeout(() => {
-      removeToast(id);
-    }, 10000);
-  };
 
-  // Remove specific toast
-  const removeToast = (id) => {
-    // Clear the timeout
-    if (toastsTimeoutRef.current[id]) {
-      clearTimeout(toastsTimeoutRef.current[id]);
-      delete toastsTimeoutRef.current[id];
-    }
-    
-    setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
-  };
 
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
@@ -597,18 +782,7 @@ const InboxManager = () => {
     return result || text; // Fallback to original if extraction fails
   };
 
-  // Lead category mapping
-  const leadCategoryMap = {
-    1: 'Interested',
-    2: 'Meeting Request', 
-    3: 'Not Interested',
-    4: 'Do Not Contact',
-    5: 'Information Request',
-    6: 'Out Of Office',
-    7: 'Wrong Person',
-    8: 'Uncategorizable by AI',
-    9: 'Sender Originated Bounce'
-  };
+
 
 
 
@@ -982,174 +1156,7 @@ const InboxManager = () => {
     return 'text-red-600';
   };
 
-  // Enhanced filter and sort leads
-  const filteredAndSortedLeads = useMemo(() => {
-    try {
-      if (!leads || !Array.isArray(leads)) {
-        return [];
-      }
-      let filtered = leads.slice(); // Create a copy
 
-      // Apply tab filter first
-      if (activeTab === 'need_response') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            return lastMessage && lastMessage.type === 'REPLY';
-          } catch (e) {
-            console.warn('Error filtering need_response:', e);
-            return false;
-          }
-        });
-      } else if (activeTab === 'recently_sent') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
-              return false;
-            }
-            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-            return timeSinceLastMessage <= 24;
-          } catch (e) {
-            console.warn('Error filtering recently_sent:', e);
-            return false;
-          }
-        });
-      }
-
-      // Apply search filter
-      if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead) return false;
-            
-            const firstName = (lead.first_name || '').toLowerCase();
-            const lastName = (lead.last_name || '').toLowerCase();
-            const email = (lead.email || '').toLowerCase();
-            const subject = (lead.subject || '').toLowerCase();
-            
-            let tagsMatch = false;
-            if (lead.tags && Array.isArray(lead.tags)) {
-              tagsMatch = lead.tags.some(tag => {
-                return tag && typeof tag === 'string' && tag.toLowerCase().includes(query);
-              });
-            }
-            
-            return firstName.includes(query) || 
-                   lastName.includes(query) || 
-                   email.includes(query) || 
-                   subject.includes(query) || 
-                   tagsMatch;
-          } catch (e) {
-            console.warn('Error in search filter:', e);
-            return false;
-          }
-        });
-      }
-
-      // Apply advanced filters
-      if (activeFilters && typeof activeFilters === 'object') {
-        for (const [category, values] of Object.entries(activeFilters)) {
-          if (!values || !Array.isArray(values) || values.length === 0) continue;
-          
-          filtered = filtered.filter(lead => {
-            try {
-              if (!lead) return false;
-              
-              return values.some(value => {
-                if (!value) return false;
-                
-                switch (category) {
-                  case 'intent':
-                    if (typeof lead.intent !== 'number') return false;
-                    if (value === 'high') return lead.intent >= 7;
-                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
-                    if (value === 'low') return lead.intent <= 3;
-                    return false;
-                  
-                  case 'urgency':
-                    try {
-                      const urgency = getResponseUrgency(lead);
-                      return value === urgency;
-                    } catch (e) {
-                      console.warn('Error checking urgency:', e);
-                      return false;
-                    }
-                  
-                  case 'category':
-                    return lead.lead_category && lead.lead_category.toString() === value;
-                  
-                  case 'engagement':
-                    if (typeof lead.engagement_score !== 'number') return false;
-                    if (value === 'high') return lead.engagement_score >= 80;
-                    if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
-                    if (value === 'low') return lead.engagement_score < 50;
-                    return false;
-                  
-                  case 'replies':
-                    try {
-                      let replyCount = 0;
-                      if (lead.conversation && Array.isArray(lead.conversation)) {
-                        replyCount = lead.conversation.filter(m => m && m.type === 'REPLY').length;
-                      }
-                      if (value === 'has_replies') return replyCount > 0;
-                      if (value === 'no_replies') return replyCount === 0;
-                      if (value === 'multiple_replies') return replyCount >= 2;
-                      return false;
-                    } catch (e) {
-                      console.warn('Error checking replies:', e);
-                      return false;
-                    }
-                  
-                  case 'timeframe':
-                    try {
-                      let lastActivity;
-                      if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
-                        const lastMessage = lead.conversation[lead.conversation.length - 1];
-                        lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
-                      } else {
-                        lastActivity = new Date(lead.created_at || Date.now());
-                      }
-                      
-                      const daysDiff = (new Date() - lastActivity) / (1000 * 60 * 60 * 24);
-                      
-                      if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
-                      if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
-                      if (value === 'this_week') return daysDiff <= 7;
-                      if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
-                      if (value === 'this_month') return daysDiff <= 30;
-                      if (value === 'older') return daysDiff > 30;
-                      return false;
-                    } catch (e) {
-                      console.warn('Error checking timeframe:', e);
-                      return false;
-                    }
-                  
-                  default:
-                    return false;
-                }
-              });
-            } catch (e) {
-              console.warn('Error in advanced filter:', e);
-              return false;
-            }
-          });
-        }
-      }
-
-      return filtered;
-    } catch (e) {
-      console.error('Error in filteredAndSortedLeads:', e);
-      return leads || [];
-    }
-  }, [leads, searchQuery, activeFilters, activeTab]);
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
