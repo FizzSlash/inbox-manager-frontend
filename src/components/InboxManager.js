@@ -167,6 +167,36 @@ const InboxManager = () => {
     };
   }, []);
 
+  // Bulk operations helpers (moved up before useEffects)
+  const toggleLeadSelection = (leadId) => {
+    const newSelected = new Set(selectedLeads);
+    if (newSelected.has(leadId)) {
+      newSelected.delete(leadId);
+    } else {
+      newSelected.add(leadId);
+    }
+    setSelectedLeads(newSelected);
+    setShowBulkActions(newSelected.size > 0);
+  };
+
+  const selectAllVisible = () => {
+    // Simple toggle for early initialization - will be replaced later
+    if (selectAllMode) {
+      setSelectedLeads(new Set());
+      setSelectAllMode(false);
+      setShowBulkActions(false);
+    } else {
+      setSelectAllMode(true);
+      setShowBulkActions(true);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedLeads(new Set());
+    setSelectAllMode(false);
+    setShowBulkActions(false);
+  };
+
   // Click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -242,35 +272,7 @@ const InboxManager = () => {
     };
   };
 
-  // Bulk operations helpers
-  const toggleLeadSelection = (leadId) => {
-    const newSelected = new Set(selectedLeads);
-    if (newSelected.has(leadId)) {
-      newSelected.delete(leadId);
-    } else {
-      newSelected.add(leadId);
-    }
-    setSelectedLeads(newSelected);
-    setShowBulkActions(newSelected.size > 0);
-  };
 
-  const selectAllVisible = () => {
-    if (selectAllMode) {
-      setSelectedLeads(new Set());
-      setSelectAllMode(false);
-    } else {
-      const allIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
-      setSelectedLeads(allIds);
-      setSelectAllMode(true);
-    }
-    setShowBulkActions(!selectAllMode);
-  };
-
-  const clearSelection = () => {
-    setSelectedLeads(new Set());
-    setSelectAllMode(false);
-    setShowBulkActions(false);
-  };
 
   // Bulk operations
   const bulkDeleteLeads = async () => {
@@ -1246,6 +1248,19 @@ const InboxManager = () => {
       setVirtualEnd(range.end);
     }
   }, [scrollTop, filteredAndSortedLeads.length]);
+
+  // Update selectAllVisible function now that filteredAndSortedLeads is available
+  const selectAllVisibleUpdated = () => {
+    if (selectAllMode) {
+      setSelectedLeads(new Set());
+      setSelectAllMode(false);
+    } else {
+      const allIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
+      setSelectedLeads(allIds);
+      setSelectAllMode(true);
+    }
+    setShowBulkActions(!selectAllMode);
+  };
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
@@ -3352,7 +3367,7 @@ const InboxManager = () => {
                 <input
                   type="checkbox"
                   checked={selectAllMode}
-                  onChange={selectAllVisible}
+                  onChange={selectAllVisibleUpdated}
                   className="rounded transition-colors duration-300"
                   style={{accentColor: themeStyles.accent}}
                 />
