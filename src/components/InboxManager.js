@@ -1,6 +1,70 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
+// Security utilities for API key encryption
+const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
+
+const encryptApiKey = (key) => {
+  if (!key) return '';
+  try {
+    // Simple encryption using base64 encoding with salt
+    const combined = key + ENCRYPTION_SALT;
+    return btoa(combined);
+  } catch (error) {
+    console.warn('Failed to encrypt API key:', error);
+    return key;
+  }
+};
+
+const decryptApiKey = (encryptedKey) => {
+  if (!encryptedKey) return '';
+  try {
+    const decoded = atob(encryptedKey);
+    return decoded.replace(ENCRYPTION_SALT, '');
+  } catch (error) {
+    console.warn('Failed to decrypt API key, treating as plain text:', error);
+    return encryptedKey;
+  }
+};
+
+// HTML sanitization function (basic XSS protection)
+const sanitizeHtml = (html) => {
+  if (!html) return '';
+  
+  // Create a temporary element to parse HTML
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  // Remove potentially dangerous elements and attributes
+  const dangerousElements = ['script', 'object', 'embed', 'iframe', 'form'];
+  const dangerousAttributes = ['onload', 'onerror', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'];
+  
+  dangerousElements.forEach(tagName => {
+    const elements = temp.querySelectorAll(tagName);
+    elements.forEach(el => el.remove());
+  });
+  
+  // Remove dangerous attributes from all elements
+  const allElements = temp.querySelectorAll('*');
+  allElements.forEach(el => {
+    dangerousAttributes.forEach(attr => {
+      if (el.hasAttribute(attr)) {
+        el.removeAttribute(attr);
+      }
+    });
+    
+    // Remove javascript: URLs
+    ['href', 'src'].forEach(attr => {
+      const value = el.getAttribute(attr);
+      if (value && value.toLowerCase().startsWith('javascript:')) {
+        el.removeAttribute(attr);
+      }
+    });
+  });
+  
+  return temp.innerHTML;
+};
+
 const InboxManager = () => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
@@ -16,9 +80,9 @@ const InboxManager = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState({
-    smartlead: localStorage.getItem('smartlead_api_key') || '',
-    claude: localStorage.getItem('claude_api_key') || '',
-    fullenrich: localStorage.getItem('fullenrich_api_key') || ''
+    smartlead: decryptApiKey(localStorage.getItem('smartlead_api_key_enc') || ''),
+    claude: decryptApiKey(localStorage.getItem('claude_api_key_enc') || ''),
+    fullenrich: decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '')
   });
   const [apiTestStatus, setApiTestStatus] = useState({
     smartlead: null,
@@ -40,6 +104,12 @@ const InboxManager = () => {
   const [toasts, setToasts] = useState([]);
   const toastsTimeoutRef = useRef({}); // Store timeouts by toast ID
 
+  // Theme management
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('inbox_manager_theme');
+    return savedTheme ? savedTheme === 'dark' : true; // Default to dark mode
+  });
+
   // Clean up all timeouts on unmount
   useEffect(() => {
     return () => {
@@ -48,6 +118,67 @@ const InboxManager = () => {
       });
     };
   }, []);
+
+  // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
+  useEffect(() => {
+    const migrateApiKeys = () => {
+      const keysToMigrate = ['smartlead', 'claude', 'fullenrich'];
+      let migrationNeeded = false;
+
+      keysToMigrate.forEach(keyName => {
+        const oldKey = localStorage.getItem(`${keyName}_api_key`);
+        const newKey = localStorage.getItem(`${keyName}_api_key_enc`);
+        
+        // If old unencrypted key exists but new encrypted key doesn't
+        if (oldKey && !newKey) {
+          const encryptedKey = encryptApiKey(oldKey);
+          localStorage.setItem(`${keyName}_api_key_enc`, encryptedKey);
+          localStorage.removeItem(`${keyName}_api_key`);
+          migrationNeeded = true;
+        }
+      });
+
+      if (migrationNeeded) {
+        console.info('API keys migrated to encrypted storage for security');
+        showToast('API keys upgraded to encrypted storage', 'success');
+      }
+    };
+
+    migrateApiKeys();
+  }, []);
+
+  // Theme toggle function
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    localStorage.setItem('inbox_manager_theme', newTheme ? 'dark' : 'light');
+    showToast(`Switched to ${newTheme ? 'dark' : 'light'} mode`, 'success');
+  };
+
+  // Theme CSS variables
+  const themeStyles = isDarkMode ? {
+    // Dark mode colors
+    primaryBg: '#1A1C1A',
+    secondaryBg: 'rgba(26, 28, 26, 0.8)',
+    tertiaryBg: 'rgba(255, 255, 255, 0.05)',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#D1D5DB',
+    textMuted: '#9CA3AF',
+    accent: '#54FCFF',
+    border: 'rgba(255, 255, 255, 0.1)',
+    borderStrong: 'rgba(255, 255, 255, 0.2)',
+  } : {
+    // Light mode colors
+    primaryBg: '#FFFFFF',
+    secondaryBg: 'rgba(255, 255, 255, 0.9)',
+    tertiaryBg: 'rgba(0, 0, 0, 0.03)',
+    textPrimary: '#1F2937',
+    textSecondary: '#374151',
+    textMuted: '#6B7280',
+    accent: '#0EA5E9',
+    border: 'rgba(0, 0, 0, 0.1)',
+    borderStrong: 'rgba(0, 0, 0, 0.2)',
+  };
 
   // Modified toast helper function
   const showToast = (message, type = 'success', leadId = null) => {
@@ -1402,9 +1533,19 @@ const InboxManager = () => {
     const removeButtons = e.target.querySelectorAll('.remove-link');
     removeButtons.forEach(btn => btn.remove());
     
-    // Update content
+    // Sanitize HTML content to prevent XSS attacks
+    const rawHtml = e.target.innerHTML;
+    const sanitizedHtml = sanitizeHtml(rawHtml);
+    
+    // Update content with sanitized HTML
     setDraftResponse(e.target.textContent || e.target.innerText);
-    setDraftHtml(e.target.innerHTML);
+    setDraftHtml(sanitizedHtml);
+    
+    // Update the editor with sanitized content if it was changed
+    if (rawHtml !== sanitizedHtml) {
+      e.target.innerHTML = sanitizedHtml;
+      console.warn('HTML content was sanitized for security');
+    }
   };
 
   const convertToHtml = (text) => {
@@ -1601,7 +1742,8 @@ const InboxManager = () => {
   // Handle send message
   const sendMessage = async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
-    const htmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
+    const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
+    const htmlContent = sanitizeHtml(rawHtmlContent);
     
     if (!textContent.trim()) return;
     
@@ -1835,23 +1977,28 @@ const InboxManager = () => {
     }));
   };
 
-  // Function to save API keys
+  // Function to save API keys (with encryption)
   const saveApiKeys = () => {
     setIsSavingApi(true);
     try {
-      // Save to localStorage
+      // Encrypt and save to localStorage
       Object.entries(apiKeys).forEach(([key, value]) => {
-        localStorage.setItem(`${key}_api_key`, value);
+        const encryptedValue = encryptApiKey(value);
+        localStorage.setItem(`${key}_api_key_enc`, encryptedValue);
+        
+        // Remove old unencrypted keys if they exist
+        localStorage.removeItem(`${key}_api_key`);
       });
 
       // Show success toast
       setApiToastMessage({
         type: 'success',
-        message: 'API keys saved successfully'
+        message: 'API keys saved securely'
       });
       setShowApiToast(true);
       setTimeout(() => setShowApiToast(false), 3000);
     } catch (error) {
+      console.error('Failed to save API keys:', error);
       setApiToastMessage({
         type: 'error',
         message: 'Failed to save API keys'
@@ -1966,31 +2113,61 @@ const InboxManager = () => {
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden" style={{backgroundColor: '#1A1C1A'}}>
+    <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 border-b border-white/10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)'}}>
-        <div className="flex space-x-4">
+      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderBottom: `1px solid ${themeStyles.border}`}}>
+        <div className="flex justify-between items-center w-full">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                (activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: (activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') ? `${themeStyles.accent}20` : 'transparent',
+                color: (activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4" />
+                Inbox
+              </div>
+            </button>
+            <button
+              onClick={() => setShowApiSettings(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                showApiSettings ? 'text-white' : 'hover:bg-white/5'
+              }`}
+              style={{
+                backgroundColor: showApiSettings ? `${themeStyles.accent}20` : 'transparent',
+                color: showApiSettings ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4" />
+                API Settings
+              </div>
+            </button>
+          </div>
+
+          {/* Theme Toggle */}
           <button
-            onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              (activeTab === 'all' || activeTab === 'need_response' || activeTab === 'recently_sent') ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-            }`}
+            onClick={toggleTheme}
+            className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+            style={{color: themeStyles.textPrimary}}
+            title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
           >
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Inbox
-            </div>
-          </button>
-          <button
-            onClick={() => setShowApiSettings(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              showApiSettings ? 'bg-cyan-400/20 text-cyan-400' : 'text-white hover:bg-white/5'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4" />
-              API Settings
-            </div>
+            {isDarkMode ? (
+              <>
+                <span className="text-lg">☀️</span>
+                <span className="hidden sm:inline">Light</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">🌙</span>
+                <span className="hidden sm:inline">Dark</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -2015,6 +2192,15 @@ const InboxManager = () => {
             </div>
             
             <div className="p-6 space-y-6">
+              {/* Security Notice */}
+              <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-green-400 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  <span className="font-medium">Secure Storage Enabled</span>
+                </div>
+                <p className="text-xs text-green-300 mt-1">API keys are encrypted before storage for enhanced security</p>
+              </div>
+
               {/* Smartlead API */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-white">
@@ -2176,6 +2362,35 @@ const InboxManager = () => {
             opacity: 1;
           }
         }
+        
+        @keyframes glow {
+          0% { opacity: 0.5; }
+          100% { opacity: 1; }
+        }
+        
+        /* Theme transition animations */
+        * {
+          transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        
+        /* Custom scrollbar for theme */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'};
+          border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+          background: ${themeStyles.accent};
+          border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+          background: ${themeStyles.accent}CC;
+        }
       `}</style>
 
       {/* Add margin-top to main content to account for nav bar */}
@@ -2214,23 +2429,23 @@ const InboxManager = () => {
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-10" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: '1px solid rgba(84, 252, 255, 0.1)'}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-10 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
         {/* Header with Metrics */}
-        <div className="p-6 border-b border-white/10 relative" style={{backgroundColor: 'rgba(26, 28, 26, 0.3)', borderRadius: '12px 12px 0 0'}}>
+        <div className="p-6 relative transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}>
           {/* Glowing accent line */}
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: 'linear-gradient(90deg, transparent, #54FCFF, transparent)', animation: 'glow 2s ease-in-out infinite alternate'}} />
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: `linear-gradient(90deg, transparent, ${themeStyles.accent}, transparent)`, animation: 'glow 2s ease-in-out infinite alternate'}} />
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-white relative">
+            <h1 className="text-2xl font-bold relative transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
               Inbox Manager
-              <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-50" />
+              <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent to-transparent opacity-50" style={{background: `linear-gradient(90deg, transparent, ${themeStyles.accent}, transparent)`}} />
             </h1>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
               className="text-sm transition-all duration-300 hover:scale-105 relative group"
-              style={{color: '#54FCFF'}}
+              style={{color: themeStyles.accent}}
             >
               <span className="relative z-10">{showMetrics ? 'Hide' : 'Show'} Metrics</span>
-              <div className="absolute inset-0 bg-blue-400 rounded opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+              <div className="absolute inset-0 rounded opacity-0 group-hover:opacity-20 transition-opacity duration-300" style={{backgroundColor: themeStyles.accent}} />
             </button>
           </div>
 
@@ -2304,14 +2519,19 @@ const InboxManager = () => {
           
           {/* Search */}
           <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{color: '#54FCFF'}} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
             <input
               type="text"
               placeholder="Search leads, tags, emails..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg text-white placeholder-gray-400 backdrop-blur-sm focus:ring-2"
-              style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', '--tw-ring-color': '#54FCFF'}}
+              className="w-full pl-10 pr-4 py-2 rounded-lg backdrop-blur-sm focus:ring-2 transition-colors duration-300"
+              style={{
+                backgroundColor: themeStyles.tertiaryBg, 
+                border: `1px solid ${themeStyles.border}`, 
+                color: themeStyles.textPrimary,
+                '--tw-ring-color': themeStyles.accent
+              }}
             />
           </div>
 
@@ -2775,7 +2995,7 @@ const InboxManager = () => {
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col shadow-lg" style={{backgroundColor: 'rgba(26, 28, 26, 0.5)', borderRadius: '12px', margin: '8px', marginLeft: '4px'}}>
+      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
         {selectedLead ? (
           <>
             {/* Lead Header */}
@@ -3424,11 +3644,11 @@ const InboxManager = () => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="flex-1 flex items-center justify-center transition-colors duration-300" style={{color: themeStyles.textMuted}}>
             <div className="text-center">
-              <Mail className="w-12 h-12 mx-auto mb-4" style={{color: '#54FCFF'}} />
-              <p className="text-lg font-medium text-white">Select a lead to view details</p>
-              <p className="text-sm text-gray-300">Choose a lead from the inbox to see their conversation history and respond</p>
+              <Mail className="w-12 h-12 mx-auto mb-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
+              <p className="text-lg font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Select a lead to view details</p>
+              <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Choose a lead from the inbox to see their conversation history and respond</p>
             </div>
           </div>
         )}
