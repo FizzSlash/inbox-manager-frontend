@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
 
 // Security utilities for API key encryption
@@ -1845,8 +1845,8 @@ const InboxManager = () => {
     }
   };
 
-  // Handle send message (wrapped in useCallback to prevent re-renders)
-  const sendMessage = useCallback(async () => {
+  // Handle send message
+  const sendMessage = async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
     const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
     const htmlContent = sanitizeHtml(rawHtmlContent);
@@ -1986,15 +1986,19 @@ const InboxManager = () => {
     } finally {
       setIsSending(false);
     }
-  }, [selectedLead, editableToEmail, editableCcEmails, draftResponse, apiKeys, savedDrafts]);
+  };
 
-  // Keyboard shortcuts (defined after sendMessage to avoid reference errors)
+  // Keyboard shortcuts 
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Ctrl+Enter or Cmd+Enter to send message
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedLead && draftResponse.trim()) {
         e.preventDefault();
-        sendMessage();
+        // Call sendMessage directly without referencing it as a dependency
+        const sendButton = document.querySelector('button[onClick*="sendMessage"]');
+        if (sendButton && !sendButton.disabled) {
+          sendButton.click();
+        }
         return;
       }
       
@@ -2019,27 +2023,35 @@ const InboxManager = () => {
       
       // Arrow key navigation (only when not typing in inputs)
       if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.contentEditable) {
-        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
+        const leadElements = document.querySelectorAll('[data-lead-id]');
+        const currentLeadElement = document.querySelector('[data-lead-id].selected');
+        let currentIndex = -1;
         
-        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
+        if (currentLeadElement) {
+          currentIndex = Array.from(leadElements).indexOf(currentLeadElement);
+        }
+        
+        if (e.key === 'ArrowDown' && currentIndex < leadElements.length - 1) {
           e.preventDefault();
-          const nextLead = filteredAndSortedLeads[currentIndex + 1];
-          setSelectedLead(nextLead);
-          setCurrentLeadIndex(currentIndex + 1);
+          const nextElement = leadElements[currentIndex + 1];
+          if (nextElement) {
+            nextElement.click();
+          }
         }
         
         if (e.key === 'ArrowUp' && currentIndex > 0) {
           e.preventDefault();
-          const prevLead = filteredAndSortedLeads[currentIndex - 1];
-          setSelectedLead(prevLead);
-          setCurrentLeadIndex(currentIndex - 1);
+          const prevElement = leadElements[currentIndex - 1];
+          if (prevElement) {
+            prevElement.click();
+          }
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLead, draftResponse, filteredAndSortedLeads, sendMessage]);
+  }, [selectedLead, draftResponse]);
 
   // Add enrichment function
   const enrichLeadData = async (lead) => {
@@ -3075,8 +3087,9 @@ const InboxManager = () => {
             return (
               <div
                 key={lead.id}
+                data-lead-id={lead.id}
                 onClick={() => setSelectedLead(lead)}
-                className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
+                className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group ${selectedLead?.id === lead.id ? 'selected' : ''}`}
                 style={{
                   backgroundColor: selectedLead?.id === lead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
                   border: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
