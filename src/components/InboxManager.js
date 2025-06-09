@@ -2323,8 +2323,10 @@ const InboxManager = () => {
             key={toast.id}
             className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
             style={{
-              backgroundColor: toast.type === 'success' ? 'rgba(84, 252, 255, 0.1)' : 'rgba(255, 99, 99, 0.1)',
-              border: `1px solid ${toast.type === 'success' ? '#54FCFF' : '#FF6363'}`,
+              backgroundColor: toast.type === 'success' 
+                ? `${themeStyles.success}20` 
+                : `${themeStyles.error}20`,
+              border: `1px solid ${toast.type === 'success' ? themeStyles.success : themeStyles.error}`,
               backdropFilter: 'blur(8px)',
               animation: 'slideIn 0.2s ease-out'
             }}
@@ -2339,17 +2341,18 @@ const InboxManager = () => {
             }}
           >
             {toast.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 shrink-0" style={{color: '#54FCFF'}} />
+              <CheckCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.success}} />
             ) : (
-              <AlertCircle className="w-5 h-5 shrink-0" style={{color: '#FF6363'}} />
+              <AlertCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.error}} />
             )}
-            <span className="text-white text-sm font-medium flex-1">{toast.message}</span>
+            <span className="text-sm font-medium flex-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{toast.message}</span>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 removeToast(toast.id);
               }}
-              className="ml-2 text-gray-400 hover:text-white shrink-0"
+              className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300"
+              style={{color: themeStyles.textMuted}}
             >
               <X className="w-4 h-4" />
             </button>
