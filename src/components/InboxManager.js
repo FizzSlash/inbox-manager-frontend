@@ -665,25 +665,38 @@ const InboxManager = () => {
   // Enhanced filter and sort leads
   const filteredAndSortedLeads = useMemo(() => {
     try {
-      if (!leads || !Array.isArray(leads)) return [];
+      if (!leads || !Array.isArray(leads)) {
+        console.log('No leads data available');
+        return [];
+      }
       
+      console.log('Filtering with activeTab:', activeTab, 'Total leads:', leads.length);
       let filtered = leads.slice(); // Create a copy
 
       // Apply tab filter first
       if (activeTab === 'need_response') {
+        console.log('Filtering for need_response...');
+        const beforeCount = filtered.length;
         filtered = filtered.filter(lead => {
           try {
             if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
               return false;
             }
             const lastMessage = lead.conversation[lead.conversation.length - 1];
-            return lastMessage && lastMessage.type === 'REPLY';
+            const result = lastMessage && lastMessage.type === 'REPLY';
+            if (result) {
+              console.log('Found need_response lead:', lead.first_name, 'last message type:', lastMessage.type);
+            }
+            return result;
           } catch (e) {
             console.warn('Error filtering need_response:', e);
             return false;
           }
         });
+        console.log('need_response filter: before:', beforeCount, 'after:', filtered.length);
       } else if (activeTab === 'recently_sent') {
+        console.log('Filtering for recently_sent...');
+        const beforeCount = filtered.length;
         filtered = filtered.filter(lead => {
           try {
             if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
@@ -694,12 +707,17 @@ const InboxManager = () => {
               return false;
             }
             const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-            return timeSinceLastMessage <= 24;
+            const result = timeSinceLastMessage <= 24;
+            if (result) {
+              console.log('Found recently_sent lead:', lead.first_name, 'hours ago:', timeSinceLastMessage);
+            }
+            return result;
           } catch (e) {
             console.warn('Error filtering recently_sent:', e);
             return false;
           }
         });
+        console.log('recently_sent filter: before:', beforeCount, 'after:', filtered.length);
       }
 
       // Apply search filter
@@ -823,6 +841,7 @@ const InboxManager = () => {
         }
       }
 
+      console.log('Final filtered results:', filtered.length, 'leads');
       return filtered;
     } catch (e) {
       console.error('Error in filteredAndSortedLeads:', e);
