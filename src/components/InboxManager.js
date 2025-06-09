@@ -2467,9 +2467,9 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'all' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
-              disabled={isLoading}
+              disabled={loading}
             >
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading...
@@ -2486,9 +2486,9 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'need_response' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
-              disabled={isLoading}
+              disabled={loading}
             >
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading...
@@ -2512,9 +2512,9 @@ const InboxManager = () => {
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{backgroundColor: activeTab === 'recently_sent' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
-              disabled={isLoading}
+              disabled={loading}
             >
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading...
