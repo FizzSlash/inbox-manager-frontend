@@ -876,6 +876,14 @@ const InboxManager = () => {
     };
   }, [leads]);
 
+  // Message patterns that indicate success
+  const POSITIVE_PATTERNS = {
+    questions: ['?', 'what', 'how', 'when', 'where', 'why', 'could', 'would'],
+    engagement_words: ['thanks', 'thank you', 'great', 'interested', 'yes', 'sure', 'sounds good'],
+    ctas: ['call', 'meeting', 'schedule', 'discuss', 'chat', 'talk', 'meet'],
+    value_props: ['help', 'improve', 'increase', 'reduce', 'save', 'better', 'solution']
+  };
+
   // Calculate analytics data
   const analyticsData = useMemo(() => {
     if (!leads.length) return null;
@@ -889,6 +897,97 @@ const InboxManager = () => {
       const leadDate = new Date(lead.created_at);
       return leadDate >= cutoffDate;
     });
+
+    // Analyze message content and patterns
+    const messageAnalysis = filteredLeads.flatMap(lead => 
+      lead.conversation
+        .filter(msg => msg.type === 'SENT')
+        .map(msg => {
+          const content = msg.content.toLowerCase();
+          const wordCount = content.split(/\s+/).length;
+          
+          // Check for pattern matches
+          const hasQuestion = POSITIVE_PATTERNS.questions.some(q => content.includes(q));
+          const engagementWords = POSITIVE_PATTERNS.engagement_words.filter(w => content.includes(w)).length;
+          const ctaWords = POSITIVE_PATTERNS.ctas.filter(c => content.includes(c)).length;
+          const valueProps = POSITIVE_PATTERNS.value_props.filter(v => content.includes(v)).length;
+          
+          // Get next message if exists
+          const msgIndex = lead.conversation.indexOf(msg);
+          const nextMsg = lead.conversation[msgIndex + 1];
+          const gotReply = nextMsg && nextMsg.type === 'REPLY';
+          const replyTime = gotReply ? new Date(nextMsg.time) - new Date(msg.time) : null;
+          
+          return {
+            wordCount,
+            hasQuestion,
+            engagementWords,
+            ctaWords,
+            valueProps,
+            gotReply,
+            replyTime
+          };
+        })
+    );
+
+    // Calculate what works
+    const copyInsights = {
+      // Message length analysis
+      totalMessages: messageAnalysis.length,
+      avgWordCount: messageAnalysis.reduce((sum, m) => sum + m.wordCount, 0) / messageAnalysis.length,
+      
+      // Pattern success rates
+      withQuestions: {
+        total: messageAnalysis.filter(m => m.hasQuestion).length,
+        success: messageAnalysis.filter(m => m.hasQuestion && m.gotReply).length
+      },
+      withEngagement: {
+        total: messageAnalysis.filter(m => m.engagementWords > 0).length,
+        success: messageAnalysis.filter(m => m.engagementWords > 0 && m.gotReply).length
+      },
+      withCTA: {
+        total: messageAnalysis.filter(m => m.ctaWords > 0).length,
+        success: messageAnalysis.filter(m => m.ctaWords > 0 && m.gotReply).length
+      },
+      withValueProps: {
+        total: messageAnalysis.filter(m => m.valueProps > 0).length,
+        success: messageAnalysis.filter(m => m.valueProps > 0 && m.gotReply).length
+      },
+      
+      // Length effectiveness
+      lengthBreakdown: [
+        {
+          range: '< 50 words',
+          messages: messageAnalysis.filter(m => m.wordCount < 50).length,
+          replies: messageAnalysis.filter(m => m.wordCount < 50 && m.gotReply).length
+        },
+        {
+          range: '50-100 words',
+          messages: messageAnalysis.filter(m => m.wordCount >= 50 && m.wordCount < 100).length,
+          replies: messageAnalysis.filter(m => m.wordCount >= 50 && m.wordCount < 100 && m.gotReply).length
+        },
+        {
+          range: '100-200 words',
+          messages: messageAnalysis.filter(m => m.wordCount >= 100 && m.wordCount < 200).length,
+          replies: messageAnalysis.filter(m => m.wordCount >= 100 && m.wordCount < 200 && m.gotReply).length
+        },
+        {
+          range: '200+ words',
+          messages: messageAnalysis.filter(m => m.wordCount >= 200).length,
+          replies: messageAnalysis.filter(m => m.wordCount >= 200 && m.gotReply).length
+        }
+      ],
+      
+      // Response time by pattern
+      avgReplyTime: {
+        withQuestion: messageAnalysis.filter(m => m.hasQuestion && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) / 
+                     messageAnalysis.filter(m => m.hasQuestion && m.replyTime).length / (1000 * 60 * 60), // Convert to hours
+        withCTA: messageAnalysis.filter(m => m.ctaWords > 0 && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
+                messageAnalysis.filter(m => m.ctaWords > 0 && m.replyTime).length / (1000 * 60 * 60),
+        withValueProp: messageAnalysis.filter(m => m.valueProps > 0 && m.replyTime).reduce((sum, m) => sum + m.replyTime, 0) /
+                      messageAnalysis.filter(m => m.valueProps > 0 && m.replyTime).length / (1000 * 60 * 60)
+      }
+    };
 
     // Overall metrics (meaningful for response inbox)
     const totalLeads = filteredLeads.length;
@@ -1071,7 +1170,7 @@ const InboxManager = () => {
       };
     });
 
-    return {
+          return {
       totalLeads,
       leadsWithMultipleReplies,
       engagementRate,
@@ -1086,7 +1185,8 @@ const InboxManager = () => {
       peakHour,
       maxCount,
       totalReplies,
-      dateRange: daysBack
+      dateRange: daysBack,
+      copyInsights // Add copy insights to analytics data
     };
   }, [leads, analyticsDateRange]);
 
@@ -3053,6 +3153,94 @@ const InboxManager = () => {
                           ))}
                         </div>
                         <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>More</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Message Copy Analysis */}
+                  <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h3 className="text-xl font-bold mb-6 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      What Works in Messages
+                    </h3>
+
+                    {/* Message Length Analysis */}
+                    <div className="mb-8">
+                      <h4 className="text-sm font-medium mb-4 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Message Length Impact</h4>
+                      <div className="grid grid-cols-4 gap-4">
+                        {analyticsData.copyInsights.lengthBreakdown.map((length, index) => {
+                          const replyRate = length.messages > 0 ? (length.replies / length.messages * 100) : 0;
+                          return (
+                            <div key={index} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                              <div className="text-sm font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                {length.range}
+                              </div>
+                              <div className="text-2xl font-bold mb-1 transition-colors duration-300" style={{color: themeStyles.accent}}>
+                                {replyRate.toFixed(1)}%
+                              </div>
+                              <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                                {length.messages} messages sent
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Pattern Success Rates */}
+                    <div className="mb-8">
+                      <h4 className="text-sm font-medium mb-4 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Message Pattern Success</h4>
+                      <div className="space-y-4">
+                        {[
+                          { label: 'Messages with Questions', data: analyticsData.copyInsights.withQuestions },
+                          { label: 'Engagement Words', data: analyticsData.copyInsights.withEngagement },
+                          { label: 'Clear Call-to-Action', data: analyticsData.copyInsights.withCTA },
+                          { label: 'Value Propositions', data: analyticsData.copyInsights.withValueProps }
+                        ].map((pattern, index) => {
+                          const successRate = pattern.data.total > 0 
+                            ? (pattern.data.success / pattern.data.total * 100)
+                            : 0;
+                          return (
+                            <div key={index} className="flex items-center gap-4">
+                              <div className="flex-1">
+                                <div className="flex justify-between mb-2">
+                                  <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{pattern.label}</span>
+                                  <span className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>{successRate.toFixed(1)}% success</span>
+                                </div>
+                                <div className="h-2 rounded-full transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                                  <div 
+                                    className="h-2 rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${successRate}%`,
+                                      backgroundColor: themeStyles.accent
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                                {pattern.data.success}/{pattern.data.total} replies
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Response Time Analysis */}
+                    <div>
+                      <h4 className="text-sm font-medium mb-4 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Average Response Time by Pattern</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        {[
+                          { label: 'With Questions', time: analyticsData.copyInsights.avgReplyTime.withQuestion },
+                          { label: 'With CTA', time: analyticsData.copyInsights.avgReplyTime.withCTA },
+                          { label: 'With Value Prop', time: analyticsData.copyInsights.avgReplyTime.withValueProp }
+                        ].map((timing, index) => (
+                          <div key={index} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                            <div className="text-sm mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{timing.label}</div>
+                            <div className="text-xl font-bold transition-colors duration-300" style={{color: themeStyles.accent}}>
+                              {formatResponseTime(timing.time)}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
