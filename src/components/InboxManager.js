@@ -3544,13 +3544,14 @@ const InboxManager = () => {
 
               {/* Sort Popup */}
               {showSortPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto" style={{backgroundColor: 'rgba(26, 28, 26, 0.95)', border: '1px solid white'}}>
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-white">Sort Options</h4>
+                      <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Sort Options</h4>
                       <button
                         onClick={() => setShowSortPopup(false)}
-                        className="text-gray-400 hover:text-white"
+                        className="transition-colors duration-300 hover:opacity-80"
+                        style={{color: themeStyles.textMuted}}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -3559,28 +3560,29 @@ const InboxManager = () => {
                     {/* Active Sorts */}
                     {activeSorts.length > 0 && (
                       <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-300 mb-2">ACTIVE SORTS</h5>
+                        <h5 className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>ACTIVE SORTS</h5>
                         <div className="space-y-2">
                           {activeSorts.map((sort, index) => {
                             const option = sortOptions.find(opt => opt.field === sort.field);
                             return (
-                              <div key={sort.field} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{backgroundColor: 'rgba(84, 252, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'}}>
+                              <div key={sort.field} className="flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}20`, border: `1px solid ${themeStyles.accent}`}}>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs px-2 py-1 rounded" style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}>
+                                  <span className="text-xs px-2 py-1 rounded transition-colors duration-300" style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}>
                                     {index + 1}
                                   </span>
-                                  <span className="text-sm text-white">{option?.label}</span>
+                                  <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{option?.label}</span>
                                   <button
                                     onClick={() => handleAddSort(sort.field, sort.direction === 'desc' ? 'asc' : 'desc')}
-                                    className="text-xs hover:opacity-80"
-                                    style={{color: '#54FCFF'}}
+                                    className="text-xs hover:opacity-80 transition-colors duration-300"
+                                    style={{color: themeStyles.accent}}
                                   >
                                     {sort.direction === 'desc' ? '↓' : '↑'}
                                   </button>
                                 </div>
                                 <button
                                   onClick={() => handleRemoveSort(sort.field)}
-                                  className="text-gray-400 hover:text-red-400"
+                                  className="hover:opacity-80 transition-colors duration-300"
+                                  style={{color: themeStyles.textMuted}}
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -3593,7 +3595,7 @@ const InboxManager = () => {
 
                     {/* Available Sort Options */}
                     <div>
-                      <h5 className="text-xs font-medium text-gray-300 mb-2">ADD SORT</h5>
+                      <h5 className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>ADD SORT</h5>
                       <div className="space-y-1">
                         {sortOptions.map((option) => {
                           const isActive = activeSorts.some(s => s.field === option.field);
@@ -3602,14 +3604,15 @@ const InboxManager = () => {
                               key={option.field}
                               onClick={() => !isActive && handleAddSort(option.field)}
                               disabled={isActive}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                                isActive 
-                                  ? 'cursor-not-allowed text-gray-500' 
-                                  : 'hover:bg-white/10 text-white'
-                              }`}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors duration-300`}
+                              style={{
+                                backgroundColor: themeStyles.tertiaryBg,
+                                color: isActive ? themeStyles.textMuted : themeStyles.textPrimary,
+                                cursor: isActive ? 'not-allowed' : 'pointer'
+                              }}
                             >
                               {option.label}
-                              {isActive && <span className="text-xs ml-2 text-gray-400">(active)</span>}
+                              {isActive && <span className="text-xs ml-2" style={{color: themeStyles.textMuted}}>(active)</span>}
                             </button>
                           );
                         })}
@@ -3640,7 +3643,7 @@ const InboxManager = () => {
 
                               {/* Filter Popup */}
                 {showFilterPopup && (
-                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`, backdropFilter: 'none'}}>
                     <div className="p-4">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Filter Options</h4>
