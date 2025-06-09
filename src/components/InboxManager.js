@@ -2726,19 +2726,19 @@ const InboxManager = () => {
             
             <div className="p-6 space-y-6">
               {/* Security Notice */}
-              <div className="bg-green-400/10 border border-green-400/20 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-green-400 text-sm">
+              <div className="bg-[#1A1C1A] border border-[#00FF8C]/20 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-[#00FF8C] text-sm">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Secure Storage Enabled</span>
                 </div>
-                <p className="text-xs text-green-300 mt-1">API keys are encrypted before storage for enhanced security</p>
+                <p className="text-xs text-[#00FF8C]/80 mt-1">API keys are encrypted before storage for enhanced security</p>
               </div>
 
               {/* Email Service Provider Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-white">
+                <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <h3 className="font-medium">Email Service Provider</h3>
+                  <h3 className="font-medium text-[#54FCFF]">Email Service Provider</h3>
                 </div>
 
                 {/* ESP Selection */}
@@ -2749,8 +2749,8 @@ const InboxManager = () => {
                       onClick={() => handleApiKeyChange('esp', { ...apiKeys.esp, provider: provider.toLowerCase() })}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         apiKeys.esp.provider === provider.toLowerCase() 
-                          ? 'bg-cyan-400/20 border-cyan-400/50' 
-                          : 'bg-white/5 border-white/10 hover:bg-white/10'
+                          ? 'bg-[#54FCFF]/10 border-[#54FCFF]' 
+                          : 'bg-[#1A1C1A] border-white/10 hover:bg-[#1A1C1A]/80'
                       }`}
                       style={{border: '1px solid'}}
                     >
@@ -2762,17 +2762,17 @@ const InboxManager = () => {
                 {/* ESP API Key Input */}
                 {apiKeys.esp.provider && (
                   <div className="space-y-2">
-                    <label className="text-sm text-gray-400">
+                    <label className="text-sm text-white/60">
                       {apiKeys.esp.provider.charAt(0).toUpperCase() + apiKeys.esp.provider.slice(1)} API Key
                     </label>
                     <div className="relative">
-                      <input
-                        type="password"
-                        value={apiKeys.esp.key}
-                        onChange={(e) => handleApiKeyChange('esp', { ...apiKeys.esp, key: e.target.value })}
-                        className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                        placeholder={`Enter ${apiKeys.esp.provider} API key`}
-                      />
+                                          <input
+                      type="password"
+                      value={apiKeys.esp.key}
+                      onChange={(e) => handleApiKeyChange('esp', { ...apiKeys.esp, key: e.target.value })}
+                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all"
+                      placeholder={`Enter ${apiKeys.esp.provider} API key`}
+                    />
                       {apiTestStatus.esp === true && (
                         <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
                       )}
@@ -2783,13 +2783,13 @@ const InboxManager = () => {
 
               {/* Data Enrichment Section */}
               <div className="space-y-4 pt-6 mt-6 border-t border-white/10">
-                <div className="flex items-center gap-2 text-white">
+                <div className="flex items-center gap-2">
                   <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <h3 className="font-medium">Data Enrichment</h3>
+                  <h3 className="font-medium text-[#54FCFF]">Data Enrichment</h3>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm text-gray-400">
+                  <label className="text-sm text-white/60">
                     Full Enrich API Key
                   </label>
                   <div className="relative">
@@ -2797,21 +2797,21 @@ const InboxManager = () => {
                       type="password"
                       value={apiKeys.fullenrich}
                       onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-white/5 border border-white/10 focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all"
                       placeholder="Enter Full Enrich API key"
                     />
                     {apiTestStatus.fullenrich === true && (
                       <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="text-xs text-white/40 mt-2">
                     Used for finding phone numbers, company data, and social profiles
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-white/5 border-t border-white/10 flex justify-end gap-3">
+            <div className="p-6 bg-[#1A1C1A] border-t border-white/10 flex justify-end gap-3">
               <button
                 onClick={() => setShowApiSettings(false)}
                 className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
@@ -2821,8 +2821,7 @@ const InboxManager = () => {
               <button
                 onClick={saveApiKeys}
                 disabled={isSavingApi}
-                className="px-4 py-2 rounded-lg text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
-                style={{backgroundColor: '#54FCFF'}}
+                className="px-4 py-2 rounded-lg bg-[#54FCFF] text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {isSavingApi ? (
                   <>
