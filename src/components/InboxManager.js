@@ -167,17 +167,23 @@ const InboxManager = () => {
     accent: '#54FCFF',
     border: 'rgba(255, 255, 255, 0.1)',
     borderStrong: 'rgba(255, 255, 255, 0.2)',
+    success: '#10B981',
+    warning: '#F59E0B',
+    error: '#EF4444',
   } : {
-    // Light mode colors
-    primaryBg: '#FFFFFF',
-    secondaryBg: 'rgba(255, 255, 255, 0.9)',
-    tertiaryBg: 'rgba(0, 0, 0, 0.03)',
-    textPrimary: '#1F2937',
-    textSecondary: '#374151',
-    textMuted: '#6B7280',
-    accent: '#0EA5E9',
-    border: 'rgba(0, 0, 0, 0.1)',
-    borderStrong: 'rgba(0, 0, 0, 0.2)',
+    // Light mode colors (fixed contrast)
+    primaryBg: '#F8FAFC',
+    secondaryBg: '#FFFFFF',
+    tertiaryBg: '#F1F5F9',
+    textPrimary: '#0F172A',
+    textSecondary: '#334155',
+    textMuted: '#64748B',
+    accent: '#2563EB',
+    border: 'rgba(0, 0, 0, 0.15)',
+    borderStrong: 'rgba(0, 0, 0, 0.25)',
+    success: '#059669',
+    warning: '#D97706',
+    error: '#DC2626',
   };
 
   // Modified toast helper function
@@ -2460,16 +2466,16 @@ const InboxManager = () => {
                 <div className="absolute inset-0 bg-red-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">🚨 URGENT</span>
+                    <AlertCircle className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>🚨 URGENT</span>
                     {activeFilters.urgency?.includes('urgent-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                      <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
                   </div>
-                  <div className="text-2xl font-bold text-white">
+                  <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
                     {leads.filter(lead => getResponseUrgency(lead) === 'urgent-response').length}
                   </div>
-                  <div className="text-xs text-white opacity-80 mt-1">Needs immediate response (2+ days)</div>
+                  <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>Needs immediate response (2+ days)</div>
                 </div>
               </button>
 
@@ -2481,16 +2487,16 @@ const InboxManager = () => {
                 <div className="absolute inset-0 bg-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">⚡ NEEDS RESPONSE</span>
+                    <Users className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>⚡ NEEDS RESPONSE</span>
                     {activeFilters.urgency?.includes('needs-response') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                      <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
                   </div>
-                  <div className="text-2xl font-bold text-white">
+                  <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-response').length}
                   </div>
-                  <div className="text-xs text-white opacity-80 mt-1">They replied, awaiting your response</div>
+                  <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>They replied, awaiting your response</div>
                 </div>
               </button>
 
@@ -2502,16 +2508,16 @@ const InboxManager = () => {
                 <div className="absolute inset-0 bg-green-400 rounded-xl opacity-0 group-hover:opacity-20 group-active:opacity-40 transition-opacity duration-300" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-white" />
-                    <span className="text-white font-bold text-sm">📞 NEEDS FOLLOWUP</span>
+                    <Target className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>📞 NEEDS FOLLOWUP</span>
                     {activeFilters.urgency?.includes('needs-followup') && (
-                      <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">ACTIVE</span>
+                      <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
                   </div>
-                  <div className="text-2xl font-bold text-white">
+                  <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
                   </div>
-                  <div className="text-xs text-white opacity-80 mt-1">You sent last, no reply 3+ days</div>
+                  <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>You sent last, no reply 3+ days</div>
                 </div>
               </button>
             </div>
@@ -2541,18 +2547,18 @@ const InboxManager = () => {
               <button
                 onClick={() => setShowSortPopup(!showSortPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
-                style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+                style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}
               >
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <span className="text-sm font-medium text-white">Sort</span>
+                  <BarChart3 className="w-4 h-4" style={{color: themeStyles.accent}} />
+                  <span className="text-sm font-medium" style={{color: themeStyles.textPrimary}}>Sort</span>
                   {activeSorts.length > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
                       {activeSorts.length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+                <ChevronDown className="w-4 h-4" style={{color: themeStyles.textMuted}} />
               </button>
 
               {/* Sort Popup */}
@@ -2637,18 +2643,18 @@ const InboxManager = () => {
               <button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
-                style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+                style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}
               >
                 <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <span className="text-sm font-medium text-white">Filter</span>
+                  <Filter className="w-4 h-4" style={{color: themeStyles.accent}} />
+                  <span className="text-sm font-medium" style={{color: themeStyles.textPrimary}}>Filter</span>
                   {getActiveFilterCount() > 0 && (
-                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(84, 252, 255, 0.2)', color: '#54FCFF'}}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
                       {getActiveFilterCount()}
                     </span>
                   )}
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+                <ChevronDown className="w-4 h-4" style={{color: themeStyles.textMuted}} />
               </button>
 
               {/* Filter Popup */}
@@ -2760,7 +2766,11 @@ const InboxManager = () => {
                   ? 'opacity-100' 
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: activeTab === 'all' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'all' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              style={{
+                backgroundColor: activeTab === 'all' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: activeTab === 'all' ? themeStyles.accent : themeStyles.textPrimary, 
+                border: `1px solid ${themeStyles.border}`
+              }}
               disabled={loading}
             >
               {loading ? (
@@ -2779,7 +2789,11 @@ const InboxManager = () => {
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: activeTab === 'need_response' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'need_response' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              style={{
+                backgroundColor: activeTab === 'need_response' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: activeTab === 'need_response' ? themeStyles.accent : themeStyles.textPrimary, 
+                border: `1px solid ${themeStyles.border}`
+              }}
               disabled={loading}
             >
               {loading ? (
@@ -2791,7 +2805,7 @@ const InboxManager = () => {
                 <>
                   Need Response
                   {activeTab !== 'need_response' && (
-                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
                       {leads.filter(lead => checkNeedsReply(lead.conversation)).length}
                     </span>
                   )}
@@ -2805,7 +2819,11 @@ const InboxManager = () => {
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
-              style={{backgroundColor: activeTab === 'recently_sent' ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', color: activeTab === 'recently_sent' ? '#54FCFF' : 'white', border: '1px solid rgba(255, 255, 255, 0.2)'}}
+              style={{
+                backgroundColor: activeTab === 'recently_sent' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: activeTab === 'recently_sent' ? themeStyles.accent : themeStyles.textPrimary, 
+                border: `1px solid ${themeStyles.border}`
+              }}
               disabled={loading}
             >
               {loading ? (
@@ -2817,7 +2835,7 @@ const InboxManager = () => {
                 <>
                   Recently Sent
                   {activeTab !== 'recently_sent' && (
-                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF'}}>
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
                       {leads.filter(lead => {
                         if (lead.conversation.length === 0) return false;
                         const lastMessage = lead.conversation[lead.conversation.length - 1];
@@ -2882,50 +2900,52 @@ const InboxManager = () => {
                 onClick={() => setSelectedLead(lead)}
                 className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
-                  backgroundColor: selectedLead?.id === lead.id ? 'rgba(84, 252, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  border: selectedLead?.id === lead.id ? '2px solid rgba(84, 252, 255, 0.8)' : '1px solid rgba(255, 255, 255, 0.1)',
-                  borderLeft: urgency !== 'none' ? '4px solid #54FCFF' : '1px solid rgba(255, 255, 255, 0.1)',
-                  boxShadow: selectedLead?.id === lead.id ? '0 0 30px rgba(84, 252, 255, 0.3)' : 'none',
+                  backgroundColor: selectedLead?.id === lead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                  border: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
+                  borderLeft: urgency !== 'none' ? `4px solid ${themeStyles.accent}` : `1px solid ${themeStyles.border}`,
+                  boxShadow: selectedLead?.id === lead.id ? `0 0 30px ${themeStyles.accent}30` : 'none',
                   animationDelay: `${index * 0.1}s`,
                   backdropFilter: 'blur(5px)'
                 }}
               >
                 {/* Hover glow effect */}
                 <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" 
-                     style={{background: 'linear-gradient(45deg, rgba(84, 252, 255, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%)'}} />
+                     style={{background: `linear-gradient(45deg, ${themeStyles.accent}10 0%, ${themeStyles.accent}05 100%)`}} />
                 
                 <div className="relative z-10">
                   {/* Response Badge at Top */}
                   {getResponseBadge()}
                   
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className={`text-white transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} ${selectedLead?.id === lead.id ? 'text-cyan-100' : ''}`}>
+                    <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}
+                        style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
                       {lead.first_name} {lead.last_name}
-                      {urgency !== 'none' && <span className="ml-2 text-red-400 text-sm animate-pulse">●</span>}
+                      {urgency !== 'none' && <span className="ml-2 text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
                     </h3>
                     <div className="flex items-center gap-1">
-                      <span className="px-2 py-1 text-xs rounded-full text-white transition-all duration-300 transform group-hover:scale-110" 
-                            style={{backgroundColor: 'rgba(84, 252, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                      <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
+                            style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                         {lead.intent}
                       </span>
                     </div>
                   </div>
                   
-                  <p className="text-sm text-gray-300 mb-1 transition-colors duration-300 group-hover:text-gray-200">{lead.email}</p>
-                  <p className={`text-sm text-white mb-2 transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} ${selectedLead?.id === lead.id ? 'text-cyan-100' : ''}`}>
+                  <p className="text-sm mb-1 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{lead.email}</p>
+                  <p className={`text-sm mb-2 transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}
+                     style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
                     {lead.subject}
                   </p>
                   
                   {/* Enhanced metadata with animations */}
-                  <div className="flex items-center gap-3 text-xs text-gray-300 mb-2">
-                    <span className={`font-medium transition-all duration-300 ${getEngagementColor(lead.engagement_score)} group-hover:scale-105`}>
+                  <div className="flex items-center gap-3 text-xs mb-2" style={{color: themeStyles.textSecondary}}>
+                    <span className={`font-medium transition-all duration-300 group-hover:scale-105`} style={{color: getEngagementColor(lead.engagement_score)}}>
                       {lead.engagement_score}% engagement
                     </span>
-                    <span className="transition-all duration-300 group-hover:scale-105" style={{color: '#54FCFF'}}>
+                    <span className="transition-all duration-300 group-hover:scale-105" style={{color: themeStyles.accent}}>
                       {lead.conversation.filter(m => m.type === 'REPLY').length} replies
                     </span>
                     {urgency !== 'none' && lastMessage && (
-                      <span className="text-red-400 font-bold animate-pulse transition-all duration-300 group-hover:scale-105">
+                      <span className="font-bold animate-pulse transition-all duration-300 group-hover:scale-105" style={{color: themeStyles.error}}>
                         {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
                       </span>
                     )}
@@ -2937,22 +2957,22 @@ const InboxManager = () => {
                       <span key={tag} 
                             className="text-xs px-3 py-1 rounded-full transition-all duration-300 transform hover:scale-110" 
                             style={{
-                              backgroundColor: 'rgba(84, 252, 255, 0.15)', 
-                              color: 'white', 
-                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              backgroundColor: `${themeStyles.accent}15`, 
+                              color: themeStyles.textPrimary, 
+                              border: `1px solid ${themeStyles.border}`,
                               animation: `tagFadeIn 0.5s ease-out ${(index * 0.1) + (tagIndex * 0.1)}s both`
                             }}>
                         {tag}
                       </span>
                     ))}
                     {displayTags.length > 3 && (
-                      <span className="text-xs text-gray-300 transition-colors duration-300 group-hover:text-gray-200">+{displayTags.length - 3}</span>
+                      <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textSecondary}}>+{displayTags.length - 3}</span>
                     )}
                   </div>
                   
-                  <div className="flex items-center justify-between text-xs text-gray-300">
+                  <div className="flex items-center justify-between text-xs" style={{color: themeStyles.textSecondary}}>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center transition-all duration-300 group-hover:text-gray-200">
+                      <div className="flex items-center transition-all duration-300">
                         <Timer className="w-3 h-3 mr-1 transition-transform duration-300 group-hover:rotate-12" />
                         Last followup: {(() => {
                           const lastSent = lead.conversation.filter(m => m.type === 'SENT');
@@ -2961,7 +2981,7 @@ const InboxManager = () => {
                           return `${daysSince}d ago`;
                         })()}
                       </div>
-                      <div className="flex items-center transition-all duration-300 group-hover:text-gray-200">
+                      <div className="flex items-center transition-all duration-300">
                         <Clock className="w-3 h-3 mr-1 transition-transform duration-300 group-hover:rotate-12" />
                         Last reply: {(() => {
                           const lastReply = getLastResponseFromThem(lead.conversation);
@@ -2972,8 +2992,8 @@ const InboxManager = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs text-white transition-all duration-300 transform group-hover:scale-105" 
-                            style={{backgroundColor: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.2)'}}>
+                      <span className="px-3 py-1 rounded-full text-xs transition-all duration-300 transform group-hover:scale-105" 
+                            style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                         {lead.conversation.length} messages
                       </span>
                     </div>
