@@ -65,19 +65,6 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
-// Lead category mapping (declare before component to avoid initialization errors)
-const leadCategoryMap = {
-  1: 'Interested',
-  2: 'Meeting Request', 
-  3: 'Not Interested',
-  4: 'Do Not Contact',
-  5: 'Information Request',
-  6: 'Out Of Office',
-  7: 'Wrong Person',
-  8: 'Uncategorizable by AI',
-  9: 'Sender Originated Bounce'
-};
-
 const InboxManager = () => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
@@ -146,39 +133,6 @@ const InboxManager = () => {
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
 
-  // Bulk operations state
-  const [selectedLeads, setSelectedLeads] = useState(new Set());
-  const [bulkSelectMode, setBulkSelectMode] = useState(false);
-  const [showBulkActions, setShowBulkActions] = useState(false);
-
-  // Auto-save drafts refs (declare early to avoid initialization errors)
-  const draftTimeoutRef = useRef(null);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
-
-  // Toast helper functions (declare early to avoid initialization errors)
-  const showToast = (message, type = 'success', leadId = null) => {
-    const id = Date.now(); // Unique ID for each toast
-    const newToast = { id, message, type, leadId };
-    
-    setToasts(currentToasts => [...currentToasts, newToast]);
-    
-    // Store the timeout reference
-    toastsTimeoutRef.current[id] = setTimeout(() => {
-      removeToast(id);
-    }, 10000);
-  };
-
-  // Remove specific toast
-  const removeToast = (id) => {
-    // Clear the timeout
-    if (toastsTimeoutRef.current[id]) {
-      clearTimeout(toastsTimeoutRef.current[id]);
-      delete toastsTimeoutRef.current[id];
-    }
-    
-    setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
-  };
-
   // Clean up all timeouts on unmount
   useEffect(() => {
     return () => {
@@ -204,195 +158,10 @@ const InboxManager = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showRecentDropdown]);
 
-  // Clear selections when exiting bulk mode or when filters change
-  useEffect(() => {
-    if (!bulkSelectMode) {
-      setSelectedLeads(new Set());
-      setShowBulkActions(false);
-    }
-  }, [bulkSelectMode]);
-
-  // Enhanced filter and sort leads (declare early to avoid initialization errors)
-  const filteredAndSortedLeads = useMemo(() => {
-    try {
-      if (!leads || !Array.isArray(leads)) {
-        return [];
-      }
-      let filtered = leads.slice(); // Create a copy
-
-      // Apply tab filter first
-      if (activeTab === 'need_response') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            return lastMessage && lastMessage.type === 'REPLY';
-          } catch (e) {
-            console.warn('Error filtering need_response:', e);
-            return false;
-          }
-        });
-      } else if (activeTab === 'recently_sent') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
-              return false;
-            }
-            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-            return timeSinceLastMessage <= 24;
-          } catch (e) {
-            console.warn('Error filtering recently_sent:', e);
-            return false;
-          }
-        });
-      }
-
-      // Apply search filter
-      if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead) return false;
-            
-            const firstName = (lead.first_name || '').toLowerCase();
-            const lastName = (lead.last_name || '').toLowerCase();
-            const email = (lead.email || '').toLowerCase();
-            const subject = (lead.subject || '').toLowerCase();
-            
-            let tagsMatch = false;
-            if (lead.tags && Array.isArray(lead.tags)) {
-              tagsMatch = lead.tags.some(tag => {
-                return tag && typeof tag === 'string' && tag.toLowerCase().includes(query);
-              });
-            }
-            
-            return firstName.includes(query) || 
-                   lastName.includes(query) || 
-                   email.includes(query) || 
-                   subject.includes(query) || 
-                   tagsMatch;
-          } catch (e) {
-            console.warn('Error in search filter:', e);
-            return false;
-          }
-        });
-      }
-
-      // Apply advanced filters
-      if (activeFilters && typeof activeFilters === 'object') {
-        for (const [category, values] of Object.entries(activeFilters)) {
-          if (!values || !Array.isArray(values) || values.length === 0) continue;
-          
-          filtered = filtered.filter(lead => {
-            try {
-              if (!lead) return false;
-              
-              return values.some(value => {
-                if (!value) return false;
-                
-                switch (category) {
-                  case 'intent':
-                    if (typeof lead.intent !== 'number') return false;
-                    if (value === 'high') return lead.intent >= 7;
-                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
-                    if (value === 'low') return lead.intent <= 3;
-                    return false;
-                  
-                  case 'urgency':
-                    try {
-                      const urgency = getResponseUrgency(lead);
-                      return value === urgency;
-                    } catch (e) {
-                      console.warn('Error checking urgency:', e);
-                      return false;
-                    }
-                  
-                  case 'category':
-                    return lead.lead_category && lead.lead_category.toString() === value;
-                  
-                  case 'engagement':
-                    if (typeof lead.engagement_score !== 'number') return false;
-                    if (value === 'high') return lead.engagement_score >= 80;
-                    if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
-                    if (value === 'low') return lead.engagement_score < 50;
-                    return false;
-                  
-                  case 'replies':
-                    try {
-                      let replyCount = 0;
-                      if (lead.conversation && Array.isArray(lead.conversation)) {
-                        replyCount = lead.conversation.filter(m => m && m.type === 'REPLY').length;
-                      }
-                      if (value === 'has_replies') return replyCount > 0;
-                      if (value === 'no_replies') return replyCount === 0;
-                      if (value === 'multiple_replies') return replyCount >= 2;
-                      return false;
-                    } catch (e) {
-                      console.warn('Error checking replies:', e);
-                      return false;
-                    }
-                  
-                  case 'timeframe':
-                    try {
-                      let lastActivity;
-                      if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
-                        const lastMessage = lead.conversation[lead.conversation.length - 1];
-                        lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
-                      } else {
-                        lastActivity = new Date(lead.created_at || Date.now());
-                      }
-                      
-                      const daysDiff = (new Date() - lastActivity) / (1000 * 60 * 60 * 24);
-                      
-                      if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
-                      if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
-                      if (value === 'this_week') return daysDiff <= 7;
-                      if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
-                      if (value === 'this_month') return daysDiff <= 30;
-                      if (value === 'older') return daysDiff > 30;
-                      return false;
-                    } catch (e) {
-                      console.warn('Error checking timeframe:', e);
-                      return false;
-                    }
-                  
-                  default:
-                    return false;
-                }
-              });
-            } catch (e) {
-              console.warn('Error in advanced filter:', e);
-              return false;
-            }
-          });
-        }
-      }
-
-      return filtered;
-    } catch (e) {
-      console.error('Error in filteredAndSortedLeads:', e);
-      return leads || [];
-    }
-  }, [leads, searchQuery, activeFilters, activeTab]);
-
-  // Remove selected leads that are no longer in filtered results
-  useEffect(() => {
-    const currentLeadIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
-    const validSelectedLeads = new Set([...selectedLeads].filter(id => currentLeadIds.has(id)));
-    
-    if (validSelectedLeads.size !== selectedLeads.size) {
-      setSelectedLeads(validSelectedLeads);
-      setShowBulkActions(validSelectedLeads.size > 0);
-    }
-  }, [filteredAndSortedLeads]);
-
   // Auto-save drafts with debouncing
+  const draftTimeoutRef = useRef(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+  
   const saveDraft = (leadId, content, htmlContent) => {
     if (draftTimeoutRef.current) {
       clearTimeout(draftTimeoutRef.current);
@@ -503,7 +272,29 @@ const InboxManager = () => {
     error: '#DC2626',
   };
 
+  // Modified toast helper function
+  const showToast = (message, type = 'success', leadId = null) => {
+    const id = Date.now(); // Unique ID for each toast
+    const newToast = { id, message, type, leadId };
+    
+    setToasts(currentToasts => [...currentToasts, newToast]);
+    
+    // Store the timeout reference
+    toastsTimeoutRef.current[id] = setTimeout(() => {
+      removeToast(id);
+    }, 10000);
+  };
 
+  // Remove specific toast
+  const removeToast = (id) => {
+    // Clear the timeout
+    if (toastsTimeoutRef.current[id]) {
+      clearTimeout(toastsTimeoutRef.current[id]);
+      delete toastsTimeoutRef.current[id];
+    }
+    
+    setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
+  };
 
   // Helper functions (moved up before they're used)
   // Get last response date from them (last REPLY message)
@@ -782,7 +573,18 @@ const InboxManager = () => {
     return result || text; // Fallback to original if extraction fails
   };
 
-
+  // Lead category mapping
+  const leadCategoryMap = {
+    1: 'Interested',
+    2: 'Meeting Request', 
+    3: 'Not Interested',
+    4: 'Do Not Contact',
+    5: 'Information Request',
+    6: 'Out Of Office',
+    7: 'Wrong Person',
+    8: 'Uncategorizable by AI',
+    9: 'Sender Originated Bounce'
+  };
 
 
 
@@ -971,79 +773,6 @@ const InboxManager = () => {
     setShowFilterPopup(false);
   };
 
-  // Bulk operations functions
-  const toggleBulkSelectMode = () => {
-    setBulkSelectMode(!bulkSelectMode);
-    setSelectedLeads(new Set());
-    setShowBulkActions(false);
-  };
-
-  const toggleLeadSelection = (leadId) => {
-    const newSelected = new Set(selectedLeads);
-    if (newSelected.has(leadId)) {
-      newSelected.delete(leadId);
-    } else {
-      newSelected.add(leadId);
-    }
-    setSelectedLeads(newSelected);
-    setShowBulkActions(newSelected.size > 0);
-  };
-
-  const selectAllLeads = () => {
-    const allLeadIds = new Set(filteredAndSortedLeads.map(lead => lead.id));
-    setSelectedLeads(allLeadIds);
-    setShowBulkActions(true);
-  };
-
-  const clearSelection = () => {
-    setSelectedLeads(new Set());
-    setShowBulkActions(false);
-  };
-
-  const bulkDeleteLeads = async () => {
-    if (selectedLeads.size === 0) return;
-    
-    const selectedLeadsList = leads.filter(lead => selectedLeads.has(lead.id));
-    const confirmed = window.confirm(`Are you sure you want to delete ${selectedLeads.size} lead(s)? This action cannot be undone.`);
-    
-    if (!confirmed) return;
-
-    try {
-      // Delete leads in parallel
-      const deletePromises = selectedLeadsList.map(lead => 
-        fetch('https://reidsickels.app.n8n.cloud/webhook/bfffab96-188f-4a4a-9ae2-62aa9e0a02f4', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...lead,
-            smartlead_api_key: apiKeys.smartlead,
-            claude_api_key: apiKeys.claude,
-            fullenrich_api_key: apiKeys.fullenrich
-          })
-        })
-      );
-
-      await Promise.all(deletePromises);
-
-      // Remove from local state
-      setLeads(prevLeads => prevLeads.filter(lead => !selectedLeads.has(lead.id)));
-      
-      // Clear selection
-      clearSelection();
-      setBulkSelectMode(false);
-      
-      // Clear selected lead if it was deleted
-      if (selectedLead && selectedLeads.has(selectedLead.id)) {
-        setSelectedLead(null);
-      }
-
-      showToast(`Successfully deleted ${selectedLeads.size} lead(s)`, 'success');
-    } catch (error) {
-      console.error('Error bulk deleting leads:', error);
-      showToast('Error deleting some leads', 'error');
-    }
-  };
-
   // Handle delete lead
   const handleDeleteLead = async (lead) => {
     try {
@@ -1156,7 +885,174 @@ const InboxManager = () => {
     return 'text-red-600';
   };
 
+  // Enhanced filter and sort leads
+  const filteredAndSortedLeads = useMemo(() => {
+    try {
+      if (!leads || !Array.isArray(leads)) {
+        return [];
+      }
+      let filtered = leads.slice(); // Create a copy
 
+      // Apply tab filter first
+      if (activeTab === 'need_response') {
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
+              return false;
+            }
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            return lastMessage && lastMessage.type === 'REPLY';
+          } catch (e) {
+            console.warn('Error filtering need_response:', e);
+            return false;
+          }
+        });
+      } else if (activeTab === 'recently_sent') {
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
+              return false;
+            }
+            const lastMessage = lead.conversation[lead.conversation.length - 1];
+            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
+              return false;
+            }
+            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+            return timeSinceLastMessage <= 24;
+          } catch (e) {
+            console.warn('Error filtering recently_sent:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply search filter
+      if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead) return false;
+            
+            const firstName = (lead.first_name || '').toLowerCase();
+            const lastName = (lead.last_name || '').toLowerCase();
+            const email = (lead.email || '').toLowerCase();
+            const subject = (lead.subject || '').toLowerCase();
+            
+            let tagsMatch = false;
+            if (lead.tags && Array.isArray(lead.tags)) {
+              tagsMatch = lead.tags.some(tag => {
+                return tag && typeof tag === 'string' && tag.toLowerCase().includes(query);
+              });
+            }
+            
+            return firstName.includes(query) || 
+                   lastName.includes(query) || 
+                   email.includes(query) || 
+                   subject.includes(query) || 
+                   tagsMatch;
+          } catch (e) {
+            console.warn('Error in search filter:', e);
+            return false;
+          }
+        });
+      }
+
+      // Apply advanced filters
+      if (activeFilters && typeof activeFilters === 'object') {
+        for (const [category, values] of Object.entries(activeFilters)) {
+          if (!values || !Array.isArray(values) || values.length === 0) continue;
+          
+          filtered = filtered.filter(lead => {
+            try {
+              if (!lead) return false;
+              
+              return values.some(value => {
+                if (!value) return false;
+                
+                switch (category) {
+                  case 'intent':
+                    if (typeof lead.intent !== 'number') return false;
+                    if (value === 'high') return lead.intent >= 7;
+                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
+                    if (value === 'low') return lead.intent <= 3;
+                    return false;
+                  
+                  case 'urgency':
+                    try {
+                      const urgency = getResponseUrgency(lead);
+                      return value === urgency;
+                    } catch (e) {
+                      console.warn('Error checking urgency:', e);
+                      return false;
+                    }
+                  
+                  case 'category':
+                    return lead.lead_category && lead.lead_category.toString() === value;
+                  
+                  case 'engagement':
+                    if (typeof lead.engagement_score !== 'number') return false;
+                    if (value === 'high') return lead.engagement_score >= 80;
+                    if (value === 'medium') return lead.engagement_score >= 50 && lead.engagement_score < 80;
+                    if (value === 'low') return lead.engagement_score < 50;
+                    return false;
+                  
+                  case 'replies':
+                    try {
+                      let replyCount = 0;
+                      if (lead.conversation && Array.isArray(lead.conversation)) {
+                        replyCount = lead.conversation.filter(m => m && m.type === 'REPLY').length;
+                      }
+                      if (value === 'has_replies') return replyCount > 0;
+                      if (value === 'no_replies') return replyCount === 0;
+                      if (value === 'multiple_replies') return replyCount >= 2;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking replies:', e);
+                      return false;
+                    }
+                  
+                  case 'timeframe':
+                    try {
+                      let lastActivity;
+                      if (lead.conversation && Array.isArray(lead.conversation) && lead.conversation.length > 0) {
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        lastActivity = lastMessage && lastMessage.time ? new Date(lastMessage.time) : new Date(lead.created_at || Date.now());
+                      } else {
+                        lastActivity = new Date(lead.created_at || Date.now());
+                      }
+                      
+                      const daysDiff = (new Date() - lastActivity) / (1000 * 60 * 60 * 24);
+                      
+                      if (value === 'today') return daysDiff >= 0 && daysDiff < 1;
+                      if (value === 'yesterday') return daysDiff >= 1 && daysDiff < 2;
+                      if (value === 'this_week') return daysDiff <= 7;
+                      if (value === 'last_week') return daysDiff > 7 && daysDiff <= 14;
+                      if (value === 'this_month') return daysDiff <= 30;
+                      if (value === 'older') return daysDiff > 30;
+                      return false;
+                    } catch (e) {
+                      console.warn('Error checking timeframe:', e);
+                      return false;
+                    }
+                  
+                  default:
+                    return false;
+                }
+              });
+            } catch (e) {
+              console.warn('Error in advanced filter:', e);
+              return false;
+            }
+          });
+        }
+      }
+
+      return filtered;
+    } catch (e) {
+      console.error('Error in filteredAndSortedLeads:', e);
+      return leads || [];
+    }
+  }, [leads, searchQuery, activeFilters, activeTab]);
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
@@ -2821,98 +2717,6 @@ const InboxManager = () => {
             />
           </div>
 
-          {/* Bulk Actions Toolbar */}
-          {showBulkActions && (
-            <div className="mb-4 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}10`, border: `1px solid ${themeStyles.accent}30`}}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                    {selectedLeads.size} lead{selectedLeads.size !== 1 ? 's' : ''} selected
-                  </span>
-                  <button
-                    onClick={clearSelection}
-                    className="text-xs px-3 py-1 rounded-lg hover:opacity-80 transition-all duration-300"
-                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted, border: `1px solid ${themeStyles.border}`}}
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const newTag = prompt('Enter tag name to add to selected leads:');
-                      if (newTag && newTag.trim()) {
-                        const trimmedTag = newTag.trim();
-                        setLeads(prevLeads => 
-                          prevLeads.map(lead => 
-                            selectedLeads.has(lead.id)
-                              ? {
-                                  ...lead, 
-                                  tags: [...new Set([...lead.tags, trimmedTag])]
-                                }
-                              : lead
-                          )
-                        );
-                        showToast(`Added "${trimmedTag}" tag to ${selectedLeads.size} lead(s)`, 'success');
-                        clearSelection();
-                      }
-                    }}
-                    className="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-all duration-300 flex items-center gap-2"
-                    style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
-                  >
-                    <Target className="w-4 h-4" />
-                    Add Tag
-                  </button>
-                  <button
-                    onClick={bulkDeleteLeads}
-                    className="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-all duration-300 flex items-center gap-2"
-                    style={{backgroundColor: themeStyles.error, color: '#FFFFFF'}}
-                  >
-                    <X className="w-4 h-4" />
-                    Delete Selected
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Bulk Select Controls */}
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={toggleBulkSelectMode}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
-                  bulkSelectMode ? 'opacity-100' : 'opacity-80 hover:opacity-90'
-                }`}
-                style={{
-                  backgroundColor: bulkSelectMode ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                  color: bulkSelectMode ? themeStyles.accent : themeStyles.textPrimary, 
-                  border: `1px solid ${themeStyles.border}`
-                }}
-              >
-                <Users className="w-4 h-4" />
-                {bulkSelectMode ? 'Exit Bulk Mode' : 'Bulk Select'}
-              </button>
-              
-              {bulkSelectMode && (
-                <>
-                  <button
-                    onClick={selectAllLeads}
-                    className="px-3 py-2 rounded-lg text-sm hover:opacity-80 transition-all duration-300"
-                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}}
-                  >
-                    Select All ({filteredAndSortedLeads.length})
-                  </button>
-                  {selectedLeads.size > 0 && (
-                    <span className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                      {selectedLeads.size} of {filteredAndSortedLeads.length} selected
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
           {/* Sort and Filter Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="relative">
@@ -3269,28 +3073,13 @@ const InboxManager = () => {
             return (
               <div
                 key={lead.id}
-                onClick={(e) => {
-                  if (bulkSelectMode) {
-                    e.preventDefault();
-                    toggleLeadSelection(lead.id);
-                  } else {
-                    setSelectedLead(lead);
-                  }
-                }}
+                onClick={() => setSelectedLead(lead)}
                 className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
-                  backgroundColor: selectedLeads.has(lead.id) 
-                    ? `${themeStyles.accent}30` 
-                    : selectedLead?.id === lead.id 
-                      ? `${themeStyles.accent}20` 
-                      : themeStyles.tertiaryBg,
-                  border: selectedLeads.has(lead.id)
-                    ? `2px solid ${themeStyles.accent}`
-                    : selectedLead?.id === lead.id 
-                      ? `2px solid ${themeStyles.accent}80` 
-                      : `1px solid ${themeStyles.border}`,
+                  backgroundColor: selectedLead?.id === lead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                  border: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
                   borderLeft: urgency !== 'none' ? `4px solid ${themeStyles.accent}` : `1px solid ${themeStyles.border}`,
-                  boxShadow: selectedLead?.id === lead.id || selectedLeads.has(lead.id) ? `0 0 30px ${themeStyles.accent}30` : 'none',
+                  boxShadow: selectedLead?.id === lead.id ? `0 0 30px ${themeStyles.accent}30` : 'none',
                   animationDelay: `${index * 0.1}s`,
                   backdropFilter: 'blur(5px)'
                 }}
@@ -3300,23 +3089,6 @@ const InboxManager = () => {
                      style={{background: `linear-gradient(45deg, ${themeStyles.accent}10 0%, ${themeStyles.accent}05 100%)`}} />
                 
                 <div className="relative z-10">
-                  {/* Bulk Select Checkbox */}
-                  {bulkSelectMode && (
-                    <div className="absolute top-0 right-0 p-2">
-                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-300 ${
-                        selectedLeads.has(lead.id) ? 'opacity-100' : 'opacity-70'
-                      }`}
-                      style={{
-                        backgroundColor: selectedLeads.has(lead.id) ? themeStyles.accent : 'transparent',
-                        borderColor: selectedLeads.has(lead.id) ? themeStyles.accent : themeStyles.border
-                      }}>
-                        {selectedLeads.has(lead.id) && (
-                          <CheckCircle className="w-3 h-3" style={{color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}} />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
                   {/* Response Badge at Top */}
                   {getResponseBadge()}
                   
