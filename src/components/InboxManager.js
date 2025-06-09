@@ -119,6 +119,108 @@ const InboxManager = () => {
     };
   }, []);
 
+  // Auto-save draft functionality with debouncing
+  const draftTimeoutRef = useRef(null);
+  
+  const saveDraftToStorage = (leadId, content, htmlContent = '') => {
+    const updatedDrafts = {
+      ...savedDrafts,
+      [leadId]: {
+        content: content.trim(),
+        htmlContent: htmlContent.trim(),
+        timestamp: Date.now()
+      }
+    };
+    
+    // Remove empty drafts
+    if (!content.trim()) {
+      delete updatedDrafts[leadId];
+    }
+    
+    setSavedDrafts(updatedDrafts);
+    
+    try {
+      localStorage.setItem('inbox_manager_drafts', JSON.stringify(updatedDrafts));
+    } catch (error) {
+      console.warn('Failed to save draft:', error);
+    }
+  };
+
+  // Debounced draft saving
+  const debouncedSaveDraft = (leadId, content, htmlContent = '') => {
+    if (draftTimeoutRef.current) {
+      clearTimeout(draftTimeoutRef.current);
+    }
+    
+    draftTimeoutRef.current = setTimeout(() => {
+      if (leadId && content.trim()) {
+        saveDraftToStorage(leadId, content, htmlContent);
+        showToast('Draft saved', 'success');
+      }
+    }, 3000); // Save after 3 seconds of inactivity
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Enter or Cmd+Enter to send message
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedLead && draftResponse.trim()) {
+        e.preventDefault();
+        sendMessage();
+        return;
+      }
+      
+      // Escape to close lead details
+      if (e.key === 'Escape') {
+        if (selectedLead) {
+          e.preventDefault();
+          setSelectedLead(null);
+          return;
+        }
+      }
+      
+      // Ctrl+F or Cmd+F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+        return;
+      }
+      
+      // Arrow key navigation (only when not typing in inputs)
+      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && !e.target.contentEditable) {
+        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
+        
+        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
+          e.preventDefault();
+          const nextLead = filteredAndSortedLeads[currentIndex + 1];
+          setSelectedLead(nextLead);
+          setCurrentLeadIndex(currentIndex + 1);
+        }
+        
+        if (e.key === 'ArrowUp' && currentIndex > 0) {
+          e.preventDefault();
+          const prevLead = filteredAndSortedLeads[currentIndex - 1];
+          setSelectedLead(prevLead);
+          setCurrentLeadIndex(currentIndex - 1);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, draftResponse, filteredAndSortedLeads]);
+
+  // Update current lead index when selected lead changes
+  useEffect(() => {
+    if (selectedLead) {
+      const index = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead.id);
+      setCurrentLeadIndex(index >= 0 ? index : 0);
+    }
+  }, [selectedLead, filteredAndSortedLeads]);
+
   // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
   useEffect(() => {
     const migrateApiKeys = () => {
@@ -538,6 +640,19 @@ const InboxManager = () => {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
+  
+  // Auto-save draft functionality
+  const [savedDrafts, setSavedDrafts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('inbox_manager_drafts');
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.warn('Failed to load saved drafts:', error);
+      return {};
+    }
+  });
+  const [currentLeadIndex, setCurrentLeadIndex] = useState(0);
+  const searchInputRef = useRef(null);
   
   // Add state for collapsible sections - default to all open
   const [activeSection, setActiveSection] = useState(['general', 'enrichment', 'engagement']);
@@ -967,6 +1082,35 @@ const InboxManager = () => {
       return leads || [];
     }
   }, [leads, searchQuery, activeFilters, activeTab]);
+
+  // Load saved draft when lead is selected
+  useEffect(() => {
+    if (selectedLead) {
+      const savedDraft = savedDrafts[selectedLead.id];
+      if (savedDraft && savedDraft.content) {
+        setDraftResponse(savedDraft.content);
+        setDraftHtml(savedDraft.htmlContent || '');
+        
+        // Update the contenteditable div
+        setTimeout(() => {
+          const editor = document.querySelector('[contenteditable]');
+          if (editor) {
+            editor.innerHTML = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
+          }
+        }, 100);
+      } else {
+        // Clear draft if no saved content
+        setDraftResponse('');
+        setDraftHtml('');
+        setTimeout(() => {
+          const editor = document.querySelector('[contenteditable]');
+          if (editor) {
+            editor.innerHTML = '';
+          }
+        }, 100);
+      }
+    }
+  }, [selectedLead, savedDrafts]);
 
   // Auto-populate email fields when lead is selected
   useEffect(() => {
@@ -1543,9 +1687,16 @@ const InboxManager = () => {
     const rawHtml = e.target.innerHTML;
     const sanitizedHtml = sanitizeHtml(rawHtml);
     
+    const textContent = e.target.textContent || e.target.innerText || '';
+    
     // Update content with sanitized HTML
-    setDraftResponse(e.target.textContent || e.target.innerText);
+    setDraftResponse(textContent);
     setDraftHtml(sanitizedHtml);
+    
+    // Auto-save draft if we have a selected lead
+    if (selectedLead) {
+      debouncedSaveDraft(selectedLead.id, textContent, sanitizedHtml);
+    }
     
     // Update the editor with sanitized content if it was changed
     if (rawHtml !== sanitizedHtml) {
@@ -1858,6 +2009,18 @@ const InboxManager = () => {
       const editor = document.querySelector('[contenteditable]');
       if (editor) {
         editor.innerHTML = '';
+      }
+      
+      // Clear saved draft for this lead
+      if (selectedLead) {
+        const updatedDrafts = { ...savedDrafts };
+        delete updatedDrafts[selectedLead.id];
+        setSavedDrafts(updatedDrafts);
+        try {
+          localStorage.setItem('inbox_manager_drafts', JSON.stringify(updatedDrafts));
+        } catch (error) {
+          console.warn('Failed to clear saved draft:', error);
+        }
       }
       
       // Clear file input
@@ -2444,10 +2607,19 @@ const InboxManager = () => {
           {/* Glowing accent line */}
                 <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-0.5 rounded-full" style={{background: `linear-gradient(90deg, transparent, ${themeStyles.accent}, transparent)`, animation: 'glow 2s ease-in-out infinite alternate'}} />
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold relative transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-              Inbox Manager
-              <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent to-transparent opacity-50" style={{background: `linear-gradient(90deg, transparent, ${themeStyles.accent}, transparent)`}} />
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold relative transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                Inbox Manager
+                <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-transparent to-transparent opacity-50" style={{background: `linear-gradient(90deg, transparent, ${themeStyles.accent}, transparent)`}} />
+              </h1>
+              {Object.keys(savedDrafts).length > 0 && (
+                <span className="text-xs px-2 py-1 rounded-full transition-colors duration-300" 
+                      style={{backgroundColor: `${themeStyles.warning}20`, color: themeStyles.warning, border: `1px solid ${themeStyles.warning}30`}}
+                      title={`${Object.keys(savedDrafts).length} saved draft${Object.keys(savedDrafts).length !== 1 ? 's' : ''}`}>
+                  📝 {Object.keys(savedDrafts).length}
+                </span>
+              )}
+            </div>
             <button
               onClick={() => setShowMetrics(!showMetrics)}
               className="text-sm transition-all duration-300 hover:scale-105 relative group"
@@ -2530,8 +2702,9 @@ const InboxManager = () => {
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors duration-300" style={{color: themeStyles.accent}} />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search leads, tags, emails..."
+              placeholder="Search leads, tags, emails... (Ctrl+F)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg backdrop-blur-sm focus:ring-2 transition-colors duration-300"
@@ -2924,6 +3097,13 @@ const InboxManager = () => {
                         style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
                       {lead.first_name} {lead.last_name}
                       {urgency !== 'none' && <span className="ml-2 text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
+                      {savedDrafts[lead.id] && (
+                        <span className="ml-2 text-xs px-2 py-1 rounded-full transition-all duration-300" 
+                              style={{backgroundColor: `${themeStyles.warning}20`, color: themeStyles.warning, border: `1px solid ${themeStyles.warning}30`}}
+                              title="Has saved draft">
+                          📝 Draft
+                        </span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
@@ -3457,7 +3637,7 @@ const InboxManager = () => {
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
                       <button
                         onClick={generateDraft}
                         disabled={isGeneratingDraft}
@@ -3467,6 +3647,41 @@ const InboxManager = () => {
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
                       </button>
+                      
+                      {/* Clear Draft Button */}
+                      {selectedLead && savedDrafts[selectedLead.id] && (
+                        <button
+                          onClick={() => {
+                            const updatedDrafts = { ...savedDrafts };
+                            delete updatedDrafts[selectedLead.id];
+                            setSavedDrafts(updatedDrafts);
+                            setDraftResponse('');
+                            setDraftHtml('');
+                            const editor = document.querySelector('[contenteditable]');
+                            if (editor) {
+                              editor.innerHTML = '';
+                            }
+                            try {
+                              localStorage.setItem('inbox_manager_drafts', JSON.stringify(updatedDrafts));
+                            } catch (error) {
+                              console.warn('Failed to clear saved draft:', error);
+                            }
+                            showToast('Draft cleared', 'success');
+                          }}
+                          className="px-3 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300 text-sm"
+                          style={{backgroundColor: `${themeStyles.warning}20`, color: themeStyles.warning, border: `1px solid ${themeStyles.warning}30`}}
+                          title="Clear saved draft"
+                        >
+                          <X className="w-4 h-4" />
+                          Clear Draft
+                        </button>
+                      )}
+                      
+                      {/* Keyboard Shortcuts Hint */}
+                      <div className="text-xs transition-colors duration-300 flex items-center gap-4" style={{color: themeStyles.textMuted}}>
+                        <span>💡 <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+Enter</kbd> to send</span>
+                        <span><kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Esc</kbd> to close</span>
+                      </div>
                     </div>
 
                     {/* Rich Text Editor with Formatting */}
@@ -3654,7 +3869,12 @@ const InboxManager = () => {
                       )}
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                        ⌨️ <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>↑↓</kbd> navigate leads
+                        <span className="mx-2">•</span>
+                        <kbd className="px-1 py-0.5 rounded text-xs" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+F</kbd> search
+                      </div>
                       <button
                         onClick={sendMessage}
                         disabled={!draftResponse.trim() || isSending}
