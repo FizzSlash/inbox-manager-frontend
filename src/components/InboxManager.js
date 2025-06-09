@@ -2640,7 +2640,7 @@ const InboxManager = () => {
                             }}
                             className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
                             style={{
-                              backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : 'transparent',
+                              backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
                               color: themeStyles.textPrimary
                             }}
                           >
@@ -3638,103 +3638,105 @@ const InboxManager = () => {
                 <ChevronDown className="w-4 h-4" style={{color: themeStyles.textMuted}} />
               </button>
 
-              {/* Filter Popup */}
-              {showFilterPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto" style={{backgroundColor: 'rgba(26, 28, 26, 0.95)', border: '1px solid white'}}>
-                  <div className="p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-white">Filter Options</h4>
-                      <div className="flex gap-2">
-                        {getActiveFilterCount() > 0 && (
-                          <button
-                            onClick={handleClearAllFilters}
-                            className="text-xs text-red-400 hover:text-red-300"
-                          >
-                            Clear All
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setShowFilterPopup(false)}
-                          className="text-gray-400 hover:text-white"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Active Filters */}
-                    {getActiveFilterCount() > 0 && (
-                      <div className="mb-4">
-                        <h5 className="text-xs font-medium text-gray-300 mb-2">ACTIVE FILTERS</h5>
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(activeFilters).map(([category, values]) =>
-                            (values || []).map((value) => {
-                              const categoryOption = filterOptions[category];
-                              const valueOption = categoryOption?.options.find(opt => opt.value === value);
-                              if (!valueOption) return null;
-                              
-                              return (
-                                <span
-                                  key={`${category}-${value}`}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
-                                  style={{backgroundColor: '#54FCFF', color: '#1A1C1A'}}
-                                >
-                                  {valueOption.label}
-                                  <button
-                                    onClick={() => handleRemoveFilter(category, value)}
-                                    className="hover:opacity-80"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </span>
-                              );
-                            })
+                              {/* Filter Popup */}
+                {showFilterPopup && (
+                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <div className="p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Filter Options</h4>
+                        <div className="flex gap-2">
+                          {getActiveFilterCount() > 0 && (
+                            <button
+                              onClick={handleClearAllFilters}
+                              className="text-xs transition-colors duration-300"
+                              style={{color: themeStyles.error}}
+                            >
+                              Clear All
+                            </button>
                           )}
+                          <button
+                            onClick={() => setShowFilterPopup(false)}
+                            className="transition-colors duration-300 hover:opacity-80"
+                            style={{color: themeStyles.textMuted}}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                    )}
 
-                    {/* Filter Categories */}
-                    <div className="space-y-4">
-                      {Object.entries(filterOptions).map(([category, config]) => (
-                        <div key={category}>
-                          <h5 className="text-xs font-medium text-gray-300 mb-2 uppercase">
-                            {config.label}
-                          </h5>
-                          <div className="space-y-1">
-                            {config.options.map((option) => {
-                              const isActive = activeFilters[category]?.includes(option.value);
-                              return (
-                                <button
-                                  key={option.value}
-                                  onClick={() => {
-                                    if (isActive) {
-                                      handleRemoveFilter(category, option.value);
-                                    } else {
-                                      handleAddFilter(category, option.value);
-                                    }
-                                  }}
-                                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                                    isActive
-                                      ? 'text-white'
-                                      : 'hover:bg-white/10 text-white'
-                                  }`}
-                                  style={isActive ? {backgroundColor: 'rgba(84, 252, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.5)'} : {}}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    {option.label}
-                                    {isActive && <span style={{color: '#54FCFF'}}>✓</span>}
-                                  </div>
-                                </button>
-                              );
-                            })}
+                      {/* Active Filters */}
+                      {getActiveFilterCount() > 0 && (
+                        <div className="mb-4">
+                          <h5 className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>ACTIVE FILTERS</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(activeFilters).map(([category, values]) =>
+                              (values || []).map((value) => {
+                                const categoryOption = filterOptions[category];
+                                const valueOption = categoryOption?.options.find(opt => opt.value === value);
+                                if (!valueOption) return null;
+                                
+                                return (
+                                  <span
+                                    key={`${category}-${value}`}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
+                                    style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                                  >
+                                    {valueOption.label}
+                                    <button
+                                      onClick={() => handleRemoveFilter(category, value)}
+                                      className="hover:opacity-80"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
-                      ))}
+                      )}
+
+                      {/* Filter Categories */}
+                      <div className="space-y-4">
+                        {Object.entries(filterOptions).map(([category, config]) => (
+                          <div key={category}>
+                            <h5 className="text-xs font-medium mb-2 uppercase transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
+                              {config.label}
+                            </h5>
+                            <div className="space-y-1">
+                              {config.options.map((option) => {
+                                const isActive = activeFilters[category]?.includes(option.value);
+                                return (
+                                  <button
+                                    key={option.value}
+                                    onClick={() => {
+                                      if (isActive) {
+                                        handleRemoveFilter(category, option.value);
+                                      } else {
+                                        handleAddFilter(category, option.value);
+                                      }
+                                    }}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors duration-300`}
+                                    style={{
+                                      backgroundColor: isActive ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                                      color: themeStyles.textPrimary,
+                                      border: isActive ? `1px solid ${themeStyles.accent}` : `1px solid ${themeStyles.border}`
+                                    }}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      {option.label}
+                                      {isActive && <span style={{color: themeStyles.accent}}>✓</span>}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
 
