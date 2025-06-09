@@ -110,14 +110,147 @@ const InboxManager = () => {
     return savedTheme ? savedTheme === 'dark' : true; // Default to dark mode
   });
 
+  // Auto-save drafts state
+  const [drafts, setDrafts] = useState(() => {
+    try {
+      const savedDrafts = localStorage.getItem('inbox_manager_drafts');
+      return savedDrafts ? JSON.parse(savedDrafts) : {};
+    } catch (e) {
+      console.warn('Failed to load saved drafts:', e);
+      return {};
+    }
+  });
+
+  // Recently viewed leads state
+  const [recentlyViewed, setRecentlyViewed] = useState(() => {
+    try {
+      const savedRecent = localStorage.getItem('inbox_manager_recent_leads');
+      return savedRecent ? JSON.parse(savedRecent) : [];
+    } catch (e) {
+      console.warn('Failed to load recently viewed leads:', e);
+      return [];
+    }
+  });
+  const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+
   // Clean up all timeouts on unmount
   useEffect(() => {
     return () => {
       Object.values(toastsTimeoutRef.current).forEach(timeout => {
         clearTimeout(timeout);
       });
+      if (draftTimeoutRef.current) {
+        clearTimeout(draftTimeoutRef.current);
+      }
     };
   }, []);
+
+  // Click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close recent dropdown if clicking outside
+      if (showRecentDropdown && !event.target.closest('.recent-dropdown')) {
+        setShowRecentDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showRecentDropdown]);
+
+  // Auto-save drafts with debouncing
+  const draftTimeoutRef = useRef(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+  
+  const saveDraft = (leadId, content, htmlContent) => {
+    if (draftTimeoutRef.current) {
+      clearTimeout(draftTimeoutRef.current);
+    }
+    
+    setIsDraftSaving(true);
+    
+    draftTimeoutRef.current = setTimeout(() => {
+      const newDrafts = {
+        ...drafts,
+        [leadId]: {
+          content: content.trim(),
+          htmlContent: htmlContent || '',
+          savedAt: new Date().toISOString()
+        }
+      };
+      
+      // Remove empty drafts
+      if (!content.trim()) {
+        delete newDrafts[leadId];
+      }
+      
+      setDrafts(newDrafts);
+      localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
+      setIsDraftSaving(false);
+    }, 2000); // Auto-save after 2 seconds of inactivity
+  };
+
+  // Recently viewed leads management
+  const addToRecentlyViewed = (lead) => {
+    if (!lead) return;
+    
+    const newRecent = [
+      { id: lead.id, name: `${lead.first_name} ${lead.last_name}`, email: lead.email },
+      ...recentlyViewed.filter(item => item.id !== lead.id)
+    ].slice(0, 8); // Keep only last 8
+    
+    setRecentlyViewed(newRecent);
+    localStorage.setItem('inbox_manager_recent_leads', JSON.stringify(newRecent));
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Enter to send message (when focused in editor)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const editor = document.querySelector('[contenteditable]');
+        if (editor && document.activeElement === editor && selectedLead && draftResponse.trim()) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+      
+      // Escape to close lead details
+      if (e.key === 'Escape') {
+        if (selectedLead) {
+          e.preventDefault();
+          setSelectedLead(null);
+        }
+      }
+      
+      // Ctrl+F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const searchInput = document.querySelector('input[placeholder*="Search"]');
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+        }
+      }
+      
+      // Arrow keys to navigate leads (when not in an input)
+      if (!document.activeElement || !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        const currentIndex = filteredAndSortedLeads.findIndex(lead => lead.id === selectedLead?.id);
+        
+        if (e.key === 'ArrowDown' && currentIndex < filteredAndSortedLeads.length - 1) {
+          e.preventDefault();
+          setSelectedLead(filteredAndSortedLeads[currentIndex + 1]);
+        }
+        
+        if (e.key === 'ArrowUp' && currentIndex > 0) {
+          e.preventDefault();
+          setSelectedLead(filteredAndSortedLeads[currentIndex - 1]);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLead, filteredAndSortedLeads, draftResponse]);
 
   // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
   useEffect(() => {
@@ -968,73 +1101,97 @@ const InboxManager = () => {
     }
   }, [leads, searchQuery, activeFilters, activeTab]);
 
-  // Auto-populate email fields when lead is selected
+  // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
-    if (selectedLead && selectedLead.conversation.length > 0) {
-      const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
+    if (selectedLead) {
+      // Add to recently viewed
+      addToRecentlyViewed(selectedLead);
       
-      // Dynamically detect our email addresses from SENT messages
-      const getOurEmails = () => {
-        const ourEmails = new Set();
-        selectedLead.conversation.forEach(msg => {
-          if (msg.type === 'SENT' && msg.from) {
-            ourEmails.add(msg.from);
-          }
-        });
-        return Array.from(ourEmails);
-      };
-      
-      // Get all unique email participants from the conversation (excluding our emails)
-      const getAllParticipants = () => {
-        const participants = new Set();
-        const ourEmails = getOurEmails();
-        
-        // Go through conversation to find all unique email addresses
-        selectedLead.conversation.forEach(msg => {
-          if (msg.from) participants.add(msg.from);
-          if (msg.to) participants.add(msg.to);
-          if (msg.cc && Array.isArray(msg.cc) && msg.cc.length > 0) {
-            msg.cc.forEach(ccEntry => {
-              if (ccEntry.address) participants.add(ccEntry.address);
-            });
-          }
-        });
-        
-        // Remove our own emails dynamically
-        ourEmails.forEach(email => participants.delete(email));
-        
-        return Array.from(participants);
-      };
-      
-      // Determine recipients based on the last message
-      let primaryRecipient = '';
-      let ccRecipients = [];
-      
-      if (lastMessage.type === 'REPLY') {
-        // If they replied, send back to the sender and CC everyone else who was involved
-        primaryRecipient = lastMessage.from;
-        
-        // Get all other participants for CC (excluding the primary recipient)
-        const allParticipants = getAllParticipants();
-        ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
+      // Restore draft if exists
+      const savedDraft = drafts[selectedLead.id];
+      if (savedDraft) {
+        setDraftResponse(savedDraft.content);
+        setDraftHtml(savedDraft.htmlContent || '');
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
+        }
       } else {
-        // If we sent last, use the same recipients as the last sent message
-        primaryRecipient = lastMessage.to || selectedLead.email;
-        
-        // Only add CC if the last message actually had CC recipients
-        if (lastMessage.cc && Array.isArray(lastMessage.cc) && lastMessage.cc.length > 0) {
-          ccRecipients = lastMessage.cc
-            .map(cc => cc.address)
-            .filter(email => email && email.trim() !== '');
+        // Clear draft if no saved content
+        setDraftResponse('');
+        setDraftHtml('');
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = '';
         }
       }
       
-      setEditableToEmail(primaryRecipient || selectedLead.email);
-      setEditableCcEmails(ccRecipients.join(', '));
-    } else if (selectedLead) {
-      // Fallback to original lead email if no conversation
-      setEditableToEmail(selectedLead.email);
-      setEditableCcEmails('');
+      if (selectedLead.conversation.length > 0) {
+        const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
+        
+        // Dynamically detect our email addresses from SENT messages
+        const getOurEmails = () => {
+          const ourEmails = new Set();
+          selectedLead.conversation.forEach(msg => {
+            if (msg.type === 'SENT' && msg.from) {
+              ourEmails.add(msg.from);
+            }
+          });
+          return Array.from(ourEmails);
+        };
+        
+        // Get all unique email participants from the conversation (excluding our emails)
+        const getAllParticipants = () => {
+          const participants = new Set();
+          const ourEmails = getOurEmails();
+          
+          // Go through conversation to find all unique email addresses
+          selectedLead.conversation.forEach(msg => {
+            if (msg.from) participants.add(msg.from);
+            if (msg.to) participants.add(msg.to);
+            if (msg.cc && Array.isArray(msg.cc) && msg.cc.length > 0) {
+              msg.cc.forEach(ccEntry => {
+                if (ccEntry.address) participants.add(ccEntry.address);
+              });
+            }
+          });
+          
+          // Remove our own emails dynamically
+          ourEmails.forEach(email => participants.delete(email));
+          
+          return Array.from(participants);
+        };
+        
+        // Determine recipients based on the last message
+        let primaryRecipient = '';
+        let ccRecipients = [];
+        
+        if (lastMessage.type === 'REPLY') {
+          // If they replied, send back to the sender and CC everyone else who was involved
+          primaryRecipient = lastMessage.from;
+          
+          // Get all other participants for CC (excluding the primary recipient)
+          const allParticipants = getAllParticipants();
+          ccRecipients = allParticipants.filter(email => email !== primaryRecipient);
+        } else {
+          // If we sent last, use the same recipients as the last sent message
+          primaryRecipient = lastMessage.to || selectedLead.email;
+          
+          // Only add CC if the last message actually had CC recipients
+          if (lastMessage.cc && Array.isArray(lastMessage.cc) && lastMessage.cc.length > 0) {
+            ccRecipients = lastMessage.cc
+              .map(cc => cc.address)
+              .filter(email => email && email.trim() !== '');
+          }
+        }
+        
+        setEditableToEmail(primaryRecipient || selectedLead.email);
+        setEditableCcEmails(ccRecipients.join(', '));
+      } else {
+        // Fallback to original lead email if no conversation
+        setEditableToEmail(selectedLead.email);
+        setEditableCcEmails('');
+      }
     }
   }, [selectedLead]);
   const calculateEngagementScore = (conversation) => {
@@ -1544,8 +1701,14 @@ const InboxManager = () => {
     const sanitizedHtml = sanitizeHtml(rawHtml);
     
     // Update content with sanitized HTML
-    setDraftResponse(e.target.textContent || e.target.innerText);
+    const textContent = e.target.textContent || e.target.innerText;
+    setDraftResponse(textContent);
     setDraftHtml(sanitizedHtml);
+    
+    // Auto-save draft if we have a selected lead
+    if (selectedLead) {
+      saveDraft(selectedLead.id, textContent, sanitizedHtml);
+    }
     
     // Update the editor with sanitized content if it was changed
     if (rawHtml !== sanitizedHtml) {
@@ -2139,6 +2302,63 @@ const InboxManager = () => {
                 Inbox
               </div>
             </button>
+
+            {/* Recently Viewed Dropdown */}
+            {recentlyViewed.length > 0 && (
+              <div className="relative recent-dropdown">
+                <button
+                  onClick={() => setShowRecentDropdown(!showRecentDropdown)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+                  style={{color: themeStyles.textPrimary}}
+                >
+                  <Clock className="w-4 h-4" />
+                  Recent ({recentlyViewed.length})
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+
+                {showRecentDropdown && (
+                  <div className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <div className="p-3">
+                      <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
+                      <div className="space-y-1">
+                        {recentlyViewed.map((recent) => (
+                          <button
+                            key={recent.id}
+                            onClick={() => {
+                              const lead = leads.find(l => l.id === recent.id);
+                              if (lead) {
+                                setSelectedLead(lead);
+                                setShowRecentDropdown(false);
+                              }
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
+                            style={{
+                              backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : 'transparent',
+                              color: themeStyles.textPrimary
+                            }}
+                          >
+                            <div className="font-medium">{recent.name}</div>
+                            <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>{recent.email}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setRecentlyViewed([]);
+                          localStorage.removeItem('inbox_manager_recent_leads');
+                          setShowRecentDropdown(false);
+                        }}
+                        className="w-full mt-3 px-3 py-2 text-xs rounded-lg transition-all duration-300 hover:opacity-80"
+                        style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                      >
+                        Clear Recent
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={() => setShowApiSettings(true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -2154,6 +2374,15 @@ const InboxManager = () => {
                 API Settings
               </div>
             </button>
+          </div>
+
+          {/* Keyboard Shortcuts Hint */}
+          <div className="hidden lg:flex items-center gap-4 px-3 py-1 rounded-lg text-xs transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
+            <span>Shortcuts:</span>
+            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+F</kbd> Search</span>
+            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>↑↓</kbd> Navigate</span>
+            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Esc</kbd> Close</span>
+            <span><kbd className="px-1 rounded" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>Ctrl+Enter</kbd> Send</span>
           </div>
 
           {/* Theme Toggle */}
@@ -2920,10 +3149,20 @@ const InboxManager = () => {
                   {getResponseBadge()}
                   
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}
+                    <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} flex items-center gap-2`}
                         style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
-                      {lead.first_name} {lead.last_name}
-                      {urgency !== 'none' && <span className="ml-2 text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
+                      <span>{lead.first_name} {lead.last_name}</span>
+                      {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
+                      {drafts[lead.id] && (
+                        <span 
+                          className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
+                          style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
+                          title="Has unsaved draft"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          Draft
+                        </span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
@@ -3406,10 +3645,27 @@ const InboxManager = () => {
 
                 {/* Response Section */}
                 <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
-                  <h3 className="font-bold mb-4 flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                    <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
-                    Compose Response
-                  </h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold flex items-center text-lg transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      <Mail className="w-4 h-4 mr-2 transition-colors duration-300" style={{color: themeStyles.accent}} />
+                      Compose Response
+                    </h3>
+                    {/* Draft Status Indicator */}
+                    <div className="flex items-center gap-2 text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      {isDraftSaving && (
+                        <span className="flex items-center gap-1">
+                          <div className="animate-spin w-3 h-3 border border-t-transparent rounded-full" style={{borderColor: themeStyles.accent}} />
+                          Saving draft...
+                        </span>
+                      )}
+                      {selectedLead && drafts[selectedLead.id] && !isDraftSaving && (
+                        <span className="flex items-center gap-1" style={{color: themeStyles.success}}>
+                          <CheckCircle className="w-3 h-3" />
+                          Draft saved {new Date(drafts[selectedLead.id].savedAt).toLocaleTimeString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   
                   <div className="space-y-6">
                     {/* Editable Email Recipients */}
