@@ -18,22 +18,38 @@ const Auth = ({ onAuthSuccess }) => {
     setError('');
 
     try {
-      const { data, error } = isSignUp 
-        ? await signUp(email, password)
+      let signupUser = null;
+      if (isSignUp) {
+        const { data, error } = await signUp(email, password);
+        if (error) {
+          setError(error.message);
+          setLoading(false);
+          return;
+        }
+        signupUser = data?.user;
+        // Immediately create profile after signup, even before verification
+        if (signupUser) {
+          await supabase.from('profiles').insert([
+            { id: signupUser.id, email: signupUser.email, brand_id: null }
+          ]);
+        }
+        if (!signupUser?.email_confirmed_at) {
+          setShowVerifyTab(true);
+          setUserNeedsVerification(true);
+          setPendingUser(signupUser);
+          setLoading(false);
+          return;
+        }
+      }
+      // Continue with login or post-signup flow
+      const { data, error } = isSignUp
+        ? await signIn(email, password)
         : await signIn(email, password);
-
       if (error) {
         setError(error.message);
       } else if (data?.user) {
-        if (isSignUp && !data.user.email_confirmed_at) {
-          setShowVerifyTab(true);
-          setUserNeedsVerification(true);
-          setPendingUser(data.user);
-        } else {
-          // Always create profile if needed after any successful login/signup
-          await createProfileIfNeeded(data.user);
-          onAuthSuccess(data.user);
-        }
+        await createProfileIfNeeded(data.user);
+        onAuthSuccess(data.user);
       }
     } catch (err) {
       setError('An unexpected error occurred');
