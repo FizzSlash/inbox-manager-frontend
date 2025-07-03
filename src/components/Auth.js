@@ -25,13 +25,12 @@ const Auth = ({ onAuthSuccess }) => {
       if (error) {
         setError(error.message);
       } else if (data?.user) {
-        // Check if email is confirmed
         if (isSignUp && !data.user.email_confirmed_at) {
           setShowVerifyTab(true);
           setUserNeedsVerification(true);
           setPendingUser(data.user);
         } else {
-          // On successful signup or login, create profile if it doesn't exist
+          // Always create profile if needed after any successful login/signup
           await createProfileIfNeeded(data.user);
           onAuthSuccess(data.user);
         }
