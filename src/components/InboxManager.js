@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut } from 'lucide-react';
+import { leadsService } from '../lib/leadsService';
+import { supabase } from '../lib/supabase';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -65,7 +67,7 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
-const InboxManager = () => {
+const InboxManager = ({ user, onSignOut }) => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -343,46 +345,65 @@ const InboxManager = () => {
     return 'none';
   };
 
-  // Fetch leads from API
+  // Fetch the user's brand_id from the profiles table after login
+  const [brandId, setBrandId] = useState(null);
+
+  // Fetch the user's brand_id from the profiles table after login
   useEffect(() => {
-    fetchLeads();
-  }, []);
+    const fetchBrandId = async () => {
+      if (!user) return;
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('brand_id')
+        .eq('id', user.id)
+        .single();
+      if (profile && profile.brand_id) {
+        setBrandId(profile.brand_id);
+      } else {
+        setBrandId(null);
+      }
+    };
+    fetchBrandId();
+  }, [user]);
+
+  // Fetch leads when brandId is available
+  useEffect(() => {
+    if (brandId) {
+      fetchLeads();
+    }
+  }, [brandId]);
 
   const fetchLeads = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await fetch('https://leads-api-nu.vercel.app/api/retention-harbor');
-      if (!response.ok) throw new Error('Failed to fetch leads');
-      
-      const data = await response.json();
-      
-      // Transform the data to match the expected format
-      const transformedLeads = (data.leads || []).map(lead => {
-        // Parse conversation data from email_message_body and extract subject
+      if (!brandId) return;
+      // Fetch leads for the brand
+      const { data, error } = await supabase
+        .from('retention_harbor')
+        .select('*')
+        .eq('brand_id', brandId);
+      if (error) throw error;
+      // Transform the data to match the expected format (reuse your transformation logic)
+      const transformedLeads = (data || []).map(lead => {
+        // ... your existing transformation code ...
+        // (keep your conversation parsing, metrics, etc. as before)
         let conversation = [];
         let extractedSubject = `Campaign for ${lead.first_name || 'Lead'}`;
         let emailStatsId = null;
-        
         try {
           if (lead.email_message_body) {
             const parsedConversation = JSON.parse(lead.email_message_body);
-            
-            // Extract stats_id from the first message
             if (parsedConversation.length > 0 && parsedConversation[0].stats_id) {
               emailStatsId = parsedConversation[0].stats_id;
             }
-            
             conversation = parsedConversation.map((msg, index) => {
               const prevMsg = parsedConversation[index - 1];
               let responseTime = undefined;
-              
               if (msg.type === 'REPLY' && prevMsg && prevMsg.type === 'SENT') {
                 const timeDiff = new Date(msg.time) - new Date(prevMsg.time);
                 responseTime = timeDiff / (1000 * 60 * 60); // Convert to hours
               }
-
               return {
                 from: msg.from || '',
                 to: msg.to || '',
@@ -396,8 +417,6 @@ const InboxManager = () => {
                 response_time: responseTime
               };
             });
-            
-            // Extract subject from the first message in conversation or any message with subject
             if (conversation.length > 0) {
               const messageWithSubject = conversation.find(msg => msg.subject && msg.subject.trim() !== '');
               if (messageWithSubject) {
@@ -409,20 +428,14 @@ const InboxManager = () => {
           console.error('Error parsing conversation for lead', lead.id, e);
           conversation = [];
         }
-
-        // Calculate metrics from conversation
         const replies = conversation.filter(m => m.type === 'REPLY');
         const sent = conversation.filter(m => m.type === 'SENT');
-        
-        // Calculate average response time
         const responseTimes = conversation
           .filter(m => m.response_time !== undefined)
           .map(m => m.response_time);
         const avgResponseTime = responseTimes.length > 0 
           ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length 
           : 0;
-
-        // Calculate engagement score
         let engagementScore = 0;
         if (sent.length > 0) {
           engagementScore += Math.min((replies.length / sent.length) * 60, 60);
@@ -432,8 +445,6 @@ const InboxManager = () => {
           else if (avgResponseTime < 72) engagementScore += 10;
         }
         engagementScore = Math.round(Math.min(engagementScore, 100));
-
-        // Calculate intent score based on conversation content
         const allText = conversation.map(m => m.content.toLowerCase()).join(' ');
         let intentScore = 1 + Math.min(replies.length * 2, 6);
         const positiveKeywords = ['interested', 'yes', 'sure', 'sounds good', 'let me know', 'call', 'meeting', 'schedule'];
@@ -441,7 +452,6 @@ const InboxManager = () => {
         if (allText.includes('price') || allText.includes('cost')) intentScore += 1;
         if (allText.includes('sample') || allText.includes('example')) intentScore += 1;
         intentScore = Math.min(intentScore, 10);
-
         return {
           id: lead.id,
           campaign_id: lead.campaign_ID || null,
@@ -463,17 +473,14 @@ const InboxManager = () => {
           lead_category: lead.lead_category,
           tags: [lead.lead_category ? leadCategoryMap[lead.lead_category] || 'Uncategorized' : 'Uncategorized'],
           conversation: conversation,
-          // Include the Supabase fields with their values or defaults
           role: lead.role || 'N/A',
           company_data: lead.company_data || 'N/A',
           personal_linkedin_url: lead.personal_linkedin_url || null,
           business_linkedin_url: lead.business_linkedin_url || null,
           linkedin_url: lead.linkedin_url || 'N/A',
           phone: lead.phone || null,
-          // Add any other relevant fields you want to include
         };
       });
-      
       setLeads(transformedLeads);
     } catch (err) {
       console.error('Error fetching leads:', err);
@@ -2683,25 +2690,48 @@ const InboxManager = () => {
             </button>
           </div>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
-            style={{color: themeStyles.textPrimary}}
-            title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
-          >
-            {isDarkMode ? (
-              <>
-                <span className="text-lg">☀️</span>
-                <span className="hidden sm:inline">Light</span>
-              </>
-            ) : (
-              <>
-                <span className="text-lg">🌙</span>
-                <span className="hidden sm:inline">Dark</span>
-              </>
+          <div className="flex items-center space-x-3">
+            {/* User Info */}
+            {user && (
+              <div className="flex items-center space-x-2 px-3 py-1 rounded-lg text-sm" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}>
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">{user.email}</span>
+              </div>
             )}
-          </button>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+              style={{color: themeStyles.textPrimary}}
+              title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+            >
+              {isDarkMode ? (
+                <>
+                  <span className="text-lg">☀️</span>
+                  <span className="hidden sm:inline">Light</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg">🌙</span>
+                  <span className="hidden sm:inline">Dark</span>
+                </>
+              )}
+            </button>
+
+            {/* Sign Out Button */}
+            {user && onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+                style={{color: '#ef4444'}}
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
