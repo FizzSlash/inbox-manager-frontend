@@ -2391,11 +2391,25 @@ const InboxManager = ({ user, onSignOut }) => {
   // Loading state
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-        <div className="text-center p-8 rounded-2xl shadow-xl" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        <div className="text-center p-8 rounded-2xl shadow-xl mb-6" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderColor: '#54FCFF'}}></div>
           <p className="text-white">Loading leads...</p>
         </div>
+        {/* Show user info and sign out button while loading */}
+        {user && (
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
+                Sign Out
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -2403,17 +2417,54 @@ const InboxManager = ({ user, onSignOut }) => {
   // Error state
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
         <div className="text-center">
           <p className="text-red-400 mb-6 font-medium">Error loading leads: {error}</p>
           <button 
             onClick={fetchLeads}
             className="px-4 py-2 text-white rounded-lg hover:opacity-80 transition-colors"
-            style={{backgroundColor: '#54FCFF', color: '#1A1C1A', border: '1px solid white'}}
-          >
+            style={{backgroundColor: '#54FCFF', color: '#1A1C1A', border: '1px solid white'}}>
             Retry
           </button>
         </div>
+        {user && (
+          <div className="flex flex-col items-center gap-2 mt-6">
+            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
+                Sign Out
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // If no brandId or no leads, show friendly message
+  if (!brandId || leads.length === 0) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        <div className="text-center p-8 rounded-2xl shadow-xl mb-6" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
+          <p className="text-white text-lg font-semibold mb-2">No leads are currently associated with your account.</p>
+          <p className="text-white text-sm mb-4">Your account may not be set up yet. Please reach out to <span className="font-semibold">Navvii support</span> for assistance.</p>
+        </div>
+        {user && (
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
+                Sign Out
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
