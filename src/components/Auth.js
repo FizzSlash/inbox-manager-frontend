@@ -52,9 +52,9 @@ const Auth = ({ onAuthSuccess }) => {
       .eq('id', user.id)
       .single();
     if (!profile) {
-      // Default brand_id for new users
+      // Set brand_id to null for new users
       await supabase.from('profiles').insert([
-        { id: user.id, email: user.email, brand_id: 'retentionharbor' }
+        { id: user.id, email: user.email, brand_id: null }
       ]);
     }
   };
