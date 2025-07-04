@@ -88,7 +88,8 @@ function App() {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setNeedsVerification(false);
     setPendingUser(null);

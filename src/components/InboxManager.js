@@ -2444,16 +2444,23 @@ const InboxManager = ({ user, onSignOut }) => {
     );
   }
 
-  // If no brandId or no leads, show friendly message
-  if (!brandId || leads.length === 0) {
+  // If no brandId, show subscribe overlay and blur the rest of the UI
+  if (!brandId) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-        <div className="text-center p-8 rounded-2xl shadow-xl mb-6" style={{backgroundColor: 'rgba(26, 28, 26, 0.8)', border: '1px solid white'}}>
-          <p className="text-white text-lg font-semibold mb-2">No leads are currently associated with your account.</p>
-          <p className="text-white text-sm mb-4">Your account may not be set up yet. Please reach out to <span className="font-semibold">Navvii support</span> for assistance.</p>
+      <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        {/* Blurred background */}
+        <div className="absolute inset-0 backdrop-blur-sm z-0" />
+        {/* Main content blurred */}
+        <div className="relative z-10 flex flex-col items-center justify-center h-full w-full">
+          <div className="bg-white/90 dark:bg-gray-900/90 p-10 rounded-2xl shadow-2xl border-2 border-blue-400 flex flex-col items-center max-w-lg mx-auto">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Subscribe to unlock the inbox</h2>
+            <p className="text-gray-700 dark:text-gray-300 mb-4">Your account is not yet associated with a brand. Please subscribe or contact Navvii support to unlock your inbox.</p>
+            <div className="text-gray-500 dark:text-gray-400 text-sm">No leads are currently associated with your account.</div>
+          </div>
         </div>
+        {/* User info and sign out button */}
         {user && (
-          <div className="flex flex-col items-center gap-2">
+          <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-20">
             <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
             {onSignOut && (
               <button
