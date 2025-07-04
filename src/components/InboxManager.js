@@ -344,8 +344,8 @@ const InboxManager = ({ user, onSignOut }) => {
     if (theyRepliedLast && hoursSinceLastMessage < 24) {
       return 'needs-response';
     }
-    // NEEDS FOLLOWUP: We sent last, and it's been followupDays+ days
-    if (weRepliedLast && daysSinceLastMessage >= followupDays) {
+    // NEEDS FOLLOWUP: We sent last, and it's been 3+ days
+    if (weRepliedLast && daysSinceLastMessage >= 3) {
       return 'needs-followup';
     }
     return 'none';
@@ -2643,9 +2643,6 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Add state for followupDays at the top of the component
-  const [followupDays, setFollowupDays] = useState(3);
-
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -3595,24 +3592,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs" style={{color: themeStyles.textSecondary}}>
-                      You sent last, no reply
-                    </span>
-                    <input
-                      type="number"
-                      min={3}
-                      max={10}
-                      value={followupDays}
-                      onChange={e => setFollowupDays(Math.max(3, Math.min(10, Number(e.target.value))))}
-                      className="w-10 px-1 py-0.5 rounded text-xs text-center border border-gray-400 bg-transparent"
-                      style={{color: themeStyles.textPrimary, borderColor: themeStyles.border}}
-                      aria-label="Followup days"
-                    />
-                    <span className="text-xs" style={{color: themeStyles.textSecondary}}>
-                      days
-                    </span>
-                  </div>
+                  <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>You sent last, no reply 3+ days</div>
                 </div>
               </button>
             </div>
