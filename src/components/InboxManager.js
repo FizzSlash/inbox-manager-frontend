@@ -2643,7 +2643,7 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Add state for adjustable followup days (default 3)
+  // Add state for followupDays at the top of the component
   const [followupDays, setFollowupDays] = useState(3);
 
   return (
@@ -3595,7 +3595,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
                     {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs" style={{color: themeStyles.textSecondary}}>
                       You sent last, no reply
                     </span>
@@ -3604,10 +3604,10 @@ const InboxManager = ({ user, onSignOut }) => {
                       min={3}
                       max={10}
                       value={followupDays}
-                      onChange={e => setFollowupDays(Number(e.target.value))}
-                      className="w-10 px-1 py-0.5 rounded text-xs text-center border border-gray-300 bg-transparent"
+                      onChange={e => setFollowupDays(Math.max(3, Math.min(10, Number(e.target.value))))}
+                      className="w-10 px-1 py-0.5 rounded text-xs text-center border border-gray-400 bg-transparent"
                       style={{color: themeStyles.textPrimary, borderColor: themeStyles.border}}
-                      title="Days before followup is needed"
+                      aria-label="Followup days"
                     />
                     <span className="text-xs" style={{color: themeStyles.textSecondary}}>
                       days
