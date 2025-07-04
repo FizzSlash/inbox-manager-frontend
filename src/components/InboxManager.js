@@ -1257,21 +1257,6 @@ const InboxManager = ({ user, onSignOut }) => {
             return false;
           }
         });
-      } else if (activeTab === 'reminders') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            const weRepliedLast = lastMessage && lastMessage.type === 'SENT';
-            const daysSinceLastMessage = lastMessage ? (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24) : 0;
-            return weRepliedLast && daysSinceLastMessage >= 3;
-          } catch (e) {
-            console.warn('Error filtering reminders:', e);
-            return false;
-          }
-        });
       }
 
       // Apply search filter
@@ -2658,9 +2643,6 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Add state for adjustable reminder days
-  const [reminderDays, setReminderDays] = useState(3);
-
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -3945,42 +3927,6 @@ const InboxManager = ({ user, onSignOut }) => {
                 </>
               )}
             </button>
-            <button
-              onClick={() => setActiveTab('reminders')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                activeTab === 'reminders'
-                  ? 'opacity-100'
-                  : 'opacity-80 hover:opacity-90'
-              }`}
-              style={{
-                backgroundColor: activeTab === 'reminders' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: activeTab === 'reminders' ? themeStyles.accent : themeStyles.textPrimary, 
-                border: `1px solid ${themeStyles.border}`
-              }}
-              disabled={loading}
-            >
-              Reminders
-              <input
-                type="number"
-                min={1}
-                max={30}
-                value={reminderDays}
-                onChange={e => setReminderDays(Math.max(1, Math.min(30, Number(e.target.value))))}
-                className="ml-2 w-12 px-1 py-0.5 rounded text-xs border border-gray-400 bg-transparent text-center"
-                style={{color: themeStyles.textPrimary, borderColor: themeStyles.border}}
-                title="Days since last sent"
-              />
-              {activeTab !== 'reminders' && (
-                <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                  {leads.filter(lead => {
-                    const lastMessage = lead.conversation && lead.conversation.length > 0 ? lead.conversation[lead.conversation.length - 1] : null;
-                    const weRepliedLast = lastMessage && lastMessage.type === 'SENT';
-                    const daysSinceLastMessage = lastMessage ? (new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24) : 0;
-                    return weRepliedLast && daysSinceLastMessage >= reminderDays;
-                  }).length}
-                </span>
-              )}
-            </button>
           </div>
 
 
@@ -4022,13 +3968,6 @@ const InboxManager = ({ user, onSignOut }) => {
                   <div className="bg-green-600 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
                     <div className="absolute inset-0 bg-white opacity-10 animate-pulse" />
                     <span className="relative z-10">📞 NEEDS FOLLOWUP</span>
-                  </div>
-                );
-              } else if (urgency === 'reminders') {
-                return (
-                  <div className="bg-yellow-600 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
-                    <div className="absolute inset-0 bg-white opacity-10 animate-pulse" />
-                    <span className="relative z-10">📅 REMINDERS</span>
                   </div>
                 );
               }
