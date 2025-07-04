@@ -2444,8 +2444,8 @@ const InboxManager = ({ user, onSignOut }) => {
     );
   }
 
-  // If no brandId, show subscribe overlay and blur the rest of the UI
-  if (!brandId) {
+  // If brandId is '1', show subscribe overlay and blur the rest of the UI
+  if (brandId === '1') {
     return (
       <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
         {/* Blurred background */}
