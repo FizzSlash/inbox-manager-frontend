@@ -1186,6 +1186,10 @@ const InboxManager = ({ user, onSignOut }) => {
       };
     });
 
+    // In analyticsData useMemo, after totalLeads is calculated:
+    const leadsWithReplies = filteredLeads.filter(lead => lead.conversation.some(m => m.type === 'REPLY'));
+    const conversionRate = totalLeads > 0 ? (leadsWithReplies.length / totalLeads) * 100 : 0;
+
           return {
       totalLeads,
       leadsWithMultipleReplies,
@@ -1202,7 +1206,9 @@ const InboxManager = ({ user, onSignOut }) => {
       maxCount,
       totalReplies,
       dateRange: daysBack,
-      copyInsights // Add copy insights to analytics data
+      copyInsights, // Add copy insights to analytics data
+      leadsWithReplies: leadsWithReplies.length,
+      conversionRate,
     };
   }, [leads, analyticsDateRange]);
 
@@ -2686,7 +2692,7 @@ const InboxManager = ({ user, onSignOut }) => {
               <div className="relative recent-dropdown">
                 <button
                   onClick={() => setShowRecentDropdown(!showRecentDropdown)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-300 hover:bg-white/5 flex items-center gap-2"
                   style={{color: themeStyles.textPrimary}}
                 >
                   <Clock className="w-4 h-4" />
@@ -2695,7 +2701,7 @@ const InboxManager = ({ user, onSignOut }) => {
                 </button>
 
                 {showRecentDropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                     <div className="p-3">
                       <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
                       <div className="space-y-1">
@@ -3133,6 +3139,21 @@ const InboxManager = ({ user, onSignOut }) => {
                         <MessageSquare className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.accent}} />
                       </div>
                     </div>
+
+                    <div className="p-6 rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>Lead Conversion Rate</p>
+                          <p className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.success}}>
+                            {analyticsData.conversionRate.toFixed(1)}%
+                          </p>
+                          <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            {analyticsData.leadsWithReplies} of {analyticsData.totalLeads} leads
+                          </p>
+                        </div>
+                        <TrendingUp className="w-8 h-8 transition-colors duration-300" style={{color: themeStyles.success}} />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Charts Grid */}
@@ -3246,7 +3267,13 @@ const InboxManager = ({ user, onSignOut }) => {
                                 d.day === ((dayIndex + 1) % 7) && d.hour === hour // Adjust for Sunday=0
                               );
                               const intensity = analyticsData.maxCount > 0 ? (dataPoint?.count || 0) / analyticsData.maxCount : 0;
-                              
+                              // Find up to 5 leads who replied in this slot
+                              const repliesInSlot = analyticsData.replyMessages
+                                ? analyticsData.replyMessages.filter(msg => msg.dayOfWeek === ((dayIndex + 1) % 7) && msg.hour === hour)
+                                : [];
+                              const leadEmails = repliesInSlot.slice(0, 5).map(msg => msg.from || msg.email || 'Lead');
+                              const tooltip = `${dayName} ${hour}:00\n${dataPoint?.count || 0} replies` +
+                                (leadEmails.length > 0 ? `\nLeads: ${leadEmails.join(', ')}` : '');
                               return (
                                 <div
                                   key={hour}
@@ -3257,7 +3284,7 @@ const InboxManager = ({ user, onSignOut }) => {
                                       : themeStyles.tertiaryBg,
                                     border: `1px solid ${themeStyles.border}`
                                   }}
-                                  title={`${dayName} ${hour}:00 - ${dataPoint?.count || 0} replies`}
+                                  title={tooltip}
                                 />
                               );
                             })}
