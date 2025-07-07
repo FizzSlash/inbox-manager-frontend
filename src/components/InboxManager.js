@@ -2643,9 +2643,6 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Add state for heatmap tooltip
-  const [heatmapTooltip, setHeatmapTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
-
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -3249,41 +3246,18 @@ const InboxManager = ({ user, onSignOut }) => {
                                 d.day === ((dayIndex + 1) % 7) && d.hour === hour // Adjust for Sunday=0
                               );
                               const intensity = analyticsData.maxCount > 0 ? (dataPoint?.count || 0) / analyticsData.maxCount : 0;
-                              // Find up to 5 leads who replied in this slot
-                              const repliesInSlot = analyticsData.replyMessages
-                                ? analyticsData.replyMessages.filter(msg => msg.dayOfWeek === ((dayIndex + 1) % 7) && msg.hour === hour)
-                                : [];
-                              const leadEmails = repliesInSlot.slice(0, 5).map(msg => msg.from || msg.email || 'Lead');
-                              const tooltip = `${dayName} ${hour}:00\n${dataPoint?.count || 0} replies` +
-                                (leadEmails.length > 0 ? `\nLeads: ${leadEmails.join(', ')}` : '');
+                              
                               return (
                                 <div
                                   key={hour}
-                                  className="flex-1 h-6 rounded-sm transition-all duration-300 hover:scale-110 cursor-pointer relative"
+                                  className="flex-1 h-6 rounded-sm transition-all duration-300 hover:scale-110 cursor-pointer"
                                   style={{
                                     backgroundColor: intensity > 0 
                                       ? `${themeStyles.accent}${Math.floor(intensity * 255).toString(16).padStart(2, '0')}`
                                       : themeStyles.tertiaryBg,
                                     border: `1px solid ${themeStyles.border}`
                                   }}
-                                  onMouseEnter={e => {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    setHeatmapTooltip({
-                                      visible: true,
-                                      x: rect.left + rect.width / 2,
-                                      y: rect.top,
-                                      content: (
-                                        <div style={{whiteSpace: 'pre-line'}}>
-                                          <div className="font-bold">{dayName} {hour}:00</div>
-                                          <div>{dataPoint?.count || 0} replies</div>
-                                          {leadEmails.length > 0 && (
-                                            <div className="mt-1 text-xs">Leads: {leadEmails.join(', ')}</div>
-                                          )}
-                                        </div>
-                                      )
-                                    });
-                                  }}
-                                  onMouseLeave={() => setHeatmapTooltip({ visible: false, x: 0, y: 0, content: '' })}
+                                  title={`${dayName} ${hour}:00 - ${dataPoint?.count || 0} replies`}
                                 />
                               );
                             })}
