@@ -2645,7 +2645,6 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Add state for heatmap tooltip
   const [heatmapTooltip, setHeatmapTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
-  const heatmapRef = useRef(null);
 
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
@@ -3228,7 +3227,7 @@ const InboxManager = ({ user, onSignOut }) => {
                     </div>
                     
                     {/* Heatmap Grid */}
-                    <div className="relative" ref={heatmapRef}>
+                    <div className="relative">
                       {/* Hour labels */}
                       <div className="flex mb-2 ml-16">
                         {Array.from({ length: 24 }, (_, hour) => (
@@ -3237,6 +3236,7 @@ const InboxManager = ({ user, onSignOut }) => {
                           </div>
                         ))}
                       </div>
+                      
                       {/* Heatmap rows */}
                       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((dayName, dayIndex) => (
                         <div key={dayName} className="flex items-center mb-1">
@@ -3249,15 +3249,13 @@ const InboxManager = ({ user, onSignOut }) => {
                                 d.day === ((dayIndex + 1) % 7) && d.hour === hour // Adjust for Sunday=0
                               );
                               const intensity = analyticsData.maxCount > 0 ? (dataPoint?.count || 0) / analyticsData.maxCount : 0;
+                              // Find up to 5 leads who replied in this slot
                               const repliesInSlot = analyticsData.replyMessages
                                 ? analyticsData.replyMessages.filter(msg => msg.dayOfWeek === ((dayIndex + 1) % 7) && msg.hour === hour)
                                 : [];
                               const leadEmails = repliesInSlot.slice(0, 5).map(msg => msg.from || msg.email || 'Lead');
-                              const tooltipContent = (
-                                `<strong>${dayName} ${hour}:00</strong><br/>` +
-                                `${dataPoint?.count || 0} replies` +
-                                (leadEmails.length > 0 ? `<br/>Leads: ${leadEmails.join(', ')}` : '')
-                              );
+                              const tooltip = `${dayName} ${hour}:00\n${dataPoint?.count || 0} replies` +
+                                (leadEmails.length > 0 ? `\nLeads: ${leadEmails.join(', ')}` : '');
                               return (
                                 <div
                                   key={hour}
@@ -3270,41 +3268,48 @@ const InboxManager = ({ user, onSignOut }) => {
                                   }}
                                   onMouseEnter={e => {
                                     const rect = e.currentTarget.getBoundingClientRect();
-                                    const parentRect = heatmapRef.current?.getBoundingClientRect();
                                     setHeatmapTooltip({
                                       visible: true,
-                                      x: rect.left - (parentRect?.left || 0) + rect.width / 2,
-                                      y: rect.top - (parentRect?.top || 0),
-                                      content: tooltipContent
+                                      x: rect.left + rect.width / 2,
+                                      y: rect.top,
+                                      content: (
+                                        <div style={{whiteSpace: 'pre-line'}}>
+                                          <div className="font-bold">{dayName} {hour}:00</div>
+                                          <div>{dataPoint?.count || 0} replies</div>
+                                          {leadEmails.length > 0 && (
+                                            <div className="mt-1 text-xs">Leads: {leadEmails.join(', ')}</div>
+                                          )}
+                                        </div>
+                                      )
                                     });
                                   }}
-                                  onMouseLeave={() => setHeatmapTooltip({ ...heatmapTooltip, visible: false })}
+                                  onMouseLeave={() => setHeatmapTooltip({ visible: false, x: 0, y: 0, content: '' })}
                                 />
                               );
                             })}
                           </div>
                         </div>
                       ))}
-                      {/* Custom Tooltip */}
-                      {heatmapTooltip.visible && (
-                        <div
-                          className="pointer-events-none z-50 px-3 py-2 rounded shadow-lg text-xs font-medium"
-                          style={{
-                            position: 'absolute',
-                            left: heatmapTooltip.x,
-                            top: heatmapTooltip.y - 36, // 36px above cell
-                            backgroundColor: themeStyles.secondaryBg,
-                            color: themeStyles.textPrimary,
-                            border: `1px solid ${themeStyles.border}`,
-                            transform: 'translateX(-50%)',
-                            minWidth: 120,
-                            maxWidth: 220,
-                            whiteSpace: 'pre-line',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                          }}
-                          dangerouslySetInnerHTML={{ __html: heatmapTooltip.content }}
-                        />
-                      )}
+                      
+                      {/* Legend */}
+                      <div className="flex items-center justify-center mt-4 gap-4">
+                        <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>Less</span>
+                        <div className="flex gap-1">
+                          {[0, 0.2, 0.4, 0.6, 0.8, 1].map((intensity, i) => (
+                            <div
+                              key={i}
+                              className="w-3 h-3 rounded-sm"
+                              style={{
+                                backgroundColor: intensity > 0 
+                                  ? `${themeStyles.accent}${Math.floor(intensity * 255).toString(16).padStart(2, '0')}`
+                                  : themeStyles.tertiaryBg,
+                                border: `1px solid ${themeStyles.border}`
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>More</span>
+                      </div>
                     </div>
                   </div>
 
