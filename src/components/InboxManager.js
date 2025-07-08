@@ -2643,6 +2643,42 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
+  // Add this helper function near other lead actions
+  const handleAddToCRM = async (lead) => {
+    if (!lead || !brandId) return;
+    try {
+      // Prepare CRM payload (customize fields as needed)
+      const crmPayload = {
+        brand_id: brandId,
+        lead_id: lead.id,
+        first_name: lead.first_name,
+        last_name: lead.last_name,
+        email: lead.email,
+        phone: lead.phone,
+        calls_booked: 0, // default, or map if you have this
+        show_rate: null,
+        close_rate: null,
+        revenue_collected: 0,
+        status: 'active',
+        notes: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      // Insert into crm_leads
+      const { error: crmError } = await supabase.from('crm_leads').insert([crmPayload]);
+      if (crmError) throw crmError;
+      // Optionally, remove from main leads table
+      const { error: delError } = await supabase.from('retention_harbor').delete().eq('id', lead.id);
+      if (delError) throw delError;
+      // Remove from local state
+      setLeads(prev => prev.filter(l => l.id !== lead.id));
+      setSelectedLead(null);
+      showToast('Lead moved to CRM!', 'success');
+    } catch (err) {
+      showToast('Error moving lead to CRM: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -4161,6 +4197,16 @@ const InboxManager = ({ user, onSignOut }) => {
                   >
                     <X className="w-5 h-5" />
                   </button>
+                  {selectedLead && (
+                    <button
+                      onClick={() => handleAddToCRM(selectedLead)}
+                      className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-blue-600 text-white hover:bg-blue-700"
+                      style={{marginRight: '8px'}}
+                      title="Move to CRM"
+                    >
+                      Add to CRM
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
