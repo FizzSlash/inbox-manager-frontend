@@ -486,7 +486,7 @@ const InboxManager = ({ user, onSignOut }) => {
           business_linkedin_url: lead.business_linkedin_url || null,
           linkedin_url: lead.linkedin_url || 'N/A',
           phone: lead.phone || null,
-          status: 'INBOX'
+          status: lead.status || 'INBOX'
         };
       });
       setLeads(transformedLeads);
@@ -4073,12 +4073,9 @@ const InboxManager = ({ user, onSignOut }) => {
                           Draft
                         </span>
                       )}
-                      {(() => {
-                        console.log('Lead status:', lead.status, 'Lead:', lead.first_name, lead.last_name);
-                        return lead.status === 'CRM' && (
-                          <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
-                        );
-                      })()}
+                      {lead.status === 'CRM' && (
+                        <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
