@@ -68,7 +68,7 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
-const InboxManager = ({ user, onSignOut }) => {
+const InboxManager = ({ user, onSignOut, activeTab, setActiveTab, selectedLead, setSelectedLead }) => {
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,6 @@ const InboxManager = ({ user, onSignOut }) => {
   const [showEnrichmentPopup, setShowEnrichmentPopup] = useState(false);
 
   // Add new state for API settings and tab management
-  const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState({
     esp: {
@@ -627,7 +626,6 @@ const InboxManager = ({ user, onSignOut }) => {
   ];
 
   // State for UI controls
-  const [selectedLead, setSelectedLead] = useState(null);
   const [sortBy, setSortBy] = useState('recent');
   const [filterBy, setFilterBy] = useState('all');
   const [responseFilter, setResponseFilter] = useState('all');

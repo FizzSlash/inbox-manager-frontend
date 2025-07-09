@@ -361,6 +361,7 @@ const CRMManager = ({ brandId }) => {
                   </div>
                   <div className="flex gap-4 mt-auto">
                     <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+                    <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300 ml-auto" style={{backgroundColor: themeStyles.accent, color: themeStyles.textPrimary, fontSize: '1.25rem'}} onClick={() => { setActiveTab('inbox'); setSelectedLead(selectedLead); }}>Go to lead in Inbox</button>
                   </div>
                 </div>
               </div>

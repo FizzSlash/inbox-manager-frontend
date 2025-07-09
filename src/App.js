@@ -10,6 +10,7 @@ function App() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
   const [activeTab, setActiveTab] = useState('inbox');
+  const [selectedLead, setSelectedLead] = useState(null);
   const [brandId, setBrandId] = useState(null);
 
   // Fetch brandId after login
@@ -143,31 +144,24 @@ function App() {
     <div className="App min-h-screen bg-gray-50 dark:bg-gray-900">
       {user ? (
         <>
-          <div className="flex gap-2 p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <button
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'inbox' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
-              onClick={() => setActiveTab('inbox')}
-            >
-              Inbox
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'crm' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
-              onClick={() => setActiveTab('crm')}
-            >
-              CRM
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
-              style={{color: '#ef4444', border: '1px solid #ef4444'}}>
-              Sign Out
-            </button>
-          </div>
+          {/* Remove old tab bar here */}
           {activeTab === 'inbox' ? (
-            <InboxManager user={user} onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }} />
+            <InboxManager
+              user={user}
+              onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              selectedLead={selectedLead}
+              setSelectedLead={setSelectedLead}
+            />
           ) : (
-            <CRMManager brandId={brandId} />
+            <CRMManager
+              brandId={brandId}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              selectedLead={selectedLead}
+              setSelectedLead={setSelectedLead}
+            />
           )}
         </>
       ) : (
