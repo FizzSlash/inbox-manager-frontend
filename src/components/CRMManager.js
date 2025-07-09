@@ -2,6 +2,38 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone } from 'lucide-react';
 
+// ThemeStyles and dark mode detection (copied from InboxManager)
+const getThemeStyles = () => {
+  const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return isDarkMode ? {
+    primaryBg: '#1A1C1A',
+    secondaryBg: 'rgba(26, 28, 26, 0.8)',
+    tertiaryBg: 'rgba(255, 255, 255, 0.05)',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#D1D5DB',
+    textMuted: '#9CA3AF',
+    accent: '#54FCFF',
+    border: 'rgba(255, 255, 255, 0.1)',
+    borderStrong: 'rgba(255, 255, 255, 0.2)',
+    success: '#10B981',
+    warning: '#F59E0B',
+    error: '#EF4444',
+  } : {
+    primaryBg: '#F8FAFC',
+    secondaryBg: '#FFFFFF',
+    tertiaryBg: '#F1F5F9',
+    textPrimary: '#0F172A',
+    textSecondary: '#334155',
+    textMuted: '#64748B',
+    accent: '#2563EB',
+    border: 'rgba(0, 0, 0, 0.15)',
+    borderStrong: 'rgba(0, 0, 0, 0.25)',
+    success: '#059669',
+    warning: '#D97706',
+    error: '#DC2626',
+  };
+};
+
 const STAGE_OPTIONS = [
   'Lead',
   'Contacted',
@@ -23,6 +55,7 @@ const CRMManager = ({ brandId }) => {
   const [savingId, setSavingId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState({ field: 'created_at', dir: 'desc' });
+  const [themeStyles, setThemeStyles] = useState(getThemeStyles());
 
   useEffect(() => {
     const fetchCrmLeads = async () => {
@@ -42,6 +75,12 @@ const CRMManager = ({ brandId }) => {
     };
     if (brandId) fetchCrmLeads();
   }, [brandId, sort]);
+
+  useEffect(() => {
+    const updateTheme = () => setThemeStyles(getThemeStyles());
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
+    return () => window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', updateTheme);
+  }, []);
 
   // Stats calculations
   const stats = useMemo(() => {
@@ -232,37 +271,99 @@ const CRMManager = ({ brandId }) => {
       {/* Side Panel for Lead Details */}
       {sidePanelOpen && selectedLead && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
-          <div className="w-full max-w-xl h-full bg-[#232526] shadow-2xl p-10 flex flex-col relative overflow-y-auto rounded-l-3xl border-l-4 border-accent">
-            <button className="absolute top-6 right-8 text-gray-400 hover:text-white text-3xl" onClick={closeSidePanel}><X className="w-8 h-8" /></button>
-            <h3 className="text-4xl font-bold mb-8 flex items-center gap-3"><Mail className="w-8 h-8 text-accent" /> {selectedLead.first_name} {selectedLead.last_name}</h3>
-            <div className="mb-8 text-lg text-gray-300">{selectedLead.email}</div>
-            <div className="grid grid-cols-2 gap-8 mb-8">
-              <div>
-                <label className="block text-lg text-gray-400 mb-2">Stage</label>
-                <select className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl font-semibold" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
-                  {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-              <div className="flex items-center gap-4 mt-8">
-                <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
-                <label htmlFor="call_booked" className="text-lg text-gray-400">Call Booked</label>
-              </div>
-              <div>
-                <label className="block text-lg text-gray-400 mb-2">Deal Size</label>
-                <input type="number" className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl font-semibold" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
-              </div>
-              <div className="flex items-center gap-4 mt-8">
-                <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
-                <label htmlFor="closed" className="text-lg text-gray-400">Closed</label>
+          <div
+            className="w-full max-w-2xl h-full flex flex-col relative overflow-y-auto"
+            style={{
+              backgroundColor: themeStyles.secondaryBg,
+              borderRadius: '12px',
+              border: `1px solid ${themeStyles.border}`,
+              margin: '8px',
+              marginRight: '0',
+              boxShadow: '0 8px 32px 0 rgba(0,0,0,0.25)',
+              minHeight: 0
+            }}
+          >
+            <button
+              className="absolute top-6 right-8 text-gray-400 hover:text-white text-3xl"
+              onClick={closeSidePanel}
+              style={{color: themeStyles.textMuted}}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            {/* Lead Header */}
+            <div
+              className="p-8 transition-colors duration-300"
+              style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    {selectedLead.first_name} {selectedLead.last_name}
+                  </h2>
+                  <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
+                  {selectedLead.phone ? (
+                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.accent}}>
+                      <Phone className="w-3 h-3" />
+                      <span className="font-medium">{selectedLead.phone}</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      <Phone className="w-3 h-3" />
+                      <span>No phone number found</span>
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    className="px-4 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-indigo-700 text-white hover:bg-indigo-800"
+                    onClick={() => handleMoveToInbox(selectedLead)}
+                  >
+                    Move to Inbox
+                  </button>
+                  <button
+                    onClick={closeSidePanel}
+                    className="p-2 rounded-lg transition-colors duration-300 hover:opacity-80"
+                    style={{border: `1px solid ${themeStyles.border}`, backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="mb-10">
-              <label className="block text-lg text-gray-400 mb-2">Notes</label>
-              <textarea className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl min-h-[120px]" value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
-            </div>
-            <div className="flex gap-4 mt-auto">
-              <button className="px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold shadow-lg" onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
-              <button className="px-8 py-4 rounded-xl bg-indigo-700 text-white text-xl font-bold shadow-lg ml-auto" onClick={() => handleMoveToInbox(selectedLead)}>Move to Inbox</button>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
+              <div className="space-y-8">
+                {/* Unified Lead Information Section */}
+                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
+                      <select className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                        {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-4 mt-8">
+                      <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
+                      <label htmlFor="call_booked" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Call Booked</label>
+                    </div>
+                    <div>
+                      <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Deal Size</label>
+                      <input type="number" className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
+                    </div>
+                    <div className="flex items-center gap-4 mt-8">
+                      <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
+                      <label htmlFor="closed" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Closed</label>
+                    </div>
+                  </div>
+                  <div className="mb-10">
+                    <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Notes</label>
+                    <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[120px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
+                  </div>
+                  <div className="flex gap-4 mt-auto">
+                    <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
