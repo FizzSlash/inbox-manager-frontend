@@ -172,6 +172,22 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
+  const handleRemoveFromCRM = async () => {
+    if (!selectedLead) return;
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ status: 'INBOX' })
+        .eq('id', selectedLead.id);
+      if (error) throw error;
+      setCrmLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+      setToast({ type: 'success', message: 'Lead removed from CRM!' });
+      closeSidePanel();
+    } catch (err) {
+      setToast({ type: 'error', message: 'Error removing lead from CRM: ' + err.message });
+    }
+  };
+
   return (
     <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
@@ -346,6 +362,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                   </div>
                   <div className="flex gap-4 mt-auto">
                     <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+                    <button onClick={handleRemoveFromCRM} className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.error, color: '#fff', fontSize: '1.25rem'}} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Remove from CRM'}</button>
                   </div>
                 </div>
               </div>

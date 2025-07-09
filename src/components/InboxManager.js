@@ -2688,6 +2688,24 @@ const InboxManager = ({ user, onSignOut }) => {
     if (lead) setSelectedLead(lead);
   };
 
+  // Add handleRemoveFromCRM function after handleAddToCRM:
+  const handleRemoveFromCRM = async (lead) => {
+    if (!lead || !brandId) return;
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ status: 'INBOX' })
+        .eq('id', lead.id);
+      if (error) throw error;
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { ...l, status: 'INBOX' } : l
+      ));
+      showToast('Lead removed from CRM!', 'success');
+    } catch (err) {
+      showToast('Error removing lead from CRM: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -4226,7 +4244,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   >
                     <X className="w-5 h-5" />
                   </button>
-                  {selectedLead && (
+                  {selectedLead && selectedLead.status !== 'CRM' && (
                     <button
                       onClick={() => handleAddToCRM(selectedLead)}
                       className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-blue-600 text-white hover:bg-blue-700"
@@ -4234,6 +4252,16 @@ const InboxManager = ({ user, onSignOut }) => {
                       title="Move to CRM"
                     >
                       Add to CRM
+                    </button>
+                  )}
+                  {selectedLead && selectedLead.status === 'CRM' && (
+                    <button
+                      onClick={() => handleRemoveFromCRM(selectedLead)}
+                      className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-red-600 text-white hover:bg-red-700"
+                      style={{marginRight: '8px'}}
+                      title="Remove from CRM"
+                    >
+                      Remove from CRM
                     </button>
                   )}
                   {selectedLead.status === 'CRM' && (
