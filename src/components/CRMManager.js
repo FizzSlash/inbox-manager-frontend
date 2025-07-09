@@ -232,64 +232,37 @@ const CRMManager = ({ brandId }) => {
       {/* Side Panel for Lead Details */}
       {sidePanelOpen && selectedLead && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
-          <div className="w-full max-w-lg h-full bg-[#232526] shadow-2xl p-8 flex flex-col relative overflow-y-auto">
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-white" onClick={closeSidePanel}><X className="w-6 h-6" /></button>
-            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2"><Mail className="w-6 h-6 text-accent" /> {selectedLead.first_name} {selectedLead.last_name}</h3>
-            <div className="mb-4 text-gray-300">{selectedLead.email}</div>
-            <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="w-full max-w-xl h-full bg-[#232526] shadow-2xl p-10 flex flex-col relative overflow-y-auto rounded-l-3xl border-l-4 border-accent">
+            <button className="absolute top-6 right-8 text-gray-400 hover:text-white text-3xl" onClick={closeSidePanel}><X className="w-8 h-8" /></button>
+            <h3 className="text-4xl font-bold mb-8 flex items-center gap-3"><Mail className="w-8 h-8 text-accent" /> {selectedLead.first_name} {selectedLead.last_name}</h3>
+            <div className="mb-8 text-lg text-gray-300">{selectedLead.email}</div>
+            <div className="grid grid-cols-2 gap-8 mb-8">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Stage</label>
-                {editing ? (
-                  <select className="w-full rounded bg-[#181A1B] px-2 py-1" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
-                    {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                ) : (
-                  <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{selectedLead.stage}</span>
-                )}
+                <label className="block text-lg text-gray-400 mb-2">Stage</label>
+                <select className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl font-semibold" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                  {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
               </div>
-              <div className="flex items-center gap-2 mt-6">
-                {editing ? (
-                  <><input type="checkbox" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} /> <label className="text-xs text-gray-400">Call Booked</label></>
-                ) : (
-                  <><input type="checkbox" checked={!!selectedLead.call_booked} readOnly /> <label className="text-xs text-gray-400">Call Booked</label></>
-                )}
+              <div className="flex items-center gap-4 mt-8">
+                <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
+                <label htmlFor="call_booked" className="text-lg text-gray-400">Call Booked</label>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Deal Size</label>
-                {editing ? (
-                  <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
-                ) : (
-                  `$${selectedLead.deal_size?.toLocaleString() || 0}`
-                )}
+                <label className="block text-lg text-gray-400 mb-2">Deal Size</label>
+                <input type="number" className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl font-semibold" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
               </div>
-              <div className="flex items-center gap-2 mt-6">
-                {editing ? (
-                  <><input type="checkbox" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} /> <label className="text-xs text-gray-400">Closed</label></>
-                ) : (
-                  <><input type="checkbox" checked={!!selectedLead.closed} readOnly /> <label className="text-xs text-gray-400">Closed</label></>
-                )}
+              <div className="flex items-center gap-4 mt-8">
+                <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
+                <label htmlFor="closed" className="text-lg text-gray-400">Closed</label>
               </div>
             </div>
-            <div className="mb-6">
-              <label className="block text-xs text-gray-400 mb-1">Notes</label>
-              {editing ? (
-                <textarea className="w-full rounded bg-[#181A1B] px-2 py-1 min-h-[80px]" value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
-              ) : (
-                <span className="block whitespace-pre-line text-base">{selectedLead.notes}</span>
-              )}
+            <div className="mb-10">
+              <label className="block text-lg text-gray-400 mb-2">Notes</label>
+              <textarea className="w-full rounded-xl bg-[#181A1B] px-4 py-3 text-xl min-h-[120px]" value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
             </div>
-            <div className="flex gap-2">
-              {editing ? (
-                <>
-                  <button className="px-4 py-2 rounded bg-green-600 text-white font-semibold" onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save Changes'}</button>
-                  <button className="px-4 py-2 rounded bg-gray-600 text-white font-semibold" onClick={cancelEdit}>Cancel</button>
-                </>
-              ) : (
-                <>
-                  <button className="px-4 py-2 rounded bg-blue-600 text-white font-semibold flex items-center gap-2" onClick={startEdit}><Edit3 className="w-5 h-5" /> Edit</button>
-                  <button className="px-4 py-2 rounded bg-indigo-700 text-white font-semibold ml-auto" onClick={() => handleMoveToInbox(selectedLead)}>Move to Inbox</button>
-                </>
-              )}
+            <div className="flex gap-4 mt-auto">
+              <button className="px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold shadow-lg" onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+              <button className="px-8 py-4 rounded-xl bg-indigo-700 text-white text-xl font-bold shadow-lg ml-auto" onClick={() => handleMoveToInbox(selectedLead)}>Move to Inbox</button>
             </div>
           </div>
         </div>
