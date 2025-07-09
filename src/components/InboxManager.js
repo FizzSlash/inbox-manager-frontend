@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
+import CRMManager from './CRMManager';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -2681,7 +2682,7 @@ const InboxManager = ({ user, onSignOut }) => {
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-12 bg-opacity-50 backdrop-blur-md z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderBottom: `1px solid ${themeStyles.border}`}}>
+      <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
           <div className="flex space-x-4">
             <button
@@ -2697,6 +2698,23 @@ const InboxManager = ({ user, onSignOut }) => {
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
                 Inbox
+              </div>
+            </button>
+
+            {/* CRM Tab */}
+            <button
+              onClick={() => setActiveTab('crm')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'crm' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'crm' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'crm' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                CRM
               </div>
             </button>
 
@@ -4933,6 +4951,13 @@ const InboxManager = ({ user, onSignOut }) => {
           </>
         )}
       </div>
+
+      {/* Main Content - CRM */}
+      {activeTab === 'crm' && (
+        <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
+          <CRMManager brandId={brandId} />
+        </div>
+      )}
     </div>
   );
 };
