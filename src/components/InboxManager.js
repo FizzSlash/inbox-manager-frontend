@@ -384,11 +384,12 @@ const InboxManager = ({ user, onSignOut }) => {
       setLoading(true);
       setError(null);
       if (!brandId) return;
-      // Fetch leads for the brand
+      // Fetch only INBOX leads for the brand
       const { data, error } = await supabase
         .from('retention_harbor')
         .select('*')
-        .eq('brand_id', brandId);
+        .eq('brand_id', brandId)
+        .eq('status', 'INBOX');
       if (error) throw error;
       // Transform the data to match the expected format (reuse your transformation logic)
       const transformedLeads = (data || []).map(lead => {
@@ -485,6 +486,7 @@ const InboxManager = ({ user, onSignOut }) => {
           business_linkedin_url: lead.business_linkedin_url || null,
           linkedin_url: lead.linkedin_url || 'N/A',
           phone: lead.phone || null,
+          status: 'INBOX'
         };
       });
       setLeads(transformedLeads);
@@ -2647,35 +2649,32 @@ const InboxManager = ({ user, onSignOut }) => {
   const handleAddToCRM = async (lead) => {
     if (!lead || !brandId) return;
     try {
-      // Prepare CRM payload (customize fields as needed)
-      const crmPayload = {
-        brand_id: brandId,
-        lead_id: lead.id,
-        first_name: lead.first_name,
-        last_name: lead.last_name,
-        email: lead.email,
-        phone: lead.phone,
-        calls_booked: 0, // default, or map if you have this
-        show_rate: null,
-        close_rate: null,
-        revenue_collected: 0,
-        status: 'active',
-        notes: '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      // Insert into crm_leads
-      const { error: crmError } = await supabase.from('crm_leads').insert([crmPayload]);
-      if (crmError) throw crmError;
-      // Optionally, remove from main leads table
-      const { error: delError } = await supabase.from('retention_harbor').delete().eq('id', lead.id);
-      if (delError) throw delError;
-      // Remove from local state
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ status: 'CRM' })
+        .eq('id', lead.id);
+      if (error) throw error;
       setLeads(prev => prev.filter(l => l.id !== lead.id));
       setSelectedLead(null);
       showToast('Lead moved to CRM!', 'success');
     } catch (err) {
       showToast('Error moving lead to CRM: ' + err.message, 'error');
+    }
+  };
+
+  // Add a button to move CRM leads back to INBOX (for CRMManager, but you can add similar logic here for demo)
+  const handleMoveToInbox = async (lead) => {
+    if (!lead || !brandId) return;
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ status: 'INBOX' })
+        .eq('id', lead.id);
+      if (error) throw error;
+      showToast('Lead moved to Inbox!', 'success');
+      // Optionally refetch leads here if you want
+    } catch (err) {
+      showToast('Error moving lead to Inbox: ' + err.message, 'error');
     }
   };
 
