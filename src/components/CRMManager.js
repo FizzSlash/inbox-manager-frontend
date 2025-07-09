@@ -20,8 +20,6 @@ const CRMManager = ({ brandId }) => {
   const [editingId, setEditingId] = useState(null);
   const [editFields, setEditFields] = useState({});
   const [savingId, setSavingId] = useState(null);
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [sidePanelOpen, setSidePanelOpen] = useState(false);
 
   useEffect(() => {
     const fetchCrmLeads = async () => {
@@ -52,7 +50,6 @@ const CRMManager = ({ brandId }) => {
       if (error) throw error;
       setCrmLeads(prev => prev.filter(l => l.id !== lead.id));
       setToast({ type: 'success', message: 'Lead moved to Inbox!' });
-      if (selectedLead && selectedLead.id === lead.id) setSidePanelOpen(false);
     } catch (err) {
       setToast({ type: 'error', message: 'Error moving lead to Inbox: ' + err.message });
     }
@@ -88,34 +85,6 @@ const CRMManager = ({ brandId }) => {
       setToast({ type: 'success', message: 'Lead updated!' });
       setEditingId(null);
       setEditFields({});
-    } catch (err) {
-      setToast({ type: 'error', message: 'Error saving lead: ' + err.message });
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  // Side panel logic
-  const openSidePanel = (lead) => {
-    setSelectedLead(lead);
-    setSidePanelOpen(true);
-  };
-  const closeSidePanel = () => {
-    setSelectedLead(null);
-    setSidePanelOpen(false);
-  };
-  const saveSidePanel = async () => {
-    if (!selectedLead) return;
-    setSavingId(selectedLead.id);
-    try {
-      const { error } = await supabase
-        .from('retention_harbor')
-        .update(selectedLead)
-        .eq('id', selectedLead.id);
-      if (error) throw error;
-      setCrmLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...selectedLead } : l));
-      setToast({ type: 'success', message: 'Lead updated!' });
-      setSidePanelOpen(false);
     } catch (err) {
       setToast({ type: 'error', message: 'Error saving lead: ' + err.message });
     } finally {
@@ -201,129 +170,87 @@ const CRMManager = ({ brandId }) => {
       {toast && (
         <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
       )}
-      {/* Leads Table */}
-      <div className="overflow-x-auto rounded-xl shadow-lg bg-[#232526]">
+      {/* Card List of Leads */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {loading ? (
-          <div className="p-8 text-center text-lg text-gray-300 flex items-center justify-center gap-2"><Loader2 className="animate-spin w-6 h-6" /> Loading CRM leads...</div>
+          <div className="col-span-full p-8 text-center text-lg text-gray-300 flex items-center justify-center gap-2"><Loader2 className="animate-spin w-6 h-6" /> Loading CRM leads...</div>
         ) : filteredLeads.length === 0 ? (
-          <div className="p-8 text-center text-lg text-gray-300">No CRM leads found.</div>
+          <div className="col-span-full p-8 text-center text-lg text-gray-300">No CRM leads found.</div>
         ) : (
-          <table className="min-w-full text-white">
-            <thead>
-              <tr className="bg-[#1A1C1A] text-gray-300">
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Stage</th>
-                <th className="px-4 py-2">Call Booked</th>
-                <th className="px-4 py-2">Deal Size</th>
-                <th className="px-4 py-2">Closed</th>
-                <th className="px-4 py-2">Notes</th>
-                <th className="px-4 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLeads.map(lead => (
-                <tr key={lead.id} className={`border-t border-gray-700 hover:bg-[#232a2e] transition-colors ${editingId === lead.id ? 'bg-[#232a2e]' : ''}`}
-                  onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL') openSidePanel(lead); }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td className="px-4 py-2 font-medium flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}
-                  </td>
-                  <td className="px-4 py-2">
-                    {editingId === lead.id ? (
-                      <select className="rounded bg-[#181A1B] px-2 py-1" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
-                        {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                    ) : (
-                      <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-center">
-                    {editingId === lead.id ? (
-                      <input type="checkbox" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} />
-                    ) : (
-                      <input type="checkbox" checked={!!lead.call_booked} readOnly />
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {editingId === lead.id ? (
-                      <input type="number" className="w-24 rounded bg-[#181A1B] px-2 py-1" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
-                    ) : (
-                      `$${lead.deal_size?.toLocaleString() || 0}`
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-center">
-                    {editingId === lead.id ? (
-                      <input type="checkbox" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} />
-                    ) : (
-                      <input type="checkbox" checked={!!lead.closed} readOnly />
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {editingId === lead.id ? (
-                      <input type="text" className="w-32 rounded bg-[#181A1B] px-2 py-1" value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
-                    ) : (
-                      <span className="truncate max-w-xs block" title={lead.notes}>{lead.notes}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 flex gap-2">
-                    {editingId === lead.id ? (
-                      <>
-                        <button className="px-2 py-1 rounded bg-green-600 text-white text-xs" onClick={e => { e.stopPropagation(); saveEdit(lead); }} disabled={savingId === lead.id}>{savingId === lead.id ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save'}</button>
-                        <button className="px-2 py-1 rounded bg-gray-600 text-white text-xs" onClick={e => { e.stopPropagation(); cancelEdit(); }}>Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="px-2 py-1 rounded bg-blue-600 text-white text-xs" onClick={e => { e.stopPropagation(); startEdit(lead); }} title="Edit"><Edit3 className="w-4 h-4 inline" /></button>
-                        <button className="px-2 py-1 rounded bg-indigo-700 text-white text-xs font-semibold" onClick={e => { e.stopPropagation(); handleMoveToInbox(lead); }}>Move to Inbox</button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          filteredLeads.map(lead => (
+            <div key={lead.id} className={`rounded-2xl bg-[#232526] shadow-lg p-6 flex flex-col gap-4 relative transition-all ${editingId === lead.id ? 'ring-2 ring-accent' : ''}`}> 
+              <div className="flex items-center gap-3 mb-2">
+                <Mail className="w-6 h-6 text-accent" />
+                <span className="text-xl font-bold">{lead.first_name} {lead.last_name}</span>
+                <span className="ml-auto inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span>
+              </div>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-400">Stage</label>
+                  {editingId === lead.id ? (
+                    <select className="rounded bg-[#181A1B] px-3 py-2 text-base" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                      {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-base font-semibold">{lead.stage}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-400">Call Booked</label>
+                  {editingId === lead.id ? (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-5 h-5" />
+                      <span className="text-base">{editFields.call_booked ? 'Yes' : 'No'}</span>
+                    </label>
+                  ) : (
+                    <span className="text-base">{lead.call_booked ? 'Yes' : 'No'}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-400">Deal Size</label>
+                  {editingId === lead.id ? (
+                    <input type="number" className="rounded bg-[#181A1B] px-3 py-2 text-base w-32" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
+                  ) : (
+                    <span className="text-base font-semibold">${lead.deal_size?.toLocaleString() || 0}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-400">Closed</label>
+                  {editingId === lead.id ? (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-5 h-5" />
+                      <span className="text-base">{editFields.closed ? 'Yes' : 'No'}</span>
+                    </label>
+                  ) : (
+                    <span className="text-base">{lead.closed ? 'Yes' : 'No'}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 mt-2">
+                <label className="text-xs text-gray-400">Notes</label>
+                {editingId === lead.id ? (
+                  <textarea className="rounded bg-[#181A1B] px-3 py-2 text-base min-h-[60px]" value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
+                ) : (
+                  <span className="text-base block whitespace-pre-line">{lead.notes}</span>
+                )}
+              </div>
+              <div className="flex gap-2 mt-4">
+                {editingId === lead.id ? (
+                  <>
+                    <button className="px-4 py-2 rounded bg-green-600 text-white text-base font-semibold" onClick={() => saveEdit(lead)} disabled={savingId === lead.id}>{savingId === lead.id ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save'}</button>
+                    <button className="px-4 py-2 rounded bg-gray-600 text-white text-base font-semibold" onClick={cancelEdit}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="px-4 py-2 rounded bg-blue-600 text-white text-base font-semibold flex items-center gap-2" onClick={() => startEdit(lead)} title="Edit"><Edit3 className="w-5 h-5" /> Edit</button>
+                    <button className="px-4 py-2 rounded bg-indigo-700 text-white text-base font-semibold" onClick={() => handleMoveToInbox(lead)}>Move to Inbox</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </div>
-      {/* Side Panel for Lead Details */}
-      {sidePanelOpen && selectedLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
-          <div className="w-full max-w-lg h-full bg-[#232526] shadow-2xl p-8 flex flex-col relative overflow-y-auto">
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-white" onClick={closeSidePanel}><X className="w-6 h-6" /></button>
-            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2"><Mail className="w-6 h-6 text-accent" /> {selectedLead.first_name} {selectedLead.last_name}</h3>
-            <div className="mb-4 text-gray-300">{selectedLead.email}</div>
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Stage</label>
-                <select className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.stage || 'Lead'} onChange={e => setSelectedLead(l => ({ ...l, stage: e.target.value }))}>
-                  {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-              <div className="flex items-center gap-2 mt-6">
-                <input type="checkbox" checked={!!selectedLead.call_booked} onChange={e => setSelectedLead(l => ({ ...l, call_booked: e.target.checked }))} />
-                <label className="text-xs text-gray-400">Call Booked</label>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Deal Size</label>
-                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.deal_size || 0} onChange={e => setSelectedLead(l => ({ ...l, deal_size: Number(e.target.value) }))} />
-              </div>
-              <div className="flex items-center gap-2 mt-6">
-                <input type="checkbox" checked={!!selectedLead.closed} onChange={e => setSelectedLead(l => ({ ...l, closed: e.target.checked }))} />
-                <label className="text-xs text-gray-400">Closed</label>
-              </div>
-            </div>
-            <div className="mb-6">
-              <label className="block text-xs text-gray-400 mb-1">Notes</label>
-              <textarea className="w-full rounded bg-[#181A1B] px-2 py-1 min-h-[80px]" value={selectedLead.notes || ''} onChange={e => setSelectedLead(l => ({ ...l, notes: e.target.value }))} />
-            </div>
-            <div className="flex gap-2">
-              <button className="px-4 py-2 rounded bg-green-600 text-white font-semibold" onClick={saveSidePanel} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-5 h-5" /> : 'Save Changes'}</button>
-              <button className="px-4 py-2 rounded bg-gray-600 text-white font-semibold" onClick={closeSidePanel}>Cancel</button>
-              <button className="px-4 py-2 rounded bg-indigo-700 text-white font-semibold ml-auto" onClick={() => handleMoveToInbox(selectedLead)}>Move to Inbox</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
