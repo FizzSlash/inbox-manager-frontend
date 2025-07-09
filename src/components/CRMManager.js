@@ -44,7 +44,7 @@ const STAGE_OPTIONS = [
   'Nurture'
 ];
 
-const CRMManager = ({ brandId }) => {
+const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   const [crmLeads, setCrmLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -315,10 +315,10 @@ const CRMManager = ({ brandId }) => {
                 </div>
                 <div className="flex items-center gap-4">
                   <button
+                    onClick={() => onGoToInboxLead(selectedLead.id)}
                     className="px-4 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-indigo-700 text-white hover:bg-indigo-800"
-                    onClick={() => handleMoveToInbox(selectedLead)}
                   >
-                    Move to Inbox
+                    Go to lead in Inbox
                   </button>
                   <button
                     onClick={closeSidePanel}

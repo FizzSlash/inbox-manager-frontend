@@ -389,8 +389,7 @@ const InboxManager = ({ user, onSignOut }) => {
       const { data, error } = await supabase
         .from('retention_harbor')
         .select('*')
-        .eq('brand_id', brandId)
-        .eq('status', 'INBOX');
+        .eq('brand_id', brandId);
       if (error) throw error;
       // Transform the data to match the expected format (reuse your transformation logic)
       const transformedLeads = (data || []).map(lead => {
@@ -2679,6 +2678,14 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
+  // When rendering <CRMManager />, add a prop: onGoToInboxLead={handleGoToInboxLead}
+  // Add this handler:
+  const handleGoToInboxLead = (leadId) => {
+    setActiveTab('inbox');
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) setSelectedLead(lead);
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -4064,6 +4071,9 @@ const InboxManager = ({ user, onSignOut }) => {
                           Draft
                         </span>
                       )}
+                      {lead.status === 'CRM' && (
+                        <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
@@ -4223,6 +4233,9 @@ const InboxManager = ({ user, onSignOut }) => {
                     >
                       Add to CRM
                     </button>
+                  )}
+                  {selectedLead.status === 'CRM' && (
+                    <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
                   )}
                 </div>
               </div>
@@ -4955,7 +4968,7 @@ const InboxManager = ({ user, onSignOut }) => {
       {/* Main Content - CRM */}
       {activeTab === 'crm' && (
         <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
-          <CRMManager brandId={brandId} />
+          <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
         </div>
       )}
     </div>
