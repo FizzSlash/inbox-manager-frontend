@@ -2654,7 +2654,9 @@ const InboxManager = ({ user, onSignOut }) => {
         .update({ status: 'CRM' })
         .eq('id', lead.id);
       if (error) throw error;
-      setLeads(prev => prev.filter(l => l.id !== lead.id));
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { ...l, status: 'CRM' } : l
+      ));
       setSelectedLead(null);
       showToast('Lead moved to CRM!', 'success');
     } catch (err) {
@@ -4071,9 +4073,12 @@ const InboxManager = ({ user, onSignOut }) => {
                           Draft
                         </span>
                       )}
-                      {lead.status === 'CRM' && (
-                        <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
-                      )}
+                      {(() => {
+                        console.log('Lead status:', lead.status, 'Lead:', lead.first_name, lead.last_name);
+                        return lead.status === 'CRM' && (
+                          <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
+                        );
+                      })()}
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 

@@ -171,21 +171,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       setSavingId(null);
     }
   };
-  const handleMoveToInbox = async (lead) => {
-    if (!lead || !brandId) return;
-    try {
-      const { error } = await supabase
-        .from('retention_harbor')
-        .update({ status: 'INBOX' })
-        .eq('id', lead.id);
-      if (error) throw error;
-      setCrmLeads(prev => prev.filter(l => l.id !== lead.id));
-      setToast({ type: 'success', message: 'Lead moved to Inbox!' });
-      if (selectedLead && selectedLead.id === lead.id) closeSidePanel();
-    } catch (err) {
-      setToast({ type: 'error', message: 'Error moving lead to Inbox: ' + err.message });
-    }
-  };
 
   return (
     <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
