@@ -4,17 +4,19 @@ import { supabase } from '../lib/supabase';
 const CRMManager = ({ brandId }) => {
   const [crmLeads, setCrmLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchCrmLeads = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from('crm_leads')
+        .from('retention_harbor')
         .select('*')
         .eq('brand_id', brandId)
+        .eq('status', 'CRM')
         .order('created_at', { ascending: false });
       if (error) {
-        alert('Error fetching CRM leads: ' + error.message);
+        setToast({ type: 'error', message: 'Error fetching CRM leads: ' + error.message });
       } else {
         setCrmLeads(data);
       }
@@ -23,9 +25,27 @@ const CRMManager = ({ brandId }) => {
     if (brandId) fetchCrmLeads();
   }, [brandId]);
 
+  const handleMoveToInbox = async (lead) => {
+    if (!lead || !brandId) return;
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ status: 'INBOX' })
+        .eq('id', lead.id);
+      if (error) throw error;
+      setCrmLeads(prev => prev.filter(l => l.id !== lead.id));
+      setToast({ type: 'success', message: 'Lead moved to Inbox!' });
+    } catch (err) {
+      setToast({ type: 'error', message: 'Error moving lead to Inbox: ' + err.message });
+    }
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-4">CRM Leads</h2>
+      {toast && (
+        <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
+      )}
       {loading ? (
         <div>Loading...</div>
       ) : crmLeads.length === 0 ? (
@@ -42,6 +62,7 @@ const CRMManager = ({ brandId }) => {
               <th className="px-4 py-2">Revenue</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2">Notes</th>
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -55,6 +76,14 @@ const CRMManager = ({ brandId }) => {
                 <td className="px-4 py-2">${lead.revenue_collected?.toLocaleString() || 0}</td>
                 <td className="px-4 py-2">{lead.status}</td>
                 <td className="px-4 py-2">{lead.notes}</td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() => handleMoveToInbox(lead)}
+                    className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 text-xs"
+                  >
+                    Move to Inbox
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
