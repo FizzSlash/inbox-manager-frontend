@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import InboxManager from './components/InboxManager';
+import CRMManager from './components/CRMManager';
 import Auth from './components/Auth';
 import { getCurrentUser, onAuthStateChange, supabase } from './lib/supabase';
 
@@ -8,6 +9,22 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [pendingUser, setPendingUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('inbox');
+  const [brandId, setBrandId] = useState(null);
+
+  // Fetch brandId after login
+  useEffect(() => {
+    const fetchBrandId = async () => {
+      if (!user) return setBrandId(null);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('brand_id')
+        .eq('id', user.id)
+        .single();
+      setBrandId(profile?.brand_id || null);
+    };
+    fetchBrandId();
+  }, [user]);
 
   // Check for existing session and verification status on load
   useEffect(() => {
@@ -123,11 +140,38 @@ function App() {
   }
 
   return (
-    <div className="App">
+    <div className="App min-h-screen bg-gray-50 dark:bg-gray-900">
       {user ? (
-        <InboxManager user={user} onSignOut={handleSignOut} />
+        <>
+          <div className="flex gap-2 p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <button
+              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'inbox' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
+              onClick={() => setActiveTab('inbox')}
+            >
+              Inbox
+            </button>
+            <button
+              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'crm' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}
+              onClick={() => setActiveTab('crm')}
+            >
+              CRM
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+              style={{color: '#ef4444', border: '1px solid #ef4444'}}>
+              Sign Out
+            </button>
+          </div>
+          {activeTab === 'inbox' ? (
+            <InboxManager user={user} onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }} />
+          ) : (
+            <CRMManager brandId={brandId} />
+          )}
+        </>
       ) : (
-        <Auth onAuthSuccess={handleAuthSuccess} />
+        <Auth onAuthSuccess={(user) => setUser(user)} />
       )}
     </div>
   );
