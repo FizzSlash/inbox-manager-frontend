@@ -1,6 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { DollarSign, Users, CheckCircle, Phone, BarChart3, Search, Edit3, Loader2, X, Mail } from 'lucide-react';
+import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, ChevronDown, Phone } from 'lucide-react';
+
+const STAGE_OPTIONS = [
+  'Lead',
+  'Contacted',
+  'Qualified',
+  'Proposal Sent',
+  'Closed Won',
+  'Closed Lost',
+  'Nurture'
+];
 
 const CRMManager = ({ brandId }) => {
   const [crmLeads, setCrmLeads] = useState([]);
@@ -52,10 +62,10 @@ const CRMManager = ({ brandId }) => {
   const startEdit = (lead) => {
     setEditingId(lead.id);
     setEditFields({
-      calls_booked: lead.calls_booked || 0,
-      show_rate: lead.show_rate || '',
-      close_rate: lead.close_rate || '',
-      revenue_collected: lead.revenue_collected || 0,
+      stage: lead.stage || 'Lead',
+      call_booked: !!lead.call_booked,
+      deal_size: lead.deal_size || 0,
+      closed: !!lead.closed,
       notes: lead.notes || ''
     });
   };
@@ -117,16 +127,16 @@ const CRMManager = ({ brandId }) => {
   const stats = useMemo(() => {
     if (!crmLeads.length) return null;
     const totalLeads = crmLeads.length;
-    const totalRevenue = crmLeads.reduce((sum, l) => sum + (l.revenue_collected || 0), 0);
-    const avgCloseRate = crmLeads.reduce((sum, l) => sum + (l.close_rate || 0), 0) / totalLeads;
-    const avgShowRate = crmLeads.reduce((sum, l) => sum + (l.show_rate || 0), 0) / totalLeads;
-    const totalCalls = crmLeads.reduce((sum, l) => sum + (l.calls_booked || 0), 0);
+    const totalClosed = crmLeads.filter(l => l.closed).length;
+    const totalDealSize = crmLeads.reduce((sum, l) => sum + (l.deal_size || 0), 0);
+    const totalCalls = crmLeads.filter(l => l.call_booked).length;
+    const winRate = totalLeads ? (totalClosed / totalLeads) * 100 : 0;
     return {
       totalLeads,
-      totalRevenue,
-      avgCloseRate,
-      avgShowRate,
-      totalCalls
+      totalClosed,
+      totalDealSize,
+      totalCalls,
+      winRate
     };
   }, [crmLeads]);
 
@@ -154,24 +164,24 @@ const CRMManager = ({ brandId }) => {
           <div className="text-sm text-gray-400">Total Leads</div>
         </div>
         <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <DollarSign className="w-7 h-7 mb-2 text-green-400" />
-          <div className="text-2xl font-bold">${stats ? stats.totalRevenue.toLocaleString() : 0}</div>
-          <div className="text-sm text-gray-400">Total Revenue</div>
+          <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
+          <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
+          <div className="text-sm text-gray-400">Total Closed</div>
         </div>
         <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <CheckCircle className="w-7 h-7 mb-2 text-purple-400" />
-          <div className="text-2xl font-bold">{stats ? stats.avgCloseRate.toFixed(1) : 0}%</div>
-          <div className="text-sm text-gray-400">Avg Close Rate</div>
+          <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
+          <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
+          <div className="text-sm text-gray-400">Total Deal Size</div>
         </div>
         <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <Phone className="w-7 h-7 mb-2 text-yellow-400" />
+          <Phone className="w-7 h-7 mb-2 text-cyan-400" />
           <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
           <div className="text-sm text-gray-400">Calls Booked</div>
         </div>
         <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <BarChart3 className="w-7 h-7 mb-2 text-cyan-400" />
-          <div className="text-2xl font-bold">{stats ? stats.avgShowRate.toFixed(1) : 0}%</div>
-          <div className="text-sm text-gray-400">Avg Show Rate</div>
+          <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
+          <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
+          <div className="text-sm text-gray-400">Win Rate</div>
         </div>
       </div>
       {/* Search Bar */}
@@ -202,12 +212,10 @@ const CRMManager = ({ brandId }) => {
             <thead>
               <tr className="bg-[#1A1C1A] text-gray-300">
                 <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Email</th>
-                <th className="px-4 py-2">Calls Booked</th>
-                <th className="px-4 py-2">Show Rate</th>
-                <th className="px-4 py-2">Close Rate</th>
-                <th className="px-4 py-2">Revenue</th>
-                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Stage</th>
+                <th className="px-4 py-2">Call Booked</th>
+                <th className="px-4 py-2">Deal Size</th>
+                <th className="px-4 py-2">Closed</th>
                 <th className="px-4 py-2">Notes</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
@@ -215,43 +223,41 @@ const CRMManager = ({ brandId }) => {
             <tbody>
               {filteredLeads.map(lead => (
                 <tr key={lead.id} className={`border-t border-gray-700 hover:bg-[#232a2e] transition-colors ${editingId === lead.id ? 'bg-[#232a2e]' : ''}`}
-                  onClick={e => { if (e.target.tagName !== 'BUTTON') openSidePanel(lead); }}
+                  onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'LABEL') openSidePanel(lead); }}
                   style={{ cursor: 'pointer' }}
                 >
                   <td className="px-4 py-2 font-medium flex items-center gap-2">
                     <Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}
                   </td>
-                  <td className="px-4 py-2">{lead.email}</td>
                   <td className="px-4 py-2">
                     {editingId === lead.id ? (
-                      <input type="number" className="w-16 rounded bg-[#181A1B] px-2 py-1" value={editFields.calls_booked} onChange={e => handleFieldChange('calls_booked', Number(e.target.value))} />
+                      <select className="rounded bg-[#181A1B] px-2 py-1" value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                        {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
                     ) : (
-                      lead.calls_booked
+                      <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    {editingId === lead.id ? (
+                      <input type="checkbox" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} />
+                    ) : (
+                      <input type="checkbox" checked={!!lead.call_booked} readOnly />
                     )}
                   </td>
                   <td className="px-4 py-2">
                     {editingId === lead.id ? (
-                      <input type="number" className="w-16 rounded bg-[#181A1B] px-2 py-1" value={editFields.show_rate} onChange={e => handleFieldChange('show_rate', Number(e.target.value))} />
+                      <input type="number" className="w-24 rounded bg-[#181A1B] px-2 py-1" value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
                     ) : (
-                      lead.show_rate ? `${lead.show_rate}%` : '-'
+                      `$${lead.deal_size?.toLocaleString() || 0}`
                     )}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 text-center">
                     {editingId === lead.id ? (
-                      <input type="number" className="w-16 rounded bg-[#181A1B] px-2 py-1" value={editFields.close_rate} onChange={e => handleFieldChange('close_rate', Number(e.target.value))} />
+                      <input type="checkbox" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} />
                     ) : (
-                      lead.close_rate ? `${lead.close_rate}%` : '-'
+                      <input type="checkbox" checked={!!lead.closed} readOnly />
                     )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {editingId === lead.id ? (
-                      <input type="number" className="w-20 rounded bg-[#181A1B] px-2 py-1" value={editFields.revenue_collected} onChange={e => handleFieldChange('revenue_collected', Number(e.target.value))} />
-                    ) : (
-                      `$${lead.revenue_collected?.toLocaleString() || 0}`
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.status}</span>
                   </td>
                   <td className="px-4 py-2">
                     {editingId === lead.id ? (
@@ -288,20 +294,22 @@ const CRMManager = ({ brandId }) => {
             <div className="mb-4 text-gray-300">{selectedLead.email}</div>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Calls Booked</label>
-                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.calls_booked || 0} onChange={e => setSelectedLead(l => ({ ...l, calls_booked: Number(e.target.value) }))} />
+                <label className="block text-xs text-gray-400 mb-1">Stage</label>
+                <select className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.stage || 'Lead'} onChange={e => setSelectedLead(l => ({ ...l, stage: e.target.value }))}>
+                  {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 mt-6">
+                <input type="checkbox" checked={!!selectedLead.call_booked} onChange={e => setSelectedLead(l => ({ ...l, call_booked: e.target.checked }))} />
+                <label className="text-xs text-gray-400">Call Booked</label>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Show Rate (%)</label>
-                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.show_rate || ''} onChange={e => setSelectedLead(l => ({ ...l, show_rate: Number(e.target.value) }))} />
+                <label className="block text-xs text-gray-400 mb-1">Deal Size</label>
+                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.deal_size || 0} onChange={e => setSelectedLead(l => ({ ...l, deal_size: Number(e.target.value) }))} />
               </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Close Rate (%)</label>
-                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.close_rate || ''} onChange={e => setSelectedLead(l => ({ ...l, close_rate: Number(e.target.value) }))} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Revenue Collected</label>
-                <input type="number" className="w-full rounded bg-[#181A1B] px-2 py-1" value={selectedLead.revenue_collected || 0} onChange={e => setSelectedLead(l => ({ ...l, revenue_collected: Number(e.target.value) }))} />
+              <div className="flex items-center gap-2 mt-6">
+                <input type="checkbox" checked={!!selectedLead.closed} onChange={e => setSelectedLead(l => ({ ...l, closed: e.target.checked }))} />
+                <label className="text-xs text-gray-400">Closed</label>
               </div>
             </div>
             <div className="mb-6">
