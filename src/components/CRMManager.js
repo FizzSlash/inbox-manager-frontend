@@ -340,6 +340,34 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
               <div className="space-y-8">
+                {/* Timeline/Metadata Section */}
+                <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Last Reply</span>
+                        <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                          {/* You may need to implement getLastResponseFromThem and formatTime in CRMManager */}
+                          {selectedLead.last_reply || 'No replies yet'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Last Followup</span>
+                        <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                          {selectedLead.last_followup || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Avg Response</span>
+                        <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.avg_response || 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div className="px-3 py-1 rounded-full text-sm transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.accent}20`}}>
+                      <span className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{selectedLead.replies_count || 0}</span>
+                      <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}> replies</span>
+                    </div>
+                  </div>
+                </div>
                 {/* Unified Lead Information Section */}
                 <div className="rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="grid grid-cols-2 gap-8 mb-8">
