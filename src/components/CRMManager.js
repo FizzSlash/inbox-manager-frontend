@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone } from 'lucide-react';
-import { Sankey, Tooltip as SankeyTooltip } from 'recharts';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
 const getThemeStyles = () => {
@@ -195,32 +194,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
-  // Sankey chart data preparation
-  const sankeyNodes = [];
-  const sankeyLinks = [];
-  const stageOrder = [
-    'Lead',
-    'Contacted',
-    'Qualified',
-    'Proposal Sent',
-    'Closed Won',
-    'Closed Lost',
-    'Nurture'
-  ];
-  // Build nodes
-  stageOrder.forEach((stage, i) => {
-    sankeyNodes.push({ name: stage });
-  });
-  // Build links (simple: count leads at each stage, link from previous to current)
-  for (let i = 0; i < stageOrder.length - 1; i++) {
-    const from = stageOrder[i];
-    const to = stageOrder[i + 1];
-    const value = crmLeads.filter(l => l.stage === to).length;
-    if (value > 0) {
-      sankeyLinks.push({ source: i, target: i + 1, value });
-    }
-  }
-
   return (
     <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
@@ -228,27 +201,27 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </h2>
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
           <Users className="w-7 h-7 mb-2 text-blue-400" />
           <div className="text-2xl font-bold">{stats ? stats.totalLeads : 0}</div>
           <div className="text-sm text-gray-400">Total Leads</div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
           <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
           <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
           <div className="text-sm text-gray-400">Total Closed</div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
           <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
           <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
           <div className="text-sm text-gray-400">Total Deal Size</div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
           <Phone className="w-7 h-7 mb-2 text-cyan-400" />
           <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
           <div className="text-sm text-gray-400">Calls Booked</div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
           <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
           <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
           <div className="text-sm text-gray-400">Win Rate</div>
@@ -272,7 +245,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
       )}
       {/* Table of Leads */}
-      <div className="overflow-x-auto rounded-xl shadow-lg bg-[#232526]">
+      <div className="overflow-x-auto rounded-2xl shadow-lg bg-[#232526]">
         <table className="min-w-full text-white">
           <thead>
             <tr className="bg-[#1A1C1A] text-gray-300">
@@ -368,7 +341,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
             <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
               <div className="space-y-8">
                 {/* Unified Lead Information Section */}
-                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="grid grid-cols-2 gap-8 mb-8">
                     <div>
                       <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
@@ -403,22 +376,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
           </div>
         </div>
       )}
-      {/* Lead Flow Chart */}
-      <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg col-span-2">
-        <h3 className="text-lg font-bold mb-4">Lead Flow</h3>
-        <div style={{ width: '100%', height: 300 }}>
-          <Sankey
-            width={500}
-            height={300}
-            data={{ nodes: sankeyNodes, links: sankeyLinks }}
-            nodePadding={30}
-            nodeWidth={20}
-            linkCurvature={0.5}
-          >
-            <SankeyTooltip />
-          </Sankey>
-        </div>
-      </div>
     </div>
   );
 };
