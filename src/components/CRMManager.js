@@ -172,18 +172,24 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
+  // Update handleRemoveFromCRM to do optimistic updates:
   const handleRemoveFromCRM = async () => {
     if (!selectedLead) return;
+    
+    // Optimistic update - remove from local state immediately
+    setCrmLeads(prev => prev.filter(l => l.id !== selectedLead.id));
+    closeSidePanel();
+    
     try {
       const { error } = await supabase
         .from('retention_harbor')
         .update({ status: 'INBOX' })
         .eq('id', selectedLead.id);
       if (error) throw error;
-      setCrmLeads(prev => prev.filter(l => l.id !== selectedLead.id));
       setToast({ type: 'success', message: 'Lead removed from CRM!' });
-      closeSidePanel();
     } catch (err) {
+      // Revert optimistic update on error
+      setCrmLeads(prev => [...prev, selectedLead]);
       setToast({ type: 'error', message: 'Error removing lead from CRM: ' + err.message });
     }
   };

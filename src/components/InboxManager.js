@@ -2648,18 +2648,26 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add this helper function near other lead actions
   const handleAddToCRM = async (lead) => {
     if (!lead || !brandId) return;
+    
+    // Optimistic update - update local state immediately
+    setLeads(prev => prev.map(l => 
+      l.id === lead.id ? { ...l, status: 'CRM' } : l
+    ));
+    setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'CRM' } : prev);
+    
     try {
       const { error } = await supabase
         .from('retention_harbor')
         .update({ status: 'CRM' })
         .eq('id', lead.id);
       if (error) throw error;
-      setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { ...l, status: 'CRM' } : l
-      ));
-      setSelectedLead(null);
       showToast('Lead moved to CRM!', 'success');
     } catch (err) {
+      // Revert optimistic update on error
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { ...l, status: 'INBOX' } : l
+      ));
+      setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'INBOX' } : prev);
       showToast('Error moving lead to CRM: ' + err.message, 'error');
     }
   };
@@ -2691,17 +2699,26 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add handleRemoveFromCRM function after handleAddToCRM:
   const handleRemoveFromCRM = async (lead) => {
     if (!lead || !brandId) return;
+    
+    // Optimistic update - update local state immediately
+    setLeads(prev => prev.map(l => 
+      l.id === lead.id ? { ...l, status: 'INBOX' } : l
+    ));
+    setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'INBOX' } : prev);
+    
     try {
       const { error } = await supabase
         .from('retention_harbor')
         .update({ status: 'INBOX' })
         .eq('id', lead.id);
       if (error) throw error;
-      setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { ...l, status: 'INBOX' } : l
-      ));
       showToast('Lead removed from CRM!', 'success');
     } catch (err) {
+      // Revert optimistic update on error
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { ...l, status: 'CRM' } : l
+      ));
+      setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'CRM' } : prev);
       showToast('Error removing lead from CRM: ' + err.message, 'error');
     }
   };
