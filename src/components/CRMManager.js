@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone } from 'lucide-react';
+import { Sankey, Tooltip as SankeyTooltip } from 'recharts';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
 const getThemeStyles = () => {
@@ -194,6 +195,32 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
+  // Sankey chart data preparation
+  const sankeyNodes = [];
+  const sankeyLinks = [];
+  const stageOrder = [
+    'Lead',
+    'Contacted',
+    'Qualified',
+    'Proposal Sent',
+    'Closed Won',
+    'Closed Lost',
+    'Nurture'
+  ];
+  // Build nodes
+  stageOrder.forEach((stage, i) => {
+    sankeyNodes.push({ name: stage });
+  });
+  // Build links (simple: count leads at each stage, link from previous to current)
+  for (let i = 0; i < stageOrder.length - 1; i++) {
+    const from = stageOrder[i];
+    const to = stageOrder[i + 1];
+    const value = crmLeads.filter(l => l.stage === to).length;
+    if (value > 0) {
+      sankeyLinks.push({ source: i, target: i + 1, value });
+    }
+  }
+
   return (
     <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
@@ -376,6 +403,22 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
           </div>
         </div>
       )}
+      {/* Lead Flow Chart */}
+      <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg col-span-2">
+        <h3 className="text-lg font-bold mb-4">Lead Flow</h3>
+        <div style={{ width: '100%', height: 300 }}>
+          <Sankey
+            width={500}
+            height={300}
+            data={{ nodes: sankeyNodes, links: sankeyLinks }}
+            nodePadding={30}
+            nodeWidth={20}
+            linkCurvature={0.5}
+          >
+            <SankeyTooltip />
+          </Sankey>
+        </div>
+      </div>
     </div>
   );
 };
