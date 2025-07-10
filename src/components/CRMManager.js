@@ -194,6 +194,175 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
+  // Refactor main return:
+  if (selectedLead) {
+    return (
+      <div className="flex min-h-screen" style={{backgroundColor: themeStyles.primaryBg}}>
+        {/* Side Panel (left half) */}
+        <div className="w-1/2 h-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+          {/* Lead Header and content (copy from previous side panel, keep themeStyles, paddings, etc) */}
+          <div
+            className="p-8 transition-colors duration-300"
+            style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  {selectedLead.first_name} {selectedLead.last_name}
+                </h2>
+                <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
+                {selectedLead.phone ? (
+                  <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.accent}}>
+                    <Phone className="w-3 h-3" />
+                    <span className="font-medium">{selectedLead.phone}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                    <Phone className="w-3 h-3" />
+                    <span>No phone number found</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => onGoToInboxLead(selectedLead.id)}
+                  className="px-4 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-indigo-700 text-white hover:bg-indigo-800"
+                >
+                  Go to lead in Inbox
+                </button>
+                <button
+                  onClick={closeSidePanel}
+                  className="p-2 rounded-lg transition-colors duration-300 hover:opacity-80"
+                  style={{border: `1px solid ${themeStyles.border}`, backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
+            <div className="space-y-8">
+              {/* Unified Lead Information Section */}
+              <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="grid grid-cols-2 gap-8 mb-8">
+                  <div>
+                    <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
+                    <select className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                      {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-4 mt-8">
+                    <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
+                    <label htmlFor="call_booked" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Call Booked</label>
+                  </div>
+                  <div>
+                    <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Deal Size</label>
+                    <input type="number" className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
+                  </div>
+                  <div className="flex items-center gap-4 mt-8">
+                    <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
+                    <label htmlFor="closed" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Closed</label>
+                  </div>
+                </div>
+                <div className="mb-10">
+                  <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Notes</label>
+                  <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[120px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
+                </div>
+                <div className="flex gap-4 mt-auto">
+                  <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+                  <button onClick={handleRemoveFromCRM} className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.error, color: '#fff', fontSize: '1.25rem'}} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Remove from CRM'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* CRM Table/Dashboard (right half) */}
+        <div className="w-1/2 p-8" style={{backgroundColor: themeStyles.primaryBg}}>
+          <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
+            <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
+          </h2>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+            <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+              <Users className="w-7 h-7 mb-2 text-blue-400" />
+              <div className="text-2xl font-bold">{stats ? stats.totalLeads : 0}</div>
+              <div className="text-sm text-gray-400">Total Leads</div>
+            </div>
+            <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+              <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
+              <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
+              <div className="text-sm text-gray-400">Total Closed</div>
+            </div>
+            <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+              <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
+              <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
+              <div className="text-sm text-gray-400">Total Deal Size</div>
+            </div>
+            <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+              <Phone className="w-7 h-7 mb-2 text-cyan-400" />
+              <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
+              <div className="text-sm text-gray-400">Calls Booked</div>
+            </div>
+            <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+              <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
+              <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
+              <div className="text-sm text-gray-400">Win Rate</div>
+            </div>
+          </div>
+          {/* Search Bar */}
+          <div className="flex items-center mb-6 max-w-md">
+            <div className="relative w-full">
+              <input
+                type="text"
+                className="w-full rounded-lg bg-[#232526] text-white px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            </div>
+          </div>
+          {/* Toast */}
+          {toast && (
+            <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
+          )}
+          {/* Table of Leads */}
+          <div className="overflow-x-auto rounded-xl shadow-lg bg-[#232526]">
+            <table className="min-w-full text-white">
+              <thead>
+                <tr className="bg-[#1A1C1A] text-gray-300">
+                  <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                  <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                  <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                  <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                  <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300"><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
+                ) : filteredLeads.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300">No CRM leads found.</td></tr>
+                ) : (
+                  filteredLeads.map(lead => (
+                    <tr key={lead.id} className="border-t border-gray-700 hover:bg-[#232a2e] transition-colors cursor-pointer" onClick={() => openSidePanel(lead)}>
+                      <td className="px-4 py-2 font-medium flex items-center gap-2"><Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}</td>
+                      <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span></td>
+                      <td className="px-4 py-2">${lead.deal_size?.toLocaleString() || 0}</td>
+                      <td className="px-4 py-2">{lead.call_booked ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-2">{lead.closed ? 'Yes' : 'No'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // If no selectedLead, render CRM dashboard/table full width
   return (
     <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
@@ -275,107 +444,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
           </tbody>
         </table>
       </div>
-      {/* Side Panel for Lead Details */}
-      {sidePanelOpen && selectedLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
-          <div
-            className="w-full max-w-2xl h-full flex flex-col relative overflow-y-auto"
-            style={{
-              backgroundColor: themeStyles.secondaryBg,
-              borderRadius: '12px',
-              border: `1px solid ${themeStyles.border}`,
-              margin: '8px',
-              marginRight: '0',
-              boxShadow: '0 8px 32px 0 rgba(0,0,0,0.25)',
-              minHeight: 0
-            }}
-          >
-            <button
-              className="absolute top-6 right-8 text-gray-400 hover:text-white text-3xl"
-              onClick={closeSidePanel}
-              style={{color: themeStyles.textMuted}}
-            >
-              <X className="w-8 h-8" />
-            </button>
-            {/* Lead Header */}
-            <div
-              className="p-8 transition-colors duration-300"
-              style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                    {selectedLead.first_name} {selectedLead.last_name}
-                  </h2>
-                  <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
-                  {selectedLead.phone ? (
-                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.accent}}>
-                      <Phone className="w-3 h-3" />
-                      <span className="font-medium">{selectedLead.phone}</span>
-                    </p>
-                  ) : (
-                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                      <Phone className="w-3 h-3" />
-                      <span>No phone number found</span>
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => onGoToInboxLead(selectedLead.id)}
-                    className="px-4 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-indigo-700 text-white hover:bg-indigo-800"
-                  >
-                    Go to lead in Inbox
-                  </button>
-                  <button
-                    onClick={closeSidePanel}
-                    className="p-2 rounded-lg transition-colors duration-300 hover:opacity-80"
-                    style={{border: `1px solid ${themeStyles.border}`, backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
-              <div className="space-y-8">
-                {/* Unified Lead Information Section */}
-                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
-                  <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
-                      <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
-                      <select className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
-                        {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-4 mt-8">
-                      <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
-                      <label htmlFor="call_booked" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Call Booked</label>
-                    </div>
-                    <div>
-                      <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Deal Size</label>
-                      <input type="number" className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
-                    </div>
-                    <div className="flex items-center gap-4 mt-8">
-                      <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
-                      <label htmlFor="closed" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Closed</label>
-                    </div>
-                  </div>
-                  <div className="mb-10">
-                    <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Notes</label>
-                    <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[120px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
-                  </div>
-                  <div className="flex gap-4 mt-auto">
-                    <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
-                    <button onClick={handleRemoveFromCRM} className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.error, color: '#fff', fontSize: '1.25rem'}} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Remove from CRM'}</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
