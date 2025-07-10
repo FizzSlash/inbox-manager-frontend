@@ -194,12 +194,30 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     }
   };
 
-  // Refactor main return:
+  // Fix layout: Only use flex row (split 50/50) when a lead is selected.
   if (selectedLead) {
     return (
       <div className="flex min-h-screen" style={{backgroundColor: themeStyles.primaryBg}}>
         {/* Left: Side Panel (w-1/2) */}
         <div className="w-1/2 h-full">
+          <div className="h-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+            {/* Lead Header and content (copy from previous side panel, keep themeStyles, paddings, etc) */}
+            <div
+              className="p-8 transition-colors duration-300"
+              style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    {selectedLead.first_name} {selectedLead.last_name}
+                  </h2>
+                  <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
+                  {selectedLead.phone ? (
+                    <p className="text-sm mt-2 flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.accent}}>
+                      <Phone className="w-3 h-3" />
+                      <span className="font-medium">{selectedLead.phone}</span>
+                    </p>
+                  ) : (
           {selectedLead && (
             <div className="h-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
               {/* Lead Header and content (copy from previous side panel, keep themeStyles, paddings, etc) */}
