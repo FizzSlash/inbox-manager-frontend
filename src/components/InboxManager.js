@@ -5013,21 +5013,10 @@ const InboxManager = ({ user, onSignOut }) => {
       </div>
 
       {/* Main Content - CRM */}
-      {activeTab === 'crm' ? (
-        <div className="flex-1 w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+      {activeTab === 'crm' && (
+        <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
           <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
         </div>
-      ) : (
-        <>
-          {/* Sidebar - Lead List */}
-          <div className="w-1/2 flex flex-col shadow-lg relative z-10 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
-            {/* ...sidebar content... */}
-          </div>
-          {/* Main Content - Lead Details */}
-          <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
-            {/* ...main content... */}
-          </div>
-        </>
       )}
     </div>
   );
