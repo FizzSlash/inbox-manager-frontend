@@ -384,9 +384,9 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </div>
     );
   }
-  // If no selectedLead, show dashboard/table full width and centered
+  // When no lead is selected, render dashboard/table full width
   return (
-    <div className="flex-1 flex flex-col items-center justify-start min-h-screen p-8" style={{backgroundColor: themeStyles.primaryBg}}>
+    <div className="min-h-screen p-8" style={{backgroundColor: themeStyles.primaryBg}}>
       <div className="w-full max-w-5xl">
         <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
           <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
