@@ -198,7 +198,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   if (selectedLead) {
     return (
       <div className="flex min-h-screen" style={{backgroundColor: themeStyles.primaryBg}}>
-        {/* Left: Side Panel (only if selectedLead) */}
+        {/* Left: Side Panel (w-1/2) */}
         <div className="w-1/2 h-full">
           {selectedLead && (
             <div className="h-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
@@ -281,7 +281,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
             </div>
           )}
         </div>
-        {/* Right: CRM Dashboard/Table (always visible) */}
+        {/* Right: CRM Dashboard/Table (w-1/2) */}
         <div className="w-1/2 p-8" style={{backgroundColor: themeStyles.primaryBg}}>
           <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
             <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
@@ -366,87 +366,89 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </div>
     );
   }
-  // If no selectedLead, render CRM dashboard/table full width
+  // If no selectedLead, show dashboard/table full width and centered
   return (
-    <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
-      <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-        <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
-      </h2>
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <Users className="w-7 h-7 mb-2 text-blue-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalLeads : 0}</div>
-          <div className="text-sm text-gray-400">Total Leads</div>
+    <div className="flex-1 flex flex-col items-center justify-start min-h-screen p-8" style={{backgroundColor: themeStyles.primaryBg}}>
+      <div className="w-full max-w-5xl">
+        <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
+          <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
+        </h2>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+          <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+            <Users className="w-7 h-7 mb-2 text-blue-400" />
+            <div className="text-2xl font-bold">{stats ? stats.totalLeads : 0}</div>
+            <div className="text-sm text-gray-400">Total Leads</div>
+          </div>
+          <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+            <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
+            <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
+            <div className="text-sm text-gray-400">Total Closed</div>
+          </div>
+          <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+            <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
+            <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
+            <div className="text-sm text-gray-400">Total Deal Size</div>
+          </div>
+          <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+            <Phone className="w-7 h-7 mb-2 text-cyan-400" />
+            <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
+            <div className="text-sm text-gray-400">Calls Booked</div>
+          </div>
+          <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
+            <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
+            <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
+            <div className="text-sm text-gray-400">Win Rate</div>
+          </div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
-          <div className="text-sm text-gray-400">Total Closed</div>
+        {/* Search Bar */}
+        <div className="flex items-center mb-6 max-w-md">
+          <div className="relative w-full">
+            <input
+              type="text"
+              className="w-full rounded-lg bg-[#232526] text-white px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+          </div>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
-          <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
-          <div className="text-sm text-gray-400">Total Deal Size</div>
+        {/* Toast */}
+        {toast && (
+          <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
+        )}
+        {/* Table of Leads */}
+        <div className="overflow-x-auto rounded-xl shadow-lg bg-[#232526]">
+          <table className="min-w-full text-white">
+            <thead>
+              <tr className="bg-[#1A1C1A] text-gray-300">
+                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+                <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300"><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
+              ) : filteredLeads.length === 0 ? (
+                <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300">No CRM leads found.</td></tr>
+              ) : (
+                filteredLeads.map(lead => (
+                  <tr key={lead.id} className="border-t border-gray-700 hover:bg-[#232a2e] transition-colors cursor-pointer" onClick={() => openSidePanel(lead)}>
+                    <td className="px-4 py-2 font-medium flex items-center gap-2"><Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}</td>
+                    <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span></td>
+                    <td className="px-4 py-2">${lead.deal_size?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-2">{lead.call_booked ? 'Yes' : 'No'}</td>
+                    <td className="px-4 py-2">{lead.closed ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <Phone className="w-7 h-7 mb-2 text-cyan-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
-          <div className="text-sm text-gray-400">Calls Booked</div>
-        </div>
-        <div className="rounded-xl bg-[#232526] p-6 flex flex-col items-center shadow-lg">
-          <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
-          <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
-          <div className="text-sm text-gray-400">Win Rate</div>
-        </div>
-      </div>
-      {/* Search Bar */}
-      <div className="flex items-center mb-6 max-w-md">
-        <div className="relative w-full">
-          <input
-            type="text"
-            className="w-full rounded-lg bg-[#232526] text-white px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-            placeholder="Search by name or email..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-        </div>
-      </div>
-      {/* Toast */}
-      {toast && (
-        <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
-      )}
-      {/* Table of Leads */}
-      <div className="overflow-x-auto rounded-xl shadow-lg bg-[#232526]">
-        <table className="min-w-full text-white">
-          <thead>
-            <tr className="bg-[#1A1C1A] text-gray-300">
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300"><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
-            ) : filteredLeads.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300">No CRM leads found.</td></tr>
-            ) : (
-              filteredLeads.map(lead => (
-                <tr key={lead.id} className="border-t border-gray-700 hover:bg-[#232a2e] transition-colors cursor-pointer" onClick={() => openSidePanel(lead)}>
-                  <td className="px-4 py-2 font-medium flex items-center gap-2"><Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}</td>
-                  <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span></td>
-                  <td className="px-4 py-2">${lead.deal_size?.toLocaleString() || 0}</td>
-                  <td className="px-4 py-2">{lead.call_booked ? 'Yes' : 'No'}</td>
-                  <td className="px-4 py-2">{lead.closed ? 'Yes' : 'No'}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
