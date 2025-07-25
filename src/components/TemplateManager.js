@@ -36,7 +36,7 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
-const TemplateManager = ({ user, brandId }) => {
+const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelect = null, onClose = null }) => {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -302,7 +302,7 @@ const TemplateManager = ({ user, brandId }) => {
 
   if (loading) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: themeStyles.primaryBg}}>
+      <div className="flex h-full flex-col items-center justify-center" style={{backgroundColor: themeStyles.primaryBg}}>
         <div className="text-center p-8 rounded-2xl shadow-xl" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{borderColor: themeStyles.accent}}></div>
           <p className="transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Loading templates...</p>
@@ -313,7 +313,7 @@ const TemplateManager = ({ user, brandId }) => {
 
   if (error && !showEditor) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center" style={{backgroundColor: themeStyles.primaryBg}}>
+      <div className="flex h-full flex-col items-center justify-center" style={{backgroundColor: themeStyles.primaryBg}}>
         <div className="text-center">
           <p className="font-medium mb-6 transition-colors duration-300" style={{color: themeStyles.error}}>Error loading templates: {error}</p>
           <button 
@@ -328,23 +328,36 @@ const TemplateManager = ({ user, brandId }) => {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+    <div className="flex h-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Template List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-50 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', border: `1px solid ${themeStyles.border}`}}>
+      <div className={`${selectionMode ? 'w-full' : 'w-1/2'} flex flex-col shadow-lg relative z-50 transition-colors duration-300`} style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: selectionMode ? '8px' : '4px', border: `1px solid ${themeStyles.border}`}}>
         {/* Header */}
         <div className="p-6 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}>
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-              Email Templates
+              {selectionMode ? 'Select Template' : 'Email Templates'}
             </h1>
-            <button
-              onClick={openNewTemplate}
-              className="px-4 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center gap-2"
-              style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
-            >
-              <Plus className="w-4 h-4" />
-              New Template
-            </button>
+            <div className="flex items-center gap-2">
+              {selectionMode ? (
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center gap-2"
+                  style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}}
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  onClick={openNewTemplate}
+                  className="px-4 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center gap-2"
+                  style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                >
+                  <Plus className="w-4 h-4" />
+                  New Template
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Search */}
@@ -378,12 +391,12 @@ const TemplateManager = ({ user, brandId }) => {
             <div className="text-center py-12">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-50 transition-colors duration-300" style={{color: themeStyles.textMuted}} />
               <p className="text-lg font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                {searchQuery ? 'No templates found' : 'No templates yet'}
+                {searchQuery ? 'No templates found' : selectionMode ? 'No templates available' : 'No templates yet'}
               </p>
               <p className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>
-                {searchQuery ? 'Try adjusting your search' : 'Create your first email template to get started'}
+                {searchQuery ? 'Try adjusting your search' : selectionMode ? 'Create templates first to use them here' : 'Create your first email template to get started'}
               </p>
-              {!searchQuery && (
+              {!searchQuery && !selectionMode && (
                 <button
                   onClick={openNewTemplate}
                   className="mt-4 px-4 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center gap-2 mx-auto"
@@ -400,57 +413,81 @@ const TemplateManager = ({ user, brandId }) => {
                 key={template.id}
                 className="p-4 rounded-lg border hover:opacity-90 transition-all duration-300 cursor-pointer"
                 style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}
+                onClick={selectionMode ? () => {
+                  if (onTemplateSelect) {
+                    onTemplateSelect(template);
+                  }
+                } : undefined}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-semibold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                     {template.name}
                   </h3>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        showTemplatePreview(template);
-                      }}
-                      className="p-1 rounded hover:opacity-80 transition-colors"
-                      style={{color: themeStyles.accent}}
-                      title="Preview"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyTemplate(template);
-                      }}
-                      className="p-1 rounded hover:opacity-80 transition-colors"
-                      style={{color: themeStyles.accent}}
-                      title="Copy"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditTemplate(template);
-                      }}
-                      className="p-1 rounded hover:opacity-80 transition-colors"
-                      style={{color: themeStyles.warning}}
-                      title="Edit"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTemplateToDelete(template);
-                        setShowDeleteConfirm(true);
-                      }}
-                      className="p-1 rounded hover:opacity-80 transition-colors"
-                      style={{color: themeStyles.error}}
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {selectionMode ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onTemplateSelect) {
+                            onTemplateSelect(template);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg hover:opacity-80 transition-colors flex items-center gap-2"
+                        style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
+                        title="Use This Template"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Use Template
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showTemplatePreview(template);
+                          }}
+                          className="p-1 rounded hover:opacity-80 transition-colors"
+                          style={{color: themeStyles.accent}}
+                          title="Preview"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyTemplate(template);
+                          }}
+                          className="p-1 rounded hover:opacity-80 transition-colors"
+                          style={{color: themeStyles.accent}}
+                          title="Copy"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditTemplate(template);
+                          }}
+                          className="p-1 rounded hover:opacity-80 transition-colors"
+                          style={{color: themeStyles.warning}}
+                          title="Edit"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTemplateToDelete(template);
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="p-1 rounded hover:opacity-80 transition-colors"
+                          style={{color: themeStyles.error}}
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 
@@ -481,8 +518,9 @@ const TemplateManager = ({ user, brandId }) => {
         </div>
       </div>
 
-      {/* Editor Panel */}
-      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
+      {/* Editor Panel - Hidden in selection mode */}
+      {!selectionMode && (
+        <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
         {showEditor ? (
           <>
             {/* Editor Header */}
@@ -596,6 +634,7 @@ const TemplateManager = ({ user, brandId }) => {
           </div>
         )}
       </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && templateToDelete && (

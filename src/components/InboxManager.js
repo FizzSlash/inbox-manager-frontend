@@ -102,6 +102,9 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add new state for searching phone number
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
+  // Add state for template selection
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+
   // Replace single loading states with maps of lead IDs
   const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
@@ -2888,6 +2891,33 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
+  // Handle template selection
+  const handleTemplateSelect = (template) => {
+    if (!template || !selectedLead) return;
+
+    // Update both the text state and HTML content
+    setDraftResponse(template.content);
+    const formattedHtml = template.html_content || convertToHtml(template.content);
+    setDraftHtml(formattedHtml);
+
+    // Update the contenteditable div
+    const editor = document.querySelector('[contenteditable]');
+    if (editor) {
+      editor.innerHTML = formattedHtml;
+    }
+
+    // Auto-save as draft if we have a selected lead
+    if (selectedLead) {
+      saveDraft(selectedLead.id, template.content, formattedHtml);
+    }
+
+    // Close template selector
+    setShowTemplateSelector(false);
+    
+    // Show success message
+    showToast(`Template "${template.name}" applied!`, 'success');
+  };
+
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
@@ -4901,7 +4931,7 @@ const InboxManager = ({ user, onSignOut }) => {
                       </button>
                       
                       <button
-                        onClick={() => setActiveTab('templates')}
+                        onClick={() => setShowTemplateSelector(true)}
                         className="px-4 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300"
                         style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
                       >
@@ -5237,6 +5267,21 @@ const InboxManager = ({ user, onSignOut }) => {
       {activeTab === 'templates' && (
         <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
           <TemplateManager user={user} brandId={brandId} />
+        </div>
+      )}
+
+      {/* Template Selector Modal */}
+      {showTemplateSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-4xl h-[80vh] rounded-xl shadow-xl overflow-hidden" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <TemplateManager 
+              user={user} 
+              brandId={brandId} 
+              selectionMode={true}
+              onTemplateSelect={handleTemplateSelect}
+              onClose={() => setShowTemplateSelector(false)}
+            />
+          </div>
         </div>
       )}
 
