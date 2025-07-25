@@ -4244,7 +4244,11 @@ const InboxManager = ({ user, onSignOut }) => {
                             {isDropdownOpen && (
                               <div 
                                 className="absolute top-full left-0 mt-1 rounded-lg shadow-xl z-50 overflow-hidden min-w-40"
-                                style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}
+                                style={{
+                                  backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
+                                  border: `1px solid ${themeStyles.borderStrong}`,
+                                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                                }}
                               >
                                 {CATEGORY_OPTIONS.map((option) => (
                                   <button
@@ -4254,11 +4258,23 @@ const InboxManager = ({ user, onSignOut }) => {
                                       updateLeadCategory(lead.id, option.value);
                                       setCategoryDropdowns(new Set());
                                     }}
-                                    className="w-full px-3 py-2 text-left transition-all duration-200 hover:opacity-80 text-xs"
+                                    className="w-full px-3 py-2 text-left transition-all duration-200 hover:opacity-90 text-xs"
                                     style={{
-                                      backgroundColor: lead.lead_category === option.value ? `${option.color}20` : 'transparent',
+                                      backgroundColor: lead.lead_category === option.value 
+                                        ? `${option.color}25` 
+                                        : isDarkMode ? '#2A2C2A' : '#F8F9FA',
                                       borderBottom: `1px solid ${themeStyles.border}`,
                                       color: option.color
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (lead.lead_category !== option.value) {
+                                        e.target.style.backgroundColor = isDarkMode ? '#3A3C3A' : '#E9ECEF';
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (lead.lead_category !== option.value) {
+                                        e.target.style.backgroundColor = isDarkMode ? '#2A2C2A' : '#F8F9FA';
+                                      }
                                     }}
                                   >
                                     <div className="flex items-center justify-between">
