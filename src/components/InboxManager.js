@@ -144,10 +144,10 @@ const InboxManager = ({ user, onSignOut }) => {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState({
     esp: {
-      provider: localStorage.getItem('esp_provider') || '',
-      key: decryptApiKey(localStorage.getItem('esp_api_key_enc') || '')
+      provider: '',
+      key: ''
     },
-    fullenrich: decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '')
+    fullenrich: ''
   });
   const [apiTestStatus, setApiTestStatus] = useState({
     esp: null,
@@ -312,33 +312,142 @@ const InboxManager = ({ user, onSignOut }) => {
 
 
 
-  // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
-  useEffect(() => {
-    const migrateApiKeys = () => {
-      const keysToMigrate = ['smartlead', 'claude', 'fullenrich'];
-      let migrationNeeded = false;
-
-      keysToMigrate.forEach(keyName => {
-        const oldKey = localStorage.getItem(`${keyName}_api_key`);
-        const newKey = localStorage.getItem(`${keyName}_api_key_enc`);
-        
-        // If old unencrypted key exists but new encrypted key doesn't
-        if (oldKey && !newKey) {
-          const encryptedKey = encryptApiKey(oldKey);
-          localStorage.setItem(`${keyName}_api_key_enc`, encryptedKey);
-          localStorage.removeItem(`${keyName}_api_key`);
-          migrationNeeded = true;
-        }
-      });
-
-      if (migrationNeeded) {
-        console.info('API keys migrated to encrypted storage for security');
-        showToast('API keys upgraded to encrypted storage', 'success');
+  // Fetch API keys from Supabase
+  const fetchApiKeys = async () => {
+    if (!brandId || !user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('api_settings')
+        .select('*')
+        .eq('brand_id', brandId)
+        .eq('is_active', true)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('Error fetching API keys:', error);
+        return;
       }
-    };
+      
+      if (data) {
+        setApiKeys({
+          esp: {
+            provider: data.esp_provider || '',
+            key: decryptApiKey(data.esp_api_key || '')
+          },
+          fullenrich: decryptApiKey(data.fullenrich_api_key || '')
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching API keys:', err);
+    }
+  };
 
-    migrateApiKeys();
-  }, []);
+  // Save API keys to Supabase
+  const saveApiKeysToSupabase = async () => {
+    if (!brandId || !user) return false;
+    
+    try {
+      const apiData = {
+        brand_id: brandId,
+        created_by: user.id,
+        esp_provider: apiKeys.esp.provider || null,
+        esp_api_key: encryptApiKey(apiKeys.esp.key),
+        fullenrich_api_key: encryptApiKey(apiKeys.fullenrich),
+        updated_at: new Date().toISOString()
+      };
+
+      // Check if record exists
+      const { data: existing } = await supabase
+        .from('api_settings')
+        .select('id')
+        .eq('brand_id', brandId)
+        .single();
+
+      if (existing) {
+        // Update existing record
+        const { error } = await supabase
+          .from('api_settings')
+          .update(apiData)
+          .eq('brand_id', brandId);
+        
+        if (error) throw error;
+      } else {
+        // Insert new record
+        const { error } = await supabase
+          .from('api_settings')
+          .insert([apiData]);
+        
+        if (error) throw error;
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error saving API keys:', err);
+      throw err;
+    }
+  };
+
+  // Migrate localStorage API keys to Supabase (one-time migration)
+  const migrateLocalStorageToSupabase = async () => {
+    if (!brandId || !user) return;
+    
+    // Check if migration already done by seeing if Supabase has data
+    const { data: existing } = await supabase
+      .from('api_settings')
+      .select('id')
+      .eq('brand_id', brandId)
+      .single();
+    
+    if (existing) return; // Already migrated
+    
+    // Check for localStorage keys
+    const espProvider = localStorage.getItem('esp_provider');
+    const espKey = localStorage.getItem('esp_api_key_enc');
+    const fullenrichKey = localStorage.getItem('fullenrich_api_key_enc');
+    
+    if (espProvider || espKey || fullenrichKey) {
+      try {
+        const migrationData = {
+          brand_id: brandId,
+          created_by: user.id,
+          esp_provider: espProvider || null,
+          esp_api_key: espKey || null,
+          fullenrich_api_key: fullenrichKey || null,
+          updated_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase
+          .from('api_settings')
+          .insert([migrationData]);
+        
+        if (error) throw error;
+        
+        // Clear localStorage after successful migration
+        localStorage.removeItem('esp_provider');
+        localStorage.removeItem('esp_api_key_enc');
+        localStorage.removeItem('fullenrich_api_key_enc');
+        
+        console.info('API keys migrated from localStorage to Supabase');
+        showToast('API keys migrated to secure database storage', 'success');
+        
+        // Fetch the migrated data
+        await fetchApiKeys();
+      } catch (err) {
+        console.error('Migration failed:', err);
+      }
+    }
+  };
+
+  // Load API keys when brandId and user are available
+  useEffect(() => {
+    if (brandId && user) {
+      // First try migration, then fetch
+      migrateLocalStorageToSupabase().then(() => {
+        fetchApiKeys();
+      });
+    }
+  }, [brandId, user]);
 
   // Theme toggle function
   const toggleTheme = () => {
@@ -2743,31 +2852,16 @@ const InboxManager = ({ user, onSignOut }) => {
     });
   };
 
-  // Function to save API keys (with encryption)
-  const saveApiKeys = () => {
+  // Function to save API keys to Supabase (with encryption)
+  const saveApiKeys = async () => {
     setIsSavingApi(true);
     try {
-      // Save ESP settings
-      if (apiKeys.esp.provider) {
-        localStorage.setItem('esp_provider', apiKeys.esp.provider);
-        const encryptedEspKey = encryptApiKey(apiKeys.esp.key);
-        localStorage.setItem('esp_api_key_enc', encryptedEspKey);
-      }
-
-      // Save Full Enrich key
-      const encryptedFullEnrich = encryptApiKey(apiKeys.fullenrich);
-      localStorage.setItem('fullenrich_api_key_enc', encryptedFullEnrich);
-
-      // Remove old keys if they exist
-      ['smartlead', 'claude'].forEach(oldKey => {
-        localStorage.removeItem(`${oldKey}_api_key`);
-        localStorage.removeItem(`${oldKey}_api_key_enc`);
-      });
+      await saveApiKeysToSupabase();
 
       // Show success toast
       setApiToastMessage({
         type: 'success',
-        message: 'API keys saved securely'
+        message: 'API keys saved securely to database'
       });
       setShowApiToast(true);
       setTimeout(() => setShowApiToast(false), 3000);
@@ -2775,7 +2869,7 @@ const InboxManager = ({ user, onSignOut }) => {
       console.error('Failed to save API keys:', error);
       setApiToastMessage({
         type: 'error',
-        message: 'Failed to save API keys'
+        message: 'Failed to save API keys: ' + error.message
       });
       setShowApiToast(true);
       setTimeout(() => setShowApiToast(false), 3000);
