@@ -147,6 +147,7 @@ const InboxManager = ({ user, onSignOut }) => {
   const [categoryDropdowns, setCategoryDropdowns] = useState(new Set()); // Track which lead category dropdowns are open
   const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown positions for portal
   const dropdownButtonRefs = useRef({}); // Refs for dropdown buttons
+  const [recentDropdownPosition, setRecentDropdownPosition] = useState(null);
 
   // Clean up all timeouts on unmount
   useEffect(() => {
@@ -163,9 +164,15 @@ const InboxManager = ({ user, onSignOut }) => {
   // Click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Close recent dropdown if clicking outside
-      if (showRecentDropdown && !event.target.closest('.recent-dropdown')) {
-        setShowRecentDropdown(false);
+      // Close recent dropdown if clicking outside (check for both button and portal dropdown)
+      if (showRecentDropdown) {
+        const isClickOnRecentButton = event.target.closest('.recent-dropdown');
+        const isClickOnRecentPortalDropdown = event.target.closest('[data-portal-dropdown]');
+        
+        if (!isClickOnRecentButton && !isClickOnRecentPortalDropdown) {
+          setShowRecentDropdown(false);
+          setRecentDropdownPosition(null);
+        }
       }
       
       // Close category dropdowns if clicking outside (check for both in-container buttons and portal dropdowns)
@@ -700,6 +707,73 @@ const InboxManager = ({ user, onSignOut }) => {
             </div>
           </button>
         ))}
+      </div>,
+      document.body
+    );
+  };
+
+  // Recent Portal Dropdown Component
+  const RecentPortalDropdown = ({ position, onClose }) => {
+    if (!position || !recentlyViewed.length) return null;
+
+    return createPortal(
+      <div
+        data-portal-dropdown
+        className="fixed rounded-xl shadow-2xl overflow-hidden z-[10000]"
+        style={{
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+          width: '256px',
+          maxHeight: '320px',
+          backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
+          border: `2px solid ${themeStyles.borderStrong}`,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
+          boxSizing: 'border-box',
+          borderRadius: '12px',
+          overflow: 'hidden'
+        }}
+      >
+        <div className="p-3">
+          <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {recentlyViewed.map((recent) => (
+              <button
+                key={recent.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const lead = leads.find(l => l.id === recent.id);
+                  if (lead) {
+                    setSelectedLead(lead);
+                    setShowRecentDropdown(false);
+                    setActiveTab('all'); // Switch to inbox to show the selected lead
+                  }
+                  onClose();
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
+                style={{
+                  backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                  color: themeStyles.textPrimary
+                }}
+              >
+                <div className="font-medium">{recent.name}</div>
+                <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>{recent.email}</div>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setRecentlyViewed([]);
+              localStorage.removeItem('inbox_manager_recent_leads');
+              setShowRecentDropdown(false);
+              onClose();
+            }}
+            className="w-full mt-3 px-3 py-2 text-xs rounded-lg transition-all duration-300 hover:opacity-80"
+            style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+          >
+            Clear Recent
+          </button>
+        </div>
       </div>,
       document.body
     );
@@ -2945,10 +3019,27 @@ const InboxManager = ({ user, onSignOut }) => {
             </button>
 
             {/* Recent Tab */}
-            <div className="relative recent-dropdown" style={{zIndex: 10000}}>
+            <div className="relative recent-dropdown">
               <button
                 ref={recentButtonRef}
-                onClick={() => setShowRecentDropdown(!showRecentDropdown)}
+                onClick={() => {
+                  if (showRecentDropdown) {
+                    setShowRecentDropdown(false);
+                    setRecentDropdownPosition(null);
+                  } else {
+                    // Calculate position for portal
+                    const buttonElement = recentButtonRef.current;
+                    if (buttonElement) {
+                      const rect = buttonElement.getBoundingClientRect();
+                      setRecentDropdownPosition({
+                        top: rect.bottom + 8,
+                        left: rect.left,
+                        width: rect.width
+                      });
+                    }
+                    setShowRecentDropdown(true);
+                  }
+                }}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
                 style={{color: themeStyles.textPrimary}}
               >
@@ -2956,57 +3047,6 @@ const InboxManager = ({ user, onSignOut }) => {
                 Recent ({recentlyViewed.length})
                 <ChevronDown className="w-3 h-3" />
               </button>
-
-                            {showRecentDropdown && recentlyViewed.length > 0 && (
-                <div className="fixed rounded-lg shadow-lg max-h-80 overflow-y-auto transition-colors duration-300" 
-                     style={{
-                       backgroundColor: themeStyles.secondaryBg, 
-                       border: `1px solid ${themeStyles.border}`, 
-                       boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
-                       zIndex: 10000,
-                       width: '256px',
-                       left: '120px',
-                       top: '56px' // 48px nav height + 8px margin
-                     }}>
-                  <div className="p-3">
-                    <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
-                    <div className="space-y-1">
-                      {recentlyViewed.map((recent) => (
-                        <button
-                          key={recent.id}
-                          onClick={() => {
-                            const lead = leads.find(l => l.id === recent.id);
-                            if (lead) {
-                              setSelectedLead(lead);
-                              setShowRecentDropdown(false);
-                              setActiveTab('all'); // Switch to inbox to show the selected lead
-                            }
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
-                          style={{
-                            backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
-                            color: themeStyles.textPrimary
-                          }}
-                        >
-                          <div className="font-medium">{recent.name}</div>
-                          <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>{recent.email}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => {
-                        setRecentlyViewed([]);
-                        localStorage.removeItem('inbox_manager_recent_leads');
-                        setShowRecentDropdown(false);
-                      }}
-                      className="w-full mt-3 px-3 py-2 text-xs rounded-lg transition-all duration-300 hover:opacity-80"
-                      style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
-                    >
-                      Clear Recent
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Templates Tab */}
@@ -5317,6 +5357,17 @@ const InboxManager = ({ user, onSignOut }) => {
           />
         ) : null;
       })}
+
+      {/* Recent Portal Dropdown */}
+      {showRecentDropdown && (
+        <RecentPortalDropdown
+          position={recentDropdownPosition}
+          onClose={() => {
+            setShowRecentDropdown(false);
+            setRecentDropdownPosition(null);
+          }}
+        />
+      )}
     </div>
   );
 };
