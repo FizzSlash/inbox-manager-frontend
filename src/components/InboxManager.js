@@ -137,6 +137,7 @@ const InboxManager = ({ user, onSignOut }) => {
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
   const [categoryDropdowns, setCategoryDropdowns] = useState(new Set()); // Track which lead category dropdowns are open
+  const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown positions
 
   // Clean up all timeouts on unmount
   useEffect(() => {
@@ -161,11 +162,35 @@ const InboxManager = ({ user, onSignOut }) => {
       // Close category dropdowns if clicking outside
       if (categoryDropdowns.size > 0 && !event.target.closest('.category-dropdown')) {
         setCategoryDropdowns(new Set());
+        setDropdownPositions({}); // Clear all positions
+      }
+    };
+
+    const handleScroll = () => {
+      // Close dropdowns on scroll to avoid positioning issues
+      if (categoryDropdowns.size > 0) {
+        setCategoryDropdowns(new Set());
+        setDropdownPositions({});
+      }
+    };
+
+    const handleResize = () => {
+      // Close dropdowns on resize to avoid positioning issues
+      if (categoryDropdowns.size > 0) {
+        setCategoryDropdowns(new Set());
+        setDropdownPositions({});
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true); // Use capture to catch all scroll eventos
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [showRecentDropdown, categoryDropdowns]);
 
   // Auto-save drafts with debouncing
@@ -2695,14 +2720,33 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   // Toggle category dropdown for a specific lead
-  const toggleCategoryDropdown = (leadId) => {
+  const toggleCategoryDropdown = (leadId, buttonElement = null) => {
     setCategoryDropdowns(prev => {
       const newSet = new Set(prev);
       if (newSet.has(leadId)) {
         newSet.delete(leadId);
+        // Clear position when closing
+        setDropdownPositions(prevPos => {
+          const newPos = { ...prevPos };
+          delete newPos[leadId];
+          return newPos;
+        });
       } else {
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
+        
+        // Calculate and store position if button element is provided
+        if (buttonElement) {
+          const rect = buttonElement.getBoundingClientRect();
+          setDropdownPositions(prevPos => ({
+            ...prevPos,
+            [leadId]: {
+              top: rect.bottom + 8,
+              left: rect.left,
+              width: Math.max(rect.width, 200)
+            }
+          }));
+        }
       }
       return newSet;
     });
@@ -4227,7 +4271,7 @@ const InboxManager = ({ user, onSignOut }) => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleCategoryDropdown(lead.id);
+                                toggleCategoryDropdown(lead.id, e.currentTarget);
                               }}
                               className="text-sm px-4 py-2 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
@@ -4242,27 +4286,17 @@ const InboxManager = ({ user, onSignOut }) => {
                               <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             
-                            {isDropdownOpen && (
+                            {isDropdownOpen && dropdownPositions[lead.id] && (
                               <div 
-                                className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52 max-h-80 overflow-y-auto"
+                                className="fixed rounded-xl shadow-2xl overflow-hidden"
                                 style={{
                                   backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
                                   border: `2px solid ${themeStyles.borderStrong}`,
                                   boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                                  zIndex: 9999,
-                                  top: 'auto',
-                                  left: 'auto',
-                                  transform: 'translateY(8px)'
-                                }}
-                                ref={(el) => {
-                                  if (el && isDropdownOpen) {
-                                    const button = el.parentNode.querySelector('button');
-                                    if (button) {
-                                      const rect = button.getBoundingClientRect();
-                                      el.style.top = `${rect.bottom + 8}px`;
-                                      el.style.left = `${rect.left}px`;
-                                    }
-                                  }
+                                  zIndex: 99999,
+                                  top: `${dropdownPositions[lead.id].top}px`,
+                                  left: `${dropdownPositions[lead.id].left}px`,
+                                  minWidth: `${dropdownPositions[lead.id].width}px`
                                 }}
                               >
                                 {CATEGORY_OPTIONS.map((option, optionIndex) => (
