@@ -583,9 +583,11 @@ const InboxManager = ({ user, onSignOut }) => {
       setLoading(true);
       setError(null);
       
-      // Don't fetch if no API keys are configured yet
+      // For new users with no API keys, show empty state but don't return early
       if (!apiKeys.accounts || apiKeys.accounts.length === 0) {
+        console.log('📝 No API keys configured - showing empty state for new user');
         setLeads([]);
+        setLoading(false);
         return;
       }
       
@@ -2911,47 +2913,71 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log('🔄 Processing API key data...');
         const processStart = Date.now();
         
-        // Separate email accounts from global services
-        const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
-        const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
-        
-        console.log(`📧 Found ${emailAccounts.length} email accounts, ${fullenrichRecord ? 1 : 0} fullenrich records`);
+        try {
+          // Separate email accounts from global services
+          console.log('📊 Filtering email accounts...');
+          const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
+          const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
+          
+          console.log(`📧 Found ${emailAccounts.length} email accounts, ${fullenrichRecord ? 1 : 0} fullenrich records`);
+        } catch (filterError) {
+          console.error('❌ Error during data filtering:', filterError);
+          throw filterError;
+        }
 
         // Convert email account records to accounts structure
         console.log('🔓 Starting decryption...');
         const decryptStart = Date.now();
+        let accounts = [];
         
-        const accounts = emailAccounts.map(record => {
-          let decryptedKey = '';
-          try {
-            decryptedKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
-          } catch (err) {
-            console.warn('⚠️ Failed to decrypt API key:', err);
-            decryptedKey = record.esp_api_key || '';
-          }
+        try {
+          accounts = emailAccounts.map((record, index) => {
+            console.log(`🔓 Processing account ${index + 1}/${emailAccounts.length}`);
+            let decryptedKey = '';
+            try {
+              decryptedKey = typeof decryptApiKey === 'function' ? 
+                decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
+            } catch (err) {
+              console.warn('⚠️ Failed to decrypt API key:', err);
+              decryptedKey = record.esp_api_key || '';
+            }
+            
+            return {
+              id: record.account_id,
+              name: record.account_name || 'Account',
+              esp: {
+                provider: record.esp_provider || '',
+                key: decryptedKey
+              },
+              is_primary: record.is_primary || false
+            };
+          });
           
-          return {
-            id: record.account_id,
-            name: record.account_name || 'Account',
-            esp: {
-              provider: record.esp_provider || '',
-              key: decryptedKey
-            },
-            is_primary: record.is_primary || false
-          };
-        });
+          console.log('✅ Account mapping completed');
+        } catch (mappingError) {
+          console.error('❌ Error during account mapping:', mappingError);
+          throw mappingError;
+        }
 
         // Extract fullenrich from its dedicated record
+        console.log('🔍 Processing fullenrich record...');
         let fullenrichKey = '';
-        if (fullenrichRecord) {
-          try {
-            fullenrichKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
-          } catch (err) {
-            console.warn('⚠️ Failed to decrypt fullenrich key:', err);
-            fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
+        try {
+          if (fullenrichRecord) {
+            console.log('🔓 Decrypting fullenrich key...');
+            try {
+              fullenrichKey = typeof decryptApiKey === 'function' ? 
+                decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
+            } catch (err) {
+              console.warn('⚠️ Failed to decrypt fullenrich key:', err);
+              fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
+            }
+          } else {
+            console.log('📝 No fullenrich record found');
           }
+        } catch (fullenrichError) {
+          console.error('❌ Error processing fullenrich:', fullenrichError);
+          throw fullenrichError;
         }
         
         const decryptTime = Date.now() - decryptStart;
@@ -2961,15 +2987,22 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log('⚛️ Updating React state...');
         const stateStart = Date.now();
         
-        // Safety check before state update
-        if (typeof setApiKeys === 'function') {
-          setApiKeys({
-            accounts: accounts,
-            fullenrich: fullenrichKey
-          });
-        } else {
-          console.error('❌ setApiKeys is not available or not a function');
-          return false;
+        try {
+          // Safety check before state update
+          if (typeof setApiKeys === 'function') {
+            console.log('⚛️ About to call setApiKeys with:', { accounts: accounts.length, fullenrich: !!fullenrichKey });
+            setApiKeys({
+              accounts: accounts,
+              fullenrich: fullenrichKey
+            });
+            console.log('✅ setApiKeys completed successfully');
+          } else {
+            console.error('❌ setApiKeys is not available or not a function');
+            return false;
+          }
+        } catch (stateError) {
+          console.error('❌ Error during state update:', stateError);
+          throw stateError;
         }
         
         const stateTime = Date.now() - stateStart;
