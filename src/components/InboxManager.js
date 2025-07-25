@@ -585,14 +585,24 @@ const InboxManager = ({ user, onSignOut }) => {
           decryptApiKey(account.esp.key) || account.esp.key
         ).filter(key => key && key.trim() !== '');
 
-        // Filter leads to only those matching user's API keys
+        // Filter leads by account_id (new architecture)
         filteredData = (data || []).filter(lead => {
-          // For backward compatibility: if no source_api_key, fall back to brand_id matching
-          if (!lead.source_api_key && brandId) {
-            return lead.brand_id === brandId;
+          // Primary filter: Check if lead's account_id matches any of our accounts
+          if (lead.account_id) {
+            const hasMatchingAccount = apiKeys.accounts.some(account => account.id === lead.account_id);
+            if (hasMatchingAccount) {
+              console.log(`✅ Lead matches account: ${lead.account_id}`);
+              return true;
+            }
           }
-          // New approach: match by API key
-          return lead.source_api_key && userApiKeys.includes(lead.source_api_key);
+          
+          // Fallback: If no account_id, use brand_id matching (backward compatibility)
+          if (!lead.account_id && brandId && lead.brand_id === brandId) {
+            console.log(`✅ Lead matches brand_id fallback: ${lead.brand_id}`);
+            return true;
+          }
+          
+          return false;
         });
       } else if (brandId) {
         // Fallback: If no API keys configured, filter by brand ID only
@@ -3070,18 +3080,62 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to get the correct API key for a lead
   const getApiKeyForLead = (lead, apiKeysData) => {
-    // Option 1: Use email_account_id if exists
-    if (lead.email_account_id) {
-      const account = apiKeysData.accounts.find(acc => acc.id === lead.email_account_id);
-      if (account) return account;
+    // Option 1: Use account_id from lead (new architecture - most accurate)
+    if (lead.account_id) {
+      const matchedAccount = apiKeysData.accounts.find(acc => acc.id === lead.account_id);
+      if (matchedAccount) {
+        console.log(`🎯 Using account "${matchedAccount.name}" for lead (account_id match)`);
+        return matchedAccount;
+      }
     }
     
-    // Option 2: Use primary account as fallback
-    const primaryAccount = apiKeysData.accounts.find(acc => acc.is_primary);
-    if (primaryAccount) return primaryAccount;
+    // Option 2: Use email_account_id if exists (legacy support)
+    if (lead.email_account_id) {
+      const account = apiKeysData.accounts.find(acc => acc.id === lead.email_account_id);
+      if (account) {
+        console.log(`🎯 Using account "${account.name}" for lead (email_account_id match)`);
+        return account;
+      }
+    }
     
-    // Option 3: Use first account if no primary
-    return apiKeysData.accounts[0] || null;
+    // Option 3: Use primary account as fallback
+    const primaryAccount = apiKeysData.accounts.find(acc => acc.is_primary);
+    if (primaryAccount) {
+      console.log(`🎯 Using primary account "${primaryAccount.name}" for lead (fallback)`);
+      return primaryAccount;
+    }
+    
+    // Option 4: Use first account if no primary
+    const firstAccount = apiKeysData.accounts[0] || null;
+    if (firstAccount) {
+      console.log(`🎯 Using first account "${firstAccount.name}" for lead (last resort)`);
+    }
+    return firstAccount;
+  };
+
+  // Function to generate webhook URL for an account  
+  const generateWebhookUrl = (accountId) => {
+    return `https://reidsickels.app.n8n.cloud/webhook/${accountId}`;
+  };
+
+  // Function to copy webhook URL to clipboard
+  const copyWebhookUrl = (accountId) => {
+    const url = generateWebhookUrl(accountId);
+    navigator.clipboard.writeText(url).then(() => {
+      setApiToastMessage({
+        type: 'success',
+        message: 'Webhook URL copied to clipboard!'
+      });
+      setShowApiToast(true);
+      setTimeout(() => setShowApiToast(false), 3000);
+    }).catch(() => {
+      setApiToastMessage({
+        type: 'error',
+        message: 'Failed to copy webhook URL'
+      });
+      setShowApiToast(true);
+      setTimeout(() => setShowApiToast(false), 3000);
+    });
   };
 
   // Function to save API keys (with encryption)
@@ -3723,6 +3777,39 @@ const InboxManager = ({ user, onSignOut }) => {
                           />
                         </div>
                       )}
+
+                      {/* Webhook URL Display */}
+                      <div className="space-y-2 pt-3 mt-3 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+                        <label className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Webhook URL for this account
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={generateWebhookUrl(account.id)}
+                            readOnly
+                            className="flex-1 px-3 py-2 rounded-lg text-sm transition-all"
+                            style={{
+                              backgroundColor: themeStyles.tertiaryBg,
+                              border: `1px solid ${themeStyles.border}`,
+                              color: themeStyles.textPrimary
+                            }}
+                          />
+                          <button
+                            onClick={() => copyWebhookUrl(account.id)}
+                            className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80 flex items-center gap-1"
+                            style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copy
+                          </button>
+                        </div>
+                        <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Use this URL in your email platform's webhook settings
+                        </p>
+                      </div>
                     </div>
                   ))}
                   
