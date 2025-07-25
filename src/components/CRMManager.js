@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink, AlertCircle } from 'lucide-react';
+import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink, AlertCircle, ChevronDown } from 'lucide-react';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
 const getThemeStyles = (isDarkMode) => {
@@ -36,13 +36,13 @@ const getThemeStyles = (isDarkMode) => {
 };
 
 const STAGE_OPTIONS = [
-  'Lead',
-  'Contacted',
-  'Qualified',
-  'Proposal Sent',
-  'Closed Won',
-  'Closed Lost',
-  'Nurture'
+  { value: 'Lead', label: 'Lead', color: '#9CA3AF', icon: '👤' },
+  { value: 'Contacted', label: 'Contacted', color: '#3B82F6', icon: '📞' },
+  { value: 'Qualified', label: 'Qualified', color: '#8B5CF6', icon: '✅' },
+  { value: 'Proposal Sent', label: 'Proposal Sent', color: '#F59E0B', icon: '📋' },
+  { value: 'Closed Won', label: 'Closed Won', color: '#10B981', icon: '🎉' },
+  { value: 'Closed Lost', label: 'Closed Lost', color: '#EF4444', icon: '❌' },
+  { value: 'Nurture', label: 'Nurture', color: '#06B6D4', icon: '🌱' }
 ];
 
 const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
@@ -56,6 +56,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   const [savingId, setSavingId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState({ field: 'created_at', dir: 'desc' });
+  const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
   
   // Auto-dismiss toast after 4 seconds
   useEffect(() => {
@@ -74,6 +75,18 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   });
   
   const themeStyles = getThemeStyles(isDarkMode);
+
+  // Close stage dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (stageDropdownOpen && !event.target.closest('.stage-dropdown')) {
+        setStageDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [stageDropdownOpen]);
 
   // Listen for theme changes from localStorage
   useEffect(() => {
@@ -328,9 +341,22 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                     </div>
                   </td>
                   <td className="px-4 py-4 text-center">
-                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}>
-                      {lead.stage}
-                    </span>
+                    {(() => {
+                      const stageOption = STAGE_OPTIONS.find(opt => opt.value === lead.stage);
+                      return (
+                        <span 
+                          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold"
+                          style={{
+                            backgroundColor: `${stageOption?.color || themeStyles.accent}20`, 
+                            color: stageOption?.color || themeStyles.accent, 
+                            border: `1px solid ${stageOption?.color || themeStyles.accent}30`
+                          }}
+                        >
+                          <span className="text-sm">{stageOption?.icon}</span>
+                          {lead.stage}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-4 text-right font-medium" style={{color: themeStyles.textPrimary}}>
                     ${lead.deal_size?.toLocaleString() || 0}
@@ -479,11 +505,58 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                 {/* Unified Lead Information Section */}
                 <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
+                    <div className="relative">
                       <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
-                      <select className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
-                        {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
+                      
+                                             {/* Custom Stage Dropdown */}
+                       <div className="relative stage-dropdown">
+                        <button
+                          type="button"
+                          onClick={() => setStageDropdownOpen(!stageDropdownOpen)}
+                          className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300 flex items-center justify-between"
+                          style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{STAGE_OPTIONS.find(opt => opt.value === editFields.stage)?.icon}</span>
+                            <span>{STAGE_OPTIONS.find(opt => opt.value === editFields.stage)?.label}</span>
+                          </div>
+                          <ChevronDown className={`w-6 h-6 transition-transform duration-200 ${stageDropdownOpen ? 'rotate-180' : ''}`} style={{color: themeStyles.textMuted}} />
+                        </button>
+                        
+                        {stageDropdownOpen && (
+                          <div 
+                            className="absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl z-50 overflow-hidden"
+                            style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}
+                          >
+                            {STAGE_OPTIONS.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                  handleFieldChange('stage', option.value);
+                                  setStageDropdownOpen(false);
+                                }}
+                                className="w-full px-4 py-4 text-left transition-all duration-200 flex items-center gap-3 hover:opacity-80"
+                                style={{
+                                  backgroundColor: editFields.stage === option.value ? `${option.color}20` : 'transparent',
+                                  borderBottom: `1px solid ${themeStyles.border}`
+                                }}
+                              >
+                                <span className="text-2xl">{option.icon}</span>
+                                <span 
+                                  className="font-semibold text-lg"
+                                  style={{color: option.color}}
+                                >
+                                  {option.label}
+                                </span>
+                                {editFields.stage === option.value && (
+                                  <CheckCircle className="w-5 h-5 ml-auto" style={{color: option.color}} />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-4 mt-8">
                       <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
