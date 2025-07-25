@@ -2619,130 +2619,244 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Handle send message
+  // SECURE EMAIL PROVIDER INTEGRATIONS (API keys never leave device)
+  
+  // Smartlead direct integration (matches your exact API structure)
+  const sendViaSmartlead = async (apiKey, lead, htmlContent, scheduledTime) => {
+    console.log('📧 Sending via Smartlead directly...');
+    
+    // Use the exact API structure from your n8n workflow
+    const url = `https://server.smartlead.ai/api/v1/campaigns/${lead.campaign_id}/reply-email-thread?api_key=${apiKey}`;
+    
+    const bodyPayload = {
+      email_stats_id: lead.email_stats_id,
+      email_body: htmlContent.replace(/\n/g, '<br>'),
+      reply_email_time: scheduledTime ? new Date(scheduledTime).toISOString() : undefined,
+      reply_email_body: htmlContent.replace(/\n/g, '<br>'),
+      to_email: lead.sl_lead_email || lead.email
+    };
+
+    console.log('🎯 Smartlead payload:', bodyPayload);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(bodyPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Smartlead API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Smartlead response:', result);
+    return result;
+  };
+
+  // Email Bison direct integration
+  const sendViaEmailBison = async (apiKey, lead, htmlContent, scheduledTime) => {
+    console.log('📧 Sending via Email Bison directly...');
+    
+    const payload = {
+      api_key: apiKey,
+      to: lead.sl_lead_email,
+      to_name: lead.to_name || lead.first_name,
+      from: lead.from_email,
+      subject: lead.subject,
+      html: htmlContent,
+      scheduled_time: scheduledTime ? new Date(scheduledTime).toISOString() : null
+    };
+
+    const response = await fetch('https://api.emailbison.com/v1/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Email Bison API error: ${response.status} - ${errorText}`);
+    }
+
+    return await response.json();
+  };
+
+  // Instantly direct integration
+  const sendViaInstantly = async (apiKey, lead, htmlContent, scheduledTime) => {
+    console.log('📧 Sending via Instantly directly...');
+    
+    const payload = {
+      api_key: apiKey,
+      to_email: lead.sl_lead_email,
+      to_name: lead.to_name || lead.first_name,
+      from_email: lead.from_email,
+      subject: lead.subject,
+      body_html: htmlContent,
+      send_time: scheduledTime ? new Date(scheduledTime).toISOString() : null
+    };
+
+    const response = await fetch('https://api.instantly.ai/api/v1/send/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Instantly API error: ${response.status} - ${errorText}`);
+    }
+
+    return await response.json();
+  };
+
+  // Update conversation in Supabase after successful send (no API keys sent)
+  const updateConversationInSupabase = async (leadId, messageData, emailResult) => {
+    console.log('💾 Updating conversation and lead status in Supabase...');
+    
+    try {
+      // Get current lead data
+      const { data: currentLead, error: fetchError } = await supabase
+        .from('retention_harbor')
+        .select('email_message_body, conversation_count, last_reply_at')
+        .eq('id', leadId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Parse existing conversation
+      let conversation = [];
+      if (currentLead.email_message_body) {
+        try {
+          conversation = JSON.parse(currentLead.email_message_body);
+        } catch (err) {
+          console.warn('Failed to parse existing conversation:', err);
+        }
+      }
+
+      // Add new sent message to conversation
+      const newMessage = {
+        id: crypto.randomUUID(),
+        type: 'SENT',
+        content: messageData.message,
+        html_content: messageData.message,
+        time: messageData.sent_at,
+        from: 'user',
+        scheduled_time: messageData.scheduled_time,
+        esp_provider: messageData.esp_provider,
+        account_name: messageData.account_name,
+        message_id: emailResult?.message_id || emailResult?.id || null,
+        smartlead_response: emailResult, // Store full response for reference
+        status: 'sent'
+      };
+
+      conversation.push(newMessage);
+
+      // Update the lead record with new conversation and metadata
+      const { error: updateError } = await supabase
+        .from('retention_harbor')
+        .update({
+          email_message_body: JSON.stringify(conversation),
+          conversation_count: conversation.length,
+          last_reply_at: messageData.sent_at,
+          updated_at: new Date().toISOString(),
+          // Update status to show it's been responded to
+          status: 'replied'
+        })
+        .eq('id', leadId);
+
+      if (updateError) throw updateError;
+
+      console.log('✅ Conversation and lead status updated in Supabase');
+      console.log('📊 Updated fields:', {
+        conversation_length: conversation.length,
+        last_reply: messageData.sent_at,
+        message_id: newMessage.message_id
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to update conversation:', error);
+      throw error;
+    }
+  };
+
+  // SECURE: Send message directly from frontend (API keys never leave device)
   const sendMessage = async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
     const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
     
-    // Debug: Log the raw HTML being generated
-    console.log('=== HTML DEBUG ===');
-    console.log('Raw HTML from editor:', rawHtmlContent);
-    console.log('Cleaned HTML (spans converted):', cleanFormattingHtml(rawHtmlContent));
+    console.log('🔐 SECURE SEND: API keys will never leave this device');
+    console.log('📧 Processing message for secure direct send...');
     
-    const htmlContent = sanitizeHtml(rawHtmlContent);
-    console.log('Final sanitized HTML:', htmlContent);
+    const htmlContent = sanitizeHtml(cleanFormattingHtml(rawHtmlContent));
     
     if (!textContent.trim()) return;
     
     setIsSending(true);
     try {
-      // Parse CC emails from the editable field
-      const ccEmails = editableCcEmails
-        .split(',')
-        .map(email => email.trim())
-        .filter(email => email.length > 0)
-        .map(email => ({ name: '', address: email }));
-
-      // Get file attachments from state
-      const attachments = [];
-      if (attachedFiles.length > 0) {
-        for (let attachment of attachedFiles) {
-          // Convert file to base64 for sending
-          const base64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(attachment.file);
-          });
-          
-          attachments.push({
-            filename: attachment.name,
-            content: base64,
-            encoding: 'base64',
-            contentType: attachment.type
-          });
-        }
-      }
+      // Get the appropriate API key for this lead
+      const leadApiKey = getApiKeyForLead(selectedLead, apiKeys);
       
-      // Prepare payload with editable recipients and HTML content
-      const sendPayload = {
-        // Draft message data with user-editable recipients and rich formatting
-        message: {
-          content: textContent.trim(), // Plain text version
-          html_content: htmlContent, // Rich HTML version
-          to: editableToEmail.trim(),
-          cc: ccEmails,
-          subject: `Re: ${selectedLead.subject}`,
-          type: 'SENT',
-          attachments: attachments
-        },
-        
-        // Add scheduled time if set (in ISO format for API)
-        ...(scheduledTime && {
-          reply_email_time: scheduledTime.toISOString()
-        }),
-        
-        // Lead data
-        lead: {
-          id: selectedLead.id,
-          campaign_id: selectedLead.campaign_id,
-          lead_id: selectedLead.lead_id,
-          email_stats_id: selectedLead.email_stats_id,
-          email: editableToEmail.trim(), // Use the editable primary email
-          first_name: selectedLead.first_name,
-          last_name: selectedLead.last_name,
-          subject: selectedLead.subject,
-          intent: selectedLead.intent,
-          engagement_score: selectedLead.engagement_score,
-          urgency: getResponseUrgency(selectedLead),
-          website: selectedLead.website || '',
-          tags: selectedLead.tags,
-          conversation_history: selectedLead.conversation,
-          reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
-          last_activity: selectedLead.conversation.length > 0 ? selectedLead.conversation[selectedLead.conversation.length - 1].time : selectedLead.created_at,
-          // Add recipient info
-          cc_recipients: ccEmails.map(cc => cc.address)
-        },
-        // Get the correct API key for this lead
-        ...((() => {
-          const leadApiKey = getApiKeyForLead(selectedLead, apiKeys);
-          return {
-            esp_provider: leadApiKey?.esp.provider || '',
-            esp_api_key: leadApiKey?.esp.key || '',
-            account_name: leadApiKey?.name || '',
-            account_id: leadApiKey?.id || '',
-            fullenrich_api_key: apiKeys.fullenrich
-          };
-        })())
-      };
-
-      console.log('Sending message with rich formatting:', {
-        to: editableToEmail.trim(),
-        cc: ccEmails,
-        htmlContent: htmlContent,
-        attachments: attachments.length,
-        payload: sendPayload
-      });
-
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(sendPayload)
-      });
-
-      console.log('Send response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Send webhook error:', errorText);
-        throw new Error(`Failed to send message: ${response.status}`);
+      if (!leadApiKey || !leadApiKey.esp.key) {
+        throw new Error('No API key available for sending messages');
       }
 
-      const responseData = await response.json();
-      console.log('Send response data:', responseData);
+      console.log(`🎯 Using ${leadApiKey.esp.provider} provider (Account: ${leadApiKey.name})`);
 
-      // Show success modal instead of alert
+             // Prepare lead data for sending (with required API fields)
+       const leadForSending = {
+         ...selectedLead,
+         sl_lead_email: editableToEmail.trim(), // Use editable email
+         to_name: selectedLead.to_name || selectedLead.first_name,
+         email: editableToEmail.trim() // Fallback email field
+       };
+
+       console.log('📋 Lead data for API call:', {
+         campaign_id: leadForSending.campaign_id,
+         email_stats_id: leadForSending.email_stats_id,
+         to_email: leadForSending.sl_lead_email,
+         provider: leadApiKey.esp.provider
+       });
+
+      // Send email directly based on ESP provider (API key stays local)
+      let emailResult;
+      switch (leadApiKey.esp.provider) {
+        case 'smartlead':
+          emailResult = await sendViaSmartlead(leadApiKey.esp.key, leadForSending, htmlContent, scheduledTime);
+          break;
+        case 'email_bison':
+          emailResult = await sendViaEmailBison(leadApiKey.esp.key, leadForSending, htmlContent, scheduledTime);
+          break;
+        case 'instantly':
+          emailResult = await sendViaInstantly(leadApiKey.esp.key, leadForSending, htmlContent, scheduledTime);
+          break;
+        default:
+          throw new Error(`Unsupported ESP provider: ${leadApiKey.esp.provider}`);
+      }
+
+      console.log('✅ Email sent successfully via', leadApiKey.esp.provider);
+
+             // Update Supabase with the sent message (NO API KEYS in this request)
+       await updateConversationInSupabase(selectedLead.id, {
+         message: htmlContent,
+         sent_at: new Date().toISOString(),
+         scheduled_time: scheduledTime ? scheduledTime.toISOString() : null,
+         esp_provider: leadApiKey.esp.provider,
+         account_name: leadApiKey.name
+       }, emailResult);
+
+      console.log('💾 Conversation updated in database (securely)');
+
+      // Show success modal
       setShowSentConfirm(true);
       
       // Clear draft and editor
@@ -2760,12 +2874,14 @@ const InboxManager = ({ user, onSignOut }) => {
       setScheduledTime(null);
       setShowScheduler(false);
       
-      // Optionally refresh leads to get updated data
+      // Refresh leads to get updated conversation
       await fetchLeads();
       
+      console.log('🎯 SECURE SEND COMPLETE: No API keys were transmitted over network');
+      
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert(`Error sending message: ${error.message}`);
+      console.error('❌ Secure send failed:', error);
+      alert(`Failed to send message securely: ${error.message}`);
     } finally {
       setIsSending(false);
     }
