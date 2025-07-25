@@ -509,59 +509,30 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Load API keys from Supabase when brandId becomes available
   useEffect(() => {
-    console.log('🎯 API Keys useEffect triggered - brandId:', brandId, 'user:', !!user);
-    
     // Prevent multiple simultaneous loads
     if (isLoadingApiKeysRef.current) {
-      console.log('⏸️ Already loading API keys, skipping...');
       return;
     }
 
     // Double-check we have both values before proceeding
     if (!brandId || !user) {
-      console.log('⏸️ Skipping API key load - missing brandId or user');
       return;
     }
 
-    const loadApiKeys = async () => {
-      // Capture values immediately to prevent closure issues
-      const currentBrandId = brandId;
-      const currentUser = user;
-      
-      // Final validation
-      if (!currentBrandId || !currentUser) {
-        console.log('⏸️ Values became null during execution, aborting');
-        return;
-      }
-
-      console.log('🚀 Starting API key load process...');
-      isLoadingApiKeysRef.current = true;
-      
-      try {
-        const loadedFromSupabase = await loadApiKeysFromSupabase(currentBrandId);
-        if (!loadedFromSupabase) {
-          // If no data in Supabase, the localStorage values are already loaded in initial state
-          console.log('No API keys found in Supabase, keeping localStorage values');
-        } else {
-          console.log('✅ API keys loaded from Supabase successfully');
+          const loadApiKeys = async () => {
+        isLoadingApiKeysRef.current = true;
+        
+        try {
+          await loadApiKeysFromSupabase(brandId);
+        } catch (error) {
+          console.error('Failed to load API keys:', error);
+        } finally {
+          isLoadingApiKeysRef.current = false;
         }
-      } catch (error) {
-        console.error('❌ Failed to load API keys from Supabase:', error);
-        // Continue with localStorage values
-      } finally {
-        isLoadingApiKeysRef.current = false;
-      }
-    };
+      };
     
-    // Add a small delay to prevent rapid-fire executions during initialization
-    const timeoutId = setTimeout(() => {
-      loadApiKeys();
-    }, 150); // 150ms delay
-    
-    // Cleanup timeout if useEffect re-runs
-    return () => {
-      clearTimeout(timeoutId);
-    };
+    // Load immediately - no artificial delays
+    loadApiKeys();
   }, [brandId, user]);
 
   // Fetch leads when brandId or API keys are available
@@ -2876,159 +2847,68 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to load API keys from Supabase
   const loadApiKeysFromSupabase = async (brandId) => {
-    console.log('🔄 Starting API key load for brandId:', brandId);
-    const startTime = Date.now();
-    
-    // Safety checks
-    if (!brandId) {
-      console.log('❌ No brandId provided to loadApiKeysFromSupabase');
-      return false;
-    }
-    
-    // Add a small delay to ensure everything is initialized
-    await new Promise(resolve => setTimeout(resolve, 50));
+    if (!brandId) return false;
     
     try {
-      console.log('🔍 Checking supabase client availability...');
-      
-      // More thorough supabase availability check
       if (!supabase || typeof supabase.from !== 'function') {
-        console.log('❌ Supabase client not properly initialized');
+        console.error('Supabase client not available');
         return false;
       }
 
-      console.log('📡 Querying Supabase api_settings table...');
-      const queryStart = Date.now();
-      
-      // Wrap the supabase call in additional try-catch
-      let data, error;
-      try {
-        const result = await supabase
-          .from('api_settings')
-          .select('*')
-          .eq('brand_id', brandId)
-          .order('is_primary', { ascending: false }); // Primary accounts first
-        
-        data = result.data;
-        error = result.error;
-      } catch (supabaseError) {
-        console.error('❌ Supabase operation failed:', supabaseError);
-        throw supabaseError;
-      }
+      const { data, error } = await supabase
+        .from('api_settings')
+        .select('*')
+        .eq('brand_id', brandId)
+        .order('is_primary', { ascending: false });
 
-      const queryTime = Date.now() - queryStart;
-      console.log(`⏱️ Supabase query took: ${queryTime}ms`);
-      console.log('📊 Query returned:', data?.length || 0, 'records');
-
-      if (error) {
-        console.error('❌ Supabase query error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (data && data.length > 0) {
-        console.log('🔄 Processing API key data...');
-        const processStart = Date.now();
-        
-        try {
-          // Separate email accounts from global services
-          console.log('📊 Filtering email accounts...');
-          const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
-          const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
-          
-          console.log(`📧 Found ${emailAccounts.length} email accounts, ${fullenrichRecord ? 1 : 0} fullenrich records`);
-        } catch (filterError) {
-          console.error('❌ Error during data filtering:', filterError);
-          throw filterError;
-        }
+        // Separate email accounts from global services
+        const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
+        const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
 
         // Convert email account records to accounts structure
-        console.log('🔓 Starting decryption...');
-        const decryptStart = Date.now();
-        let accounts = [];
-        
-        try {
-          accounts = emailAccounts.map((record, index) => {
-            console.log(`🔓 Processing account ${index + 1}/${emailAccounts.length}`);
-            let decryptedKey = '';
-            try {
-              decryptedKey = typeof decryptApiKey === 'function' ? 
-                decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
-            } catch (err) {
-              console.warn('⚠️ Failed to decrypt API key:', err);
-              decryptedKey = record.esp_api_key || '';
-            }
-            
-            return {
-              id: record.account_id,
-              name: record.account_name || 'Account',
-              esp: {
-                provider: record.esp_provider || '',
-                key: decryptedKey
-              },
-              is_primary: record.is_primary || false
-            };
-          });
+        const accounts = emailAccounts.map(record => {
+          let decryptedKey = '';
+          try {
+            decryptedKey = typeof decryptApiKey === 'function' ? 
+              decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
+          } catch (err) {
+            decryptedKey = record.esp_api_key || '';
+          }
           
-          console.log('✅ Account mapping completed');
-        } catch (mappingError) {
-          console.error('❌ Error during account mapping:', mappingError);
-          throw mappingError;
-        }
+          return {
+            id: record.account_id,
+            name: record.account_name || 'Account',
+            esp: {
+              provider: record.esp_provider || '',
+              key: decryptedKey
+            },
+            is_primary: record.is_primary || false
+          };
+        });
 
         // Extract fullenrich from its dedicated record
-        console.log('🔍 Processing fullenrich record...');
         let fullenrichKey = '';
-        try {
-          if (fullenrichRecord) {
-            console.log('🔓 Decrypting fullenrich key...');
-            try {
-              fullenrichKey = typeof decryptApiKey === 'function' ? 
-                decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
-            } catch (err) {
-              console.warn('⚠️ Failed to decrypt fullenrich key:', err);
-              fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
-            }
-          } else {
-            console.log('📝 No fullenrich record found');
+        if (fullenrichRecord) {
+          try {
+            fullenrichKey = typeof decryptApiKey === 'function' ? 
+              decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
+          } catch (err) {
+            fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
           }
-        } catch (fullenrichError) {
-          console.error('❌ Error processing fullenrich:', fullenrichError);
-          throw fullenrichError;
         }
         
         const decryptTime = Date.now() - decryptStart;
         console.log(`🔓 Decryption took: ${decryptTime}ms`);
 
         // Update API keys state with data from Supabase
-        console.log('⚛️ Updating React state...');
-        const stateStart = Date.now();
-        
-        try {
-          // Safety check before state update
-          if (typeof setApiKeys === 'function') {
-            console.log('⚛️ About to call setApiKeys with:', { accounts: accounts.length, fullenrich: !!fullenrichKey });
-            setApiKeys({
-              accounts: accounts,
-              fullenrich: fullenrichKey
-            });
-            console.log('✅ setApiKeys completed successfully');
-          } else {
-            console.error('❌ setApiKeys is not available or not a function');
-            return false;
-          }
-        } catch (stateError) {
-          console.error('❌ Error during state update:', stateError);
-          throw stateError;
-        }
-        
-        const stateTime = Date.now() - stateStart;
-        const totalTime = Date.now() - startTime;
-        
-        console.log(`⚛️ State update took: ${stateTime}ms`);
-        console.log(`✅ Total API key load time: ${totalTime}ms`);
+        setApiKeys({
+          accounts: accounts,
+          fullenrich: fullenrichKey
+        });
 
-        const fullenrichCount = fullenrichKey ? 1 : 0;
-        console.log(`Loaded ${accounts.length} email account(s) and ${fullenrichCount} global service(s) from Supabase`);
         return true; // Successfully loaded from Supabase
       }
       return false; // No data found in Supabase
