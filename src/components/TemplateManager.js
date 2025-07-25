@@ -160,6 +160,42 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
     }
   };
 
+  // Rich text formatting functions
+  const formatText = (command, value = null) => {
+    document.execCommand(command, false, value);
+    // Update content after formatting
+    const editor = document.querySelector('[contenteditable]');
+    if (editor) {
+      handleContentChange({ target: editor });
+    }
+  };
+
+  const insertList = () => {
+    document.execCommand('insertUnorderedList', false, null);
+    // Update content
+    const editor = document.querySelector('[contenteditable]');
+    if (editor) {
+      handleContentChange({ target: editor });
+    }
+  };
+
+  const insertLink = () => {
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    const url = prompt('Enter URL:', 'https://');
+    
+    if (url && url.trim() !== '' && url !== 'https://') {
+      const linkText = selectedText || url;
+      document.execCommand('createLink', false, url);
+      
+      // Update content
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        handleContentChange({ target: editor });
+      }
+    }
+  };
+
   // Save template
   const saveTemplate = async () => {
     if (!formData.name.trim() || !formData.content.trim()) {
@@ -362,7 +398,42 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
   }
 
   return (
-    <div className="flex h-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+    <>
+      <style jsx global>{`
+        /* Rich text editor styling for templates */
+        div[contenteditable] ul {
+          margin: 8px 0;
+          padding-left: 20px;
+          list-style-type: disc;
+        }
+
+        div[contenteditable] ul li {
+          margin: 2px 0;
+          line-height: 1.5;
+        }
+
+        div[contenteditable] ol {
+          margin: 8px 0;
+          padding-left: 20px;
+          list-style-type: decimal;
+        }
+
+        div[contenteditable] ol li {
+          margin: 2px 0;
+          line-height: 1.5;
+        }
+
+        /* Placeholder text for contenteditable */
+        div[contenteditable]:empty:before {
+          content: attr(data-placeholder);
+          color: #9CA3AF;
+          font-style: italic;
+          pointer-events: none;
+          white-space: pre-line;
+        }
+      `}</style>
+      
+      <div className="flex h-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Template List */}
       <div className={`${selectionMode ? 'w-full' : 'w-1/2'} flex flex-col shadow-lg relative z-50 transition-colors duration-300`} style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: selectionMode ? '8px' : '4px', border: `1px solid ${themeStyles.border}`}}>
         {/* Header */}
@@ -641,10 +712,171 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                 <label className="text-sm font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                   Template Content *
                 </label>
+                
+                {/* Formatting Toolbar */}
+                <div className="flex flex-wrap gap-2 p-3 rounded-lg mb-3 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <button
+                    type="button"
+                    onClick={() => formatText('bold')}
+                    className="px-3 py-1 rounded text-xs font-bold hover:opacity-80 transition-all duration-300"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                    title="Bold (Ctrl+B)"
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => formatText('italic')}
+                    className="px-3 py-1 rounded text-xs italic hover:opacity-80 transition-all duration-300"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                    title="Italic (Ctrl+I)"
+                  >
+                    I
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => formatText('underline')}
+                    className="px-3 py-1 rounded text-xs underline hover:opacity-80 transition-all duration-300"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                    title="Underline (Ctrl+U)"
+                  >
+                    U
+                  </button>
+                  <button
+                    type="button"
+                    onClick={insertLink}
+                    className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300 flex items-center gap-1"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                    title="Insert Link"
+                  >
+                    🔗 Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={insertList}
+                    className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300"
+                    style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                    title="Bullet List"
+                  >
+                    • List
+                  </button>
+                </div>
+
                 <div
                   contentEditable
                   suppressContentEditableWarning={true}
                   onInput={handleContentChange}
+                  onKeyDown={(e) => {
+                    // Handle keyboard shortcuts
+                    if (e.ctrlKey || e.metaKey) {
+                      switch(e.key) {
+                        case 'b':
+                          e.preventDefault();
+                          formatText('bold');
+                          break;
+                        case 'i':
+                          e.preventDefault();
+                          formatText('italic');
+                          break;
+                        case 'u':
+                          e.preventDefault();
+                          formatText('underline');
+                          break;
+                        case 'z':
+                          e.preventDefault();
+                          if (e.shiftKey) {
+                            document.execCommand('redo', false, null);
+                          } else {
+                            document.execCommand('undo', false, null);
+                          }
+                          handleContentChange({ target: e.target });
+                          break;
+                        case 'y':
+                          e.preventDefault();
+                          document.execCommand('redo', false, null);
+                          handleContentChange({ target: e.target });
+                          break;
+                      }
+                    } else if (e.key === 'Enter' && e.shiftKey) {
+                      // Handle Shift+Enter to exit lists
+                      const selection = window.getSelection();
+                      if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        let currentElement = range.startContainer;
+                        
+                        while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                          currentElement = currentElement.parentNode;
+                        }
+                        
+                        if (currentElement && currentElement.tagName === 'LI') {
+                          e.preventDefault();
+                          const list = currentElement.closest('ul, ol');
+                          if (list) {
+                            const newDiv = document.createElement('div');
+                            newDiv.innerHTML = '<br>';
+                            list.parentNode.insertBefore(newDiv, list.nextSibling);
+                            
+                            const newRange = document.createRange();
+                            newRange.setStart(newDiv, 0);
+                            newRange.collapse(true);
+                            selection.removeAllRanges();
+                            selection.addRange(newRange);
+                            
+                            handleContentChange({ target: e.target });
+                          }
+                        }
+                      }
+                    } else if (e.key === 'Tab') {
+                      // Handle Tab for indenting
+                      e.preventDefault();
+                      const selection = window.getSelection();
+                      
+                      if (selection.rangeCount > 0) {
+                        let currentElement = selection.getRangeAt(0).startContainer;
+                        while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                          currentElement = currentElement.parentNode;
+                        }
+                        
+                        if (currentElement && (currentElement.tagName === 'LI' || currentElement.closest('ul, ol'))) {
+                          if (e.shiftKey) {
+                            document.execCommand('outdent', false, null);
+                          } else {
+                            document.execCommand('indent', false, null);
+                          }
+                        } else {
+                          if (e.shiftKey) {
+                            document.execCommand('outdent', false, null);
+                          } else {
+                            document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+                          }
+                        }
+                      }
+                      
+                      handleContentChange({ target: e.target });
+                    } else if (e.key === 'Backspace') {
+                      // Handle exiting lists
+                      const selection = window.getSelection();
+                      if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        let currentElement = range.startContainer;
+                        
+                        while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                          currentElement = currentElement.parentNode;
+                        }
+                        
+                        if (currentElement && currentElement.tagName === 'LI') {
+                          const isEmpty = currentElement.textContent.trim() === '';
+                          const atStart = range.startOffset === 0;
+                          
+                          if (isEmpty && atStart) {
+                            e.preventDefault();
+                            document.execCommand('outdent', false, null);
+                            handleContentChange({ target: e.target });
+                          }
+                        }
+                      }
+                    }
+                  }}
                   className="w-full h-64 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
                   style={{
                     backgroundColor: themeStyles.tertiaryBg, 
@@ -653,10 +885,18 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                     '--tw-ring-color': themeStyles.accent,
                     minHeight: '256px'
                   }}
-                  data-placeholder="Enter your email template content..."
+                  data-placeholder="Start typing your template content...
+
+Keyboard shortcuts:
+• Ctrl+B/I/U - Bold/Italic/Underline
+• Ctrl+Z/Y - Undo/Redo
+• Tab/Shift+Tab - Indent/Outdent
+• Bullet button - Toggle lists
+• Backspace on empty bullet - Exit list
+• Shift+Enter in bullet - Exit to normal text"
                 />
                 <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                  You can use basic formatting (bold, italic, links, etc.)
+                  Rich text editor with full formatting support - Bold, italic, links, bullet points, and more!
                 </p>
               </div>
             </div>
@@ -739,6 +979,7 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
         </div>
       )}
     </div>
+    </>
   );
 };
 

@@ -5235,13 +5235,13 @@ const InboxManager = ({ user, onSignOut }) => {
                             }
                           }
                         }}
-                        className="w-full h-40 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
+                        className="w-full p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
                         style={{
                           backgroundColor: themeStyles.secondaryBg, 
                           border: `1px solid ${themeStyles.border}`, 
                           color: themeStyles.textPrimary,
                           '--tw-ring-color': themeStyles.accent,
-                          minHeight: '160px'
+                          minHeight: '320px'
                         }}
                         data-placeholder="Start typing your response...
 
