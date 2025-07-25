@@ -5068,37 +5068,7 @@ const InboxManager = ({ user, onSignOut }) => {
                         >
                           • List
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // Force exit list mode by inserting a paragraph
-                            const editor = document.querySelector('[contenteditable]');
-                            const selection = window.getSelection();
-                            if (selection.rangeCount > 0) {
-                              const range = selection.getRangeAt(0);
-                              const newPara = document.createElement('div');
-                              newPara.innerHTML = '<br>';
-                              
-                              // Insert paragraph at current position
-                              range.insertNode(newPara);
-                              
-                              // Move cursor to new paragraph
-                              const newRange = document.createRange();
-                              newRange.setStart(newPara, 0);
-                              newRange.collapse(true);
-                              selection.removeAllRanges();
-                              selection.addRange(newRange);
-                              
-                              // Update content
-                              handleTextareaChange({ target: editor });
-                            }
-                          }}
-                          className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300"
-                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
-                          title="Exit List Mode"
-                        >
-                          Exit List
-                        </button>
+
                         <div className="mx-2" style={{borderLeft: `1px solid ${themeStyles.border}`}}></div>
                         <input
                           type="file"
@@ -5238,6 +5208,54 @@ const InboxManager = ({ user, onSignOut }) => {
                                 // If not empty and not Shift+Enter, let default behavior create new list item
                               }
                             }
+                          } else if (e.key === 'Backspace') {
+                            // Handle Backspace key in lists - exit list if bullet is empty and backspace again
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentElement = range.startContainer;
+                              
+                              // Navigate up to find if we're in a list item
+                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                                currentElement = currentElement.parentNode;
+                              }
+                              
+                              // Check if we're in a list item and at the beginning
+                              if (currentElement && currentElement.tagName === 'LI') {
+                                const listItem = currentElement;
+                                const textContent = listItem.textContent || listItem.innerText || '';
+                                const isEmpty = textContent.trim() === '' || textContent.trim() === '\n';
+                                
+                                // Check if cursor is at the beginning of an empty list item
+                                if (isEmpty && range.startOffset === 0) {
+                                  e.preventDefault();
+                                  
+                                  const ul = listItem.parentNode;
+                                  const newPara = document.createElement('div');
+                                  newPara.innerHTML = '<br>';
+                                  
+                                  // Exit the list
+                                  if (ul.children.length === 1) {
+                                    // Only one item (the empty one), replace entire list
+                                    ul.parentNode.replaceChild(newPara, ul);
+                                  } else {
+                                    // Multiple items, just remove empty one and add paragraph before list
+                                    listItem.remove();
+                                    ul.parentNode.insertBefore(newPara, ul);
+                                  }
+                                  
+                                  // Focus the new paragraph
+                                  const newRange = document.createRange();
+                                  newRange.setStart(newPara, 0);
+                                  newRange.collapse(true);
+                                  selection.removeAllRanges();
+                                  selection.addRange(newRange);
+                                  
+                                  // Update content
+                                  handleTextareaChange({ target: e.target });
+                                }
+                              }
+                            }
                           }
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
@@ -5248,12 +5266,7 @@ const InboxManager = ({ user, onSignOut }) => {
                           '--tw-ring-color': themeStyles.accent,
                           minHeight: '160px'
                         }}
-                        data-placeholder="Generated draft will appear here, or write your own response... 
-
-💡 Tips: 
-• Press Enter on empty bullet to exit list
-• Press Shift+Enter to exit list anytime
-• Use toolbar buttons for formatting"
+                        data-placeholder="Generated draft will appear here, or write your own response..."
                       />
                       
                       {/* Show HTML preview for debugging */}
