@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef, createPortal } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
@@ -137,7 +138,8 @@ const InboxManager = ({ user, onSignOut }) => {
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
   const [categoryDropdowns, setCategoryDropdowns] = useState(new Set()); // Track which lead category dropdowns are open
-  const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown button positions
+  const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown positions for portal
+  const dropdownButtonRefs = useRef({}); // Refs for dropdown buttons
 
   // Clean up all timeouts on unmount
   useEffect(() => {
@@ -151,7 +153,7 @@ const InboxManager = ({ user, onSignOut }) => {
     };
   }, []);
 
-  // Click outside to close dropdowns and handle window events
+  // Click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
       // Close recent dropdown if clicking outside
@@ -159,32 +161,20 @@ const InboxManager = ({ user, onSignOut }) => {
         setShowRecentDropdown(false);
       }
       
-      // Close category dropdowns if clicking outside
-      if (categoryDropdowns.size > 0 && 
-          !event.target.closest('.category-dropdown') && 
-          !event.target.closest('[data-category-dropdown]')) {
-        setCategoryDropdowns(new Set());
-        setDropdownPositions({});
-      }
-    };
-
-    const handleWindowEvents = () => {
-      // Close dropdowns on scroll or resize to prevent misalignment
+      // Close category dropdowns if clicking outside (check for both in-container buttons and portal dropdowns)
       if (categoryDropdowns.size > 0) {
-        setCategoryDropdowns(new Set());
-        setDropdownPositions({});
+        const isClickOnButton = event.target.closest('.category-dropdown');
+        const isClickOnPortalDropdown = event.target.closest('[data-portal-dropdown]');
+        
+        if (!isClickOnButton && !isClickOnPortalDropdown) {
+          setCategoryDropdowns(new Set());
+          setDropdownPositions({});
+        }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleWindowEvents, true);
-    window.addEventListener('resize', handleWindowEvents);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleWindowEvents, true);
-      window.removeEventListener('resize', handleWindowEvents);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showRecentDropdown, categoryDropdowns]);
 
   // Auto-save drafts with debouncing
@@ -641,6 +631,62 @@ const InboxManager = ({ user, onSignOut }) => {
     { value: 8, label: 'Uncategorizable by AI', color: '#9CA3AF' },
     { value: 9, label: 'Sender Originated Bounce', color: '#EF4444' }
   ];
+
+  // Portal Dropdown Component
+  const PortalDropdown = ({ leadId, lead, position, onClose, onSelect }) => {
+    if (!position) return null;
+
+    return createPortal(
+      <div
+        data-portal-dropdown
+        className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52 z-[10000]"
+        style={{
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+          backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
+          border: `2px solid ${themeStyles.borderStrong}`,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.9)'
+        }}
+      >
+        {CATEGORY_OPTIONS.map((option, optionIndex) => (
+          <button
+            key={option.value}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(leadId, option.value);
+              onClose();
+            }}
+            className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+            style={{
+              backgroundColor: lead.lead_category === option.value 
+                ? `${option.color}30` 
+                : isDarkMode ? '#2A2C2A' : '#F8F9FA',
+              borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
+              color: option.color
+            }}
+            onMouseEnter={(e) => {
+              if (lead.lead_category !== option.value) {
+                e.target.style.backgroundColor = `${option.color}15`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (lead.lead_category !== option.value) {
+                e.target.style.backgroundColor = isDarkMode ? '#2A2C2A' : '#F8F9FA';
+              }
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-semibold">{option.label}</span>
+              {lead.lead_category === option.value && (
+                <CheckCircle className="w-4 h-4" style={{color: option.color}} />
+              )}
+            </div>
+          </button>
+        ))}
+      </div>,
+      document.body
+    );
+  };
 
 
 
@@ -2714,7 +2760,7 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   // Toggle category dropdown for a specific lead
-  const toggleCategoryDropdown = (leadId, buttonElement) => {
+  const toggleCategoryDropdown = (leadId) => {
     setCategoryDropdowns(prev => {
       const newSet = new Set(prev);
       if (newSet.has(leadId)) {
@@ -2729,14 +2775,16 @@ const InboxManager = ({ user, onSignOut }) => {
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
         
-        // Calculate and store position when opening
+        // Calculate position for portal
+        const buttonElement = dropdownButtonRefs.current[leadId];
         if (buttonElement) {
           const rect = buttonElement.getBoundingClientRect();
           setDropdownPositions(prevPos => ({
             ...prevPos,
             [leadId]: {
-              top: rect.bottom + window.scrollY + 8,
-              left: rect.left + window.scrollX
+              top: rect.bottom + 8,
+              left: rect.left,
+              width: rect.width
             }
           }));
         }
@@ -4262,9 +4310,14 @@ const InboxManager = ({ user, onSignOut }) => {
                         return (
                           <>
                             <button
+                              ref={(el) => {
+                                if (el) {
+                                  dropdownButtonRefs.current[lead.id] = el;
+                                }
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleCategoryDropdown(lead.id, e.currentTarget);
+                                toggleCategoryDropdown(lead.id);
                               }}
                               className="text-sm px-4 py-2 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
@@ -4279,60 +4332,7 @@ const InboxManager = ({ user, onSignOut }) => {
                               <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             
-                            {/* Portal-based dropdown to escape container clipping */}
-                            {isDropdownOpen && dropdownPositions[lead.id] && createPortal(
-                              <div 
-                                className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52"
-                                data-category-dropdown
-                                style={{
-                                  backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
-                                  border: `2px solid ${themeStyles.borderStrong}`,
-                                  boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                                  zIndex: 999999,
-                                  top: `${dropdownPositions[lead.id].top}px`,
-                                  left: `${dropdownPositions[lead.id].left}px`,
-                                  pointerEvents: 'auto'
-                                }}
-                              >
-                                {CATEGORY_OPTIONS.map((option, optionIndex) => (
-                                  <button
-                                    key={option.value}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      updateLeadCategory(lead.id, option.value);
-                                      setCategoryDropdowns(new Set());
-                                      setDropdownPositions({});
-                                    }}
-                                    className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
-                                    style={{
-                                      backgroundColor: lead.lead_category === option.value 
-                                        ? `${option.color}30` 
-                                        : isDarkMode ? '#2A2C2A' : '#F8F9FA',
-                                      borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
-                                      color: option.color
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (lead.lead_category !== option.value) {
-                                        e.target.style.backgroundColor = `${option.color}15`;
-                                      }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      if (lead.lead_category !== option.value) {
-                                        e.target.style.backgroundColor = isDarkMode ? '#2A2C2A' : '#F8F9FA';
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-semibold">{option.label}</span>
-                                      {lead.lead_category === option.value && (
-                                        <CheckCircle className="w-4 h-4" style={{color: option.color}} />
-                                      )}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>,
-                              document.body
-                            )}
+                            {/* Portal dropdown is rendered separately */}
                           </>
                         );
                       })()}
@@ -5214,6 +5214,23 @@ const InboxManager = ({ user, onSignOut }) => {
           <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
         </div>
       )}
+
+      {/* Portal Dropdowns - Rendered outside container hierarchy */}
+      {filteredAndSortedLeads.map((lead) => {
+        const isDropdownOpen = categoryDropdowns.has(lead.id);
+        const position = dropdownPositions[lead.id];
+        
+        return isDropdownOpen ? (
+          <PortalDropdown
+            key={`dropdown-${lead.id}`}
+            leadId={lead.id}
+            lead={lead}
+            position={position}
+            onClose={() => setCategoryDropdowns(new Set())}
+            onSelect={updateLeadCategory}
+          />
+        ) : null;
+      })}
     </div>
   );
 };
