@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink } from 'lucide-react';
+import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink, AlertCircle } from 'lucide-react';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
 const getThemeStyles = (isDarkMode) => {
@@ -65,6 +65,21 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   
   const themeStyles = getThemeStyles(isDarkMode);
 
+  // Toast management - similar to InboxManager
+  const showToast = (message, type = 'success') => {
+    const toastId = Date.now();
+    setToast({ id: toastId, message, type });
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
+
+  const removeToast = () => {
+    setToast(null);
+  };
+
   // Listen for theme changes from localStorage
   useEffect(() => {
     const handleStorageChange = (e) => {
@@ -101,7 +116,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .eq('status', 'CRM')
         .order(sort.field, { ascending: sort.dir === 'asc' });
       if (error) {
-        setToast({ type: 'error', message: 'Error fetching CRM leads: ' + error.message });
+        showToast('Error fetching CRM leads: ' + error.message, 'error');
       } else {
         setCrmLeads(data);
       }
@@ -191,10 +206,10 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .eq('id', selectedLead.id);
       if (error) throw error;
       setCrmLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, ...editFields } : l));
-      setToast({ type: 'success', message: 'Lead updated!' });
+      showToast('Lead updated successfully!', 'success');
       setEditing(false);
     } catch (err) {
-      setToast({ type: 'error', message: 'Error saving lead: ' + err.message });
+      showToast('Error saving lead: ' + err.message, 'error');
     } finally {
       setSavingId(null);
     }
@@ -214,11 +229,11 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .update({ status: 'INBOX' })
         .eq('id', selectedLead.id);
       if (error) throw error;
-      setToast({ type: 'success', message: 'Lead removed from CRM!' });
+      showToast('Lead removed from CRM!', 'success');
     } catch (err) {
       // Revert optimistic update on error
       setCrmLeads(prev => [...prev, selectedLead]);
-      setToast({ type: 'error', message: 'Error removing lead from CRM: ' + err.message });
+      showToast('Error removing lead from CRM: ' + err.message, 'error');
     }
   };
 
@@ -227,6 +242,41 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       <h2 className="text-3xl font-bold mb-6 flex items-center gap-3" style={{color: themeStyles.textPrimary}}>
         <BarChart3 className="w-7 h-7" style={{color: themeStyles.accent}} /> CRM Dashboard
       </h2>
+      
+      {/* Toast Notification - positioned in top-right */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50">
+          <div 
+            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
+            style={{
+              backgroundColor: toast.type === 'success' 
+                ? `${themeStyles.success}20` 
+                : `${themeStyles.error}20`,
+              border: `1px solid ${toast.type === 'success' ? themeStyles.success : themeStyles.error}`,
+              backdropFilter: 'blur(8px)',
+            }}
+            onClick={removeToast}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.success}} />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.error}} />
+            )}
+            <span className="text-sm font-medium flex-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{toast.message}</span>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                removeToast();
+              }}
+              className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300"
+              style={{color: themeStyles.textMuted}}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
         <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
@@ -269,10 +319,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
           <Search className="absolute left-3 top-2.5 w-5 h-5" style={{color: themeStyles.textMuted}} />
         </div>
       </div>
-      {/* Toast */}
-      {toast && (
-        <div className={`mb-4 px-4 py-2 rounded transition-colors duration-300 ${toast.type === 'success' ? 'text-white' : 'text-white'}`} style={{backgroundColor: toast.type === 'success' ? themeStyles.success : themeStyles.error}}>{toast.message}</div>
-      )}
+      
       {/* Table of Leads */}
       <div className="overflow-x-auto rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
         <table className="min-w-full" style={{color: themeStyles.textPrimary}}>
@@ -306,7 +353,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </div>
       {/* Side Panel for Lead Details */}
       {sidePanelOpen && selectedLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
+        <div className="fixed inset-0 flex items-center justify-end z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.75)'}}>
           <div
             className="w-full max-w-2xl h-full flex flex-col relative overflow-y-auto"
             style={{
@@ -315,7 +362,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
               border: `1px solid ${themeStyles.border}`,
               margin: '8px',
               marginRight: '0',
-              boxShadow: '0 8px 32px 0 rgba(0,0,0,0.25)',
+              boxShadow: '0 8px 32px 0 rgba(0,0,0,0.5)',
               minHeight: 0
             }}
           >
@@ -407,34 +454,86 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                     </div>
                   </div>
                 </div>
-                {/* Unified Lead Information Section */}
+                {/* Unified Lead Information Section - Fixed Alignment */}
                 <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
+                    {/* Stage Field */}
+                    <div className="flex flex-col">
                       <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
-                      <select className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.stage} onChange={e => handleFieldChange('stage', e.target.value)}>
+                      <select 
+                        className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" 
+                        style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} 
+                        value={editFields.stage} 
+                        onChange={e => handleFieldChange('stage', e.target.value)}
+                      >
                         {STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </div>
-                    <div className="flex items-center gap-4 mt-8">
-                      <input type="checkbox" id="call_booked" checked={!!editFields.call_booked} onChange={e => handleFieldChange('call_booked', e.target.checked)} className="w-7 h-7 accent-accent" />
-                      <label htmlFor="call_booked" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Call Booked</label>
+                    
+                    {/* Call Booked Field - Fixed Alignment */}
+                    <div className="flex flex-col justify-end">
+                      <div className="flex items-center gap-4 h-12">
+                        <input 
+                          type="checkbox" 
+                          id="call_booked" 
+                          checked={!!editFields.call_booked} 
+                          onChange={e => handleFieldChange('call_booked', e.target.checked)} 
+                          className="w-7 h-7" 
+                          style={{accentColor: themeStyles.accent}}
+                        />
+                        <label htmlFor="call_booked" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Call Booked</label>
+                      </div>
                     </div>
-                    <div>
+                    
+                    {/* Deal Size Field */}
+                    <div className="flex flex-col">
                       <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Deal Size</label>
-                      <input type="number" className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.deal_size} onChange={e => handleFieldChange('deal_size', Number(e.target.value))} />
+                      <input 
+                        type="number" 
+                        className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300" 
+                        style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} 
+                        value={editFields.deal_size} 
+                        onChange={e => handleFieldChange('deal_size', Number(e.target.value))} 
+                      />
                     </div>
-                    <div className="flex items-center gap-4 mt-8">
-                      <input type="checkbox" id="closed" checked={!!editFields.closed} onChange={e => handleFieldChange('closed', e.target.checked)} className="w-7 h-7 accent-accent" />
-                      <label htmlFor="closed" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Closed</label>
+                    
+                    {/* Closed Field - Fixed Alignment */}
+                    <div className="flex flex-col justify-end">
+                      <div className="flex items-center gap-4 h-12">
+                        <input 
+                          type="checkbox" 
+                          id="closed" 
+                          checked={!!editFields.closed} 
+                          onChange={e => handleFieldChange('closed', e.target.checked)} 
+                          className="w-7 h-7" 
+                          style={{accentColor: themeStyles.accent}}
+                        />
+                        <label htmlFor="closed" className="text-lg font-medium" style={{color: themeStyles.textSecondary}}>Closed</label>
+                      </div>
                     </div>
                   </div>
+                  
+                  {/* Notes Field */}
                   <div className="mb-10">
                     <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Notes</label>
-                    <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[200px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
+                    <textarea 
+                      className="w-full rounded-xl px-4 py-3 text-xl min-h-[200px] transition-colors duration-300" 
+                      style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} 
+                      value={editFields.notes} 
+                      onChange={e => handleFieldChange('notes', e.target.value)} 
+                    />
                   </div>
+                  
+                  {/* Save Button */}
                   <div className="flex gap-4 mt-auto">
-                    <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
+                    <button 
+                      className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" 
+                      style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} 
+                      onClick={saveEdit} 
+                      disabled={savingId === selectedLead.id}
+                    >
+                      {savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}
+                    </button>
                   </div>
                 </div>
               </div>
