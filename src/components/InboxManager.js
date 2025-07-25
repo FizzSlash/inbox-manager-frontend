@@ -504,32 +504,50 @@ const InboxManager = ({ user, onSignOut }) => {
     fetchBrandId();
   }, [user]);
 
+  // Track loading state to prevent race conditions (using ref to avoid re-renders)
+  const isLoadingApiKeysRef = useRef(false);
+
   // Load API keys from Supabase when brandId becomes available
   useEffect(() => {
     console.log('🎯 API Keys useEffect triggered - brandId:', brandId, 'user:', !!user);
     
+    // Prevent multiple simultaneous loads
+    if (isLoadingApiKeysRef.current) {
+      console.log('⏸️ Already loading API keys, skipping...');
+      return;
+    }
+
     const loadApiKeys = async () => {
-      if (brandId && user) {
-        console.log('🚀 Starting API key load process...');
-        try {
-          const loadedFromSupabase = await loadApiKeysFromSupabase(brandId);
-          if (!loadedFromSupabase) {
-            // If no data in Supabase, the localStorage values are already loaded in initial state
-            console.log('No API keys found in Supabase, keeping localStorage values');
-          } else {
-            console.log('✅ API keys loaded from Supabase successfully');
-          }
-        } catch (error) {
-          console.error('❌ Failed to load API keys from Supabase:', error);
-          // Continue with localStorage values
-        }
-      } else {
+      // Double-check values exist and capture them to prevent closure issues
+      const currentBrandId = brandId;
+      const currentUser = user;
+      
+      if (!currentBrandId || !currentUser) {
         console.log('⏸️ Skipping API key load - missing brandId or user');
+        return;
+      }
+
+      console.log('🚀 Starting API key load process...');
+      isLoadingApiKeysRef.current = true;
+      
+      try {
+        const loadedFromSupabase = await loadApiKeysFromSupabase(currentBrandId);
+        if (!loadedFromSupabase) {
+          // If no data in Supabase, the localStorage values are already loaded in initial state
+          console.log('No API keys found in Supabase, keeping localStorage values');
+        } else {
+          console.log('✅ API keys loaded from Supabase successfully');
+        }
+      } catch (error) {
+        console.error('❌ Failed to load API keys from Supabase:', error);
+        // Continue with localStorage values
+      } finally {
+        isLoadingApiKeysRef.current = false;
       }
     };
     
     // Load immediately if brandId is available (from cache or database)
-    if (brandId) {
+    if (brandId && user) {
       loadApiKeys();
     }
   }, [brandId, user]);
@@ -2844,6 +2862,17 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to load API keys from Supabase
   const loadApiKeysFromSupabase = async (brandId) => {
+    // Safety checks
+    if (!brandId) {
+      console.log('❌ No brandId provided to loadApiKeysFromSupabase');
+      return false;
+    }
+    
+    if (!supabase) {
+      console.log('❌ Supabase client not available');
+      return false;
+    }
+
     console.log('🔄 Starting API key load for brandId:', brandId);
     const startTime = Date.now();
     
@@ -2880,18 +2909,38 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log('🔓 Starting decryption...');
         const decryptStart = Date.now();
         
-        const accounts = emailAccounts.map(record => ({
-          id: record.account_id,
-          name: record.account_name || 'Account',
-          esp: {
-            provider: record.esp_provider || '',
-            key: decryptApiKey(record.esp_api_key || '')
-          },
-          is_primary: record.is_primary || false
-        }));
+        const accounts = emailAccounts.map(record => {
+          let decryptedKey = '';
+          try {
+            decryptedKey = typeof decryptApiKey === 'function' ? 
+              decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
+          } catch (err) {
+            console.warn('⚠️ Failed to decrypt API key:', err);
+            decryptedKey = record.esp_api_key || '';
+          }
+          
+          return {
+            id: record.account_id,
+            name: record.account_name || 'Account',
+            esp: {
+              provider: record.esp_provider || '',
+              key: decryptedKey
+            },
+            is_primary: record.is_primary || false
+          };
+        });
 
         // Extract fullenrich from its dedicated record
-        const fullenrichKey = fullenrichRecord ? decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : '';
+        let fullenrichKey = '';
+        if (fullenrichRecord) {
+          try {
+            fullenrichKey = typeof decryptApiKey === 'function' ? 
+              decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
+          } catch (err) {
+            console.warn('⚠️ Failed to decrypt fullenrich key:', err);
+            fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
+          }
+        }
         
         const decryptTime = Date.now() - decryptStart;
         console.log(`🔓 Decryption took: ${decryptTime}ms`);
@@ -2900,10 +2949,16 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log('⚛️ Updating React state...');
         const stateStart = Date.now();
         
-        setApiKeys({
-          accounts: accounts,
-          fullenrich: fullenrichKey
-        });
+        // Safety check before state update
+        if (typeof setApiKeys === 'function') {
+          setApiKeys({
+            accounts: accounts,
+            fullenrich: fullenrichKey
+          });
+        } else {
+          console.error('❌ setApiKeys is not available or not a function');
+          return false;
+        }
         
         const stateTime = Date.now() - stateStart;
         const totalTime = Date.now() - startTime;
