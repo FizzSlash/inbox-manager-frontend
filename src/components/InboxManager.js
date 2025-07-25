@@ -4212,21 +4212,21 @@ const InboxManager = ({ user, onSignOut }) => {
             const getResponseBadge = () => {
               if (urgency === 'urgent-response') {
                 return (
-                  <div className="bg-red-600 text-white px-4 py-2 rounded-full text-xs font-bold mb-3 shadow-lg relative overflow-hidden">
+                  <div className="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold mb-3 shadow-lg relative overflow-hidden">
                     <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />
                     <span className="relative z-10">🚨 URGENT NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-response') {
                 return (
-                  <div className="bg-red-500 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
+                  <div className="bg-red-500 text-white px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 transform -skew-x-12 animate-shimmer" />
                     <span className="relative z-10">⚡ NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-followup') {
                 return (
-                  <div className="bg-green-600 text-white px-4 py-2 rounded-full text-xs font-medium mb-3 shadow-md relative overflow-hidden">
+                  <div className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md relative overflow-hidden">
                     <div className="absolute inset-0 bg-white opacity-10 animate-pulse" />
                     <span className="relative z-10">📞 NEEDS FOLLOWUP</span>
                   </div>
@@ -4311,7 +4311,7 @@ const InboxManager = ({ user, onSignOut }) => {
                                 e.stopPropagation();
                                 toggleCategoryDropdown(lead.id);
                               }}
-                              className="text-sm px-4 py-2 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
+                              className="text-sm px-4 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
                                 backgroundColor: `${currentCategory.color}30`,
                                 color: currentCategory.color,
