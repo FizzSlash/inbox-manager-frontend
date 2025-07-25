@@ -2833,13 +2833,23 @@ const InboxManager = ({ user, onSignOut }) => {
   // Function to save API keys to Supabase
   const saveApiKeysToSupabase = async (brandId, apiKeysData) => {
     try {
+      console.log('=== SUPABASE SAVE DEBUG ===');
+      console.log('brandId:', brandId);
+      console.log('user.id:', user?.id);
+      console.log('apiKeysData:', apiKeysData);
+      
       // Delete existing records for this brand first
+      console.log('Deleting existing records for brand:', brandId);
       const { error: deleteError } = await supabase
         .from('api_settings')
         .delete()
         .eq('brand_id', brandId);
       
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
+      console.log('Successfully deleted existing records');
 
       // Insert all accounts
       const accountRecords = apiKeysData.accounts.map(account => ({
@@ -2854,17 +2864,31 @@ const InboxManager = ({ user, onSignOut }) => {
         updated_at: new Date().toISOString()
       }));
 
+      console.log('Records to insert:', accountRecords);
+
       if (accountRecords.length > 0) {
         const { error: insertError } = await supabase
           .from('api_settings')
           .insert(accountRecords);
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
+        console.log('Successfully inserted', accountRecords.length, 'records');
       }
       
+      console.log('=== SUPABASE SAVE SUCCESS ===');
       return true; // Successfully saved to Supabase
     } catch (error) {
+      console.error('=== SUPABASE SAVE ERROR ===');
       console.error('Error saving API keys to Supabase:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       return false; // Failed to save to Supabase
     }
   };
@@ -2943,13 +2967,22 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to save API keys (with encryption)
   const saveApiKeys = async () => {
+    console.log('=== SAVE API KEYS DEBUG ===');
+    console.log('brandId:', brandId);
+    console.log('user:', user);
+    console.log('apiKeys:', apiKeys);
+    
     setIsSavingApi(true);
     try {
       let savedToSupabase = false;
       
       // Try to save to Supabase first if brandId is available
       if (brandId && user) {
+        console.log('Attempting to save to Supabase...');
         savedToSupabase = await saveApiKeysToSupabase(brandId, apiKeys);
+        console.log('Supabase save result:', savedToSupabase);
+      } else {
+        console.log('Skipping Supabase save - brandId:', brandId, 'user:', !!user);
       }
       
       // Also save to localStorage as backup (for offline access)
