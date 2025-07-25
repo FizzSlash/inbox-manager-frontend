@@ -506,20 +506,25 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Load API keys from Supabase when brandId becomes available
   useEffect(() => {
+    console.log('🎯 API Keys useEffect triggered - brandId:', brandId, 'user:', !!user);
+    
     const loadApiKeys = async () => {
       if (brandId && user) {
+        console.log('🚀 Starting API key load process...');
         try {
           const loadedFromSupabase = await loadApiKeysFromSupabase(brandId);
           if (!loadedFromSupabase) {
             // If no data in Supabase, the localStorage values are already loaded in initial state
             console.log('No API keys found in Supabase, keeping localStorage values');
           } else {
-            console.log('API keys loaded from Supabase successfully');
+            console.log('✅ API keys loaded from Supabase successfully');
           }
         } catch (error) {
-          console.error('Failed to load API keys from Supabase:', error);
+          console.error('❌ Failed to load API keys from Supabase:', error);
           // Continue with localStorage values
         }
+      } else {
+        console.log('⏸️ Skipping API key load - missing brandId or user');
       }
     };
     
@@ -2839,23 +2844,42 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to load API keys from Supabase
   const loadApiKeysFromSupabase = async (brandId) => {
+    console.log('🔄 Starting API key load for brandId:', brandId);
+    const startTime = Date.now();
+    
     try {
+      console.log('📡 Querying Supabase api_settings table...');
+      const queryStart = Date.now();
+      
       const { data, error } = await supabase
         .from('api_settings')
         .select('*')
         .eq('brand_id', brandId)
         .order('is_primary', { ascending: false }); // Primary accounts first
 
+      const queryTime = Date.now() - queryStart;
+      console.log(`⏱️ Supabase query took: ${queryTime}ms`);
+      console.log('📊 Query returned:', data?.length || 0, 'records');
+
       if (error) {
+        console.error('❌ Supabase query error:', error);
         throw error;
       }
 
       if (data && data.length > 0) {
+        console.log('🔄 Processing API key data...');
+        const processStart = Date.now();
+        
         // Separate email accounts from global services
         const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
         const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
+        
+        console.log(`📧 Found ${emailAccounts.length} email accounts, ${fullenrichRecord ? 1 : 0} fullenrich records`);
 
         // Convert email account records to accounts structure
+        console.log('🔓 Starting decryption...');
+        const decryptStart = Date.now();
+        
         const accounts = emailAccounts.map(record => ({
           id: record.account_id,
           name: record.account_name || 'Account',
@@ -2868,12 +2892,24 @@ const InboxManager = ({ user, onSignOut }) => {
 
         // Extract fullenrich from its dedicated record
         const fullenrichKey = fullenrichRecord ? decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : '';
+        
+        const decryptTime = Date.now() - decryptStart;
+        console.log(`🔓 Decryption took: ${decryptTime}ms`);
 
         // Update API keys state with data from Supabase
+        console.log('⚛️ Updating React state...');
+        const stateStart = Date.now();
+        
         setApiKeys({
           accounts: accounts,
           fullenrich: fullenrichKey
         });
+        
+        const stateTime = Date.now() - stateStart;
+        const totalTime = Date.now() - startTime;
+        
+        console.log(`⚛️ State update took: ${stateTime}ms`);
+        console.log(`✅ Total API key load time: ${totalTime}ms`);
 
         const fullenrichCount = fullenrichKey ? 1 : 0;
         console.log(`Loaded ${accounts.length} email account(s) and ${fullenrichCount} global service(s) from Supabase`);
