@@ -157,11 +157,20 @@ const InboxManager = ({ user, onSignOut }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState(() => {
+    console.log('🔄 Initializing apiKeys state...');
+    
     // Initial load from localStorage for immediate availability
     const legacyProvider = localStorage.getItem('esp_provider') || '';
     const legacyKey = decryptApiKey(localStorage.getItem('esp_api_key_enc') || '');
+    const fullenrichKey = decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '');
     
-    return {
+    console.log(`📱 localStorage data found:`, {
+      legacyProvider: !!legacyProvider,
+      legacyKey: !!legacyKey,
+      fullenrichKey: !!fullenrichKey
+    });
+    
+    const initialState = {
       accounts: legacyProvider || legacyKey ? [{
         id: crypto.randomUUID(), // Generate proper UUID
         name: 'Primary Account',
@@ -171,13 +180,34 @@ const InboxManager = ({ user, onSignOut }) => {
         },
         is_primary: true
       }] : [],
-      fullenrich: decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '')
+      fullenrich: fullenrichKey
     };
+    
+    console.log(`🎯 Initial apiKeys state:`, {
+      accountCount: initialState.accounts.length,
+      hasFullenrich: !!initialState.fullenrich
+    });
+    
+    return initialState;
   });
   const [apiTestStatus, setApiTestStatus] = useState({
     esp: null,
     fullenrich: null
   });
+
+  // Debug: Track apiKeys state changes
+  useEffect(() => {
+    console.log('🔄 apiKeys state changed:', {
+      accountCount: apiKeys.accounts.length,
+      accounts: apiKeys.accounts.map(acc => ({
+        id: acc.id,
+        name: acc.name,
+        provider: acc.esp?.provider,
+        hasKey: !!acc.esp?.key
+      })),
+      hasFullenrich: !!apiKeys.fullenrich
+    });
+  }, [apiKeys]);
   const [isSavingApi, setIsSavingApi] = useState(false);
   const [showApiToast, setShowApiToast] = useState(false);
   const [apiToastMessage, setApiToastMessage] = useState({ type: '', message: '' });
@@ -523,27 +553,46 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Load API keys from Supabase when brandId becomes available
   useEffect(() => {
+    console.log('🔄 API Keys loading useEffect triggered');
+    console.log(`🏢 brandId: ${brandId}`);
+    console.log(`👤 user: ${user?.id}`);
+    console.log(`🔒 isLoadingApiKeysRef.current: ${isLoadingApiKeysRef.current}`);
+    
     // Prevent multiple simultaneous loads
     if (isLoadingApiKeysRef.current) {
+      console.log('⏸️ Already loading API keys, skipping...');
       return;
     }
 
     // Double-check we have both values before proceeding
     if (!brandId || !user) {
+      console.log('⚠️ Missing required data for API key loading:', {
+        hasBrandId: !!brandId,
+        hasUser: !!user
+      });
       return;
     }
 
-          const loadApiKeys = async () => {
-        isLoadingApiKeysRef.current = true;
+    console.log('🚀 Starting API keys load from Supabase...');
+
+    const loadApiKeys = async () => {
+      isLoadingApiKeysRef.current = true;
+      
+      try {
+        console.log('📥 Calling loadApiKeysFromSupabase...');
+        const success = await loadApiKeysFromSupabase(brandId);
+        console.log(`📊 loadApiKeysFromSupabase result: ${success}`);
         
-        try {
-          await loadApiKeysFromSupabase(brandId);
-        } catch (error) {
-          console.error('Failed to load API keys:', error);
-        } finally {
-          isLoadingApiKeysRef.current = false;
+        if (!success) {
+          console.warn('⚠️ Failed to load from Supabase - API keys will remain in initial state');
         }
-      };
+      } catch (error) {
+        console.error('❌ Failed to load API keys:', error);
+      } finally {
+        isLoadingApiKeysRef.current = false;
+        console.log('✅ API keys loading completed');
+      }
+    };
     
     // Load immediately - no artificial delays
     loadApiKeys();
@@ -2942,10 +2991,24 @@ const InboxManager = ({ user, onSignOut }) => {
         }
 
         // Update API keys state with data from Supabase
-        setApiKeys({
+        console.log('🔄 Setting apiKeys state with Supabase data...');
+        const newApiKeysState = {
           accounts: accounts,
           fullenrich: fullenrichKey
+        };
+        
+        console.log('📊 About to set apiKeys to:', {
+          accountCount: newApiKeysState.accounts.length,
+          accounts: newApiKeysState.accounts.map(acc => ({
+            id: acc.id,
+            name: acc.name,
+            provider: acc.esp.provider,
+            hasKey: !!acc.esp.key
+          })),
+          hasFullenrich: !!newApiKeysState.fullenrich
         });
+        
+        setApiKeys(newApiKeysState);
 
         console.log(`🎯 Successfully loaded ${accounts.length} accounts and FullEnrich key`);
         console.log(`🔗 Webhook URLs:`, accounts.map(acc => `${acc.name}: /webhook/${acc.id}`));
