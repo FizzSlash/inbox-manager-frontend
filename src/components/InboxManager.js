@@ -2876,29 +2876,45 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to load API keys from Supabase
   const loadApiKeysFromSupabase = async (brandId) => {
+    console.log('🔄 Starting API key load for brandId:', brandId);
+    const startTime = Date.now();
+    
     // Safety checks
     if (!brandId) {
       console.log('❌ No brandId provided to loadApiKeysFromSupabase');
       return false;
     }
     
-    if (!supabase) {
-      console.log('❌ Supabase client not available');
-      return false;
-    }
-
-    console.log('🔄 Starting API key load for brandId:', brandId);
-    const startTime = Date.now();
+    // Add a small delay to ensure everything is initialized
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     try {
+      console.log('🔍 Checking supabase client availability...');
+      
+      // More thorough supabase availability check
+      if (!supabase || typeof supabase.from !== 'function') {
+        console.log('❌ Supabase client not properly initialized');
+        return false;
+      }
+
       console.log('📡 Querying Supabase api_settings table...');
       const queryStart = Date.now();
       
-      const { data, error } = await supabase
-        .from('api_settings')
-        .select('*')
-        .eq('brand_id', brandId)
-        .order('is_primary', { ascending: false }); // Primary accounts first
+      // Wrap the supabase call in additional try-catch
+      let data, error;
+      try {
+        const result = await supabase
+          .from('api_settings')
+          .select('*')
+          .eq('brand_id', brandId)
+          .order('is_primary', { ascending: false }); // Primary accounts first
+        
+        data = result.data;
+        error = result.error;
+      } catch (supabaseError) {
+        console.error('❌ Supabase operation failed:', supabaseError);
+        throw supabaseError;
+      }
 
       const queryTime = Date.now() - queryStart;
       console.log(`⏱️ Supabase query took: ${queryTime}ms`);
