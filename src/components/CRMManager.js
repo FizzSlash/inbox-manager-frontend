@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone } from 'lucide-react';
+import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink } from 'lucide-react';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
 const getThemeStyles = () => {
@@ -195,36 +195,36 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   };
 
   return (
-    <div className="p-8 min-h-screen bg-[#181A1B] text-white relative">
-      <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-        <BarChart3 className="w-7 h-7 text-accent" /> CRM Dashboard
+    <div className="p-8 min-h-screen relative" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary}}>
+      <h2 className="text-3xl font-bold mb-6 flex items-center gap-3" style={{color: themeStyles.textPrimary}}>
+        <BarChart3 className="w-7 h-7" style={{color: themeStyles.accent}} /> CRM Dashboard
       </h2>
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
-          <Users className="w-7 h-7 mb-2 text-blue-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalLeads : 0}</div>
-          <div className="text-sm text-gray-400">Total Leads</div>
+        <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <Users className="w-7 h-7 mb-2" style={{color: themeStyles.accent}} />
+          <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>{stats ? stats.totalLeads : 0}</div>
+          <div className="text-sm" style={{color: themeStyles.textMuted}}>Total Leads</div>
         </div>
-        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
-          <CheckCircle className="w-7 h-7 mb-2 text-green-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalClosed : 0}</div>
-          <div className="text-sm text-gray-400">Total Closed</div>
+        <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <CheckCircle className="w-7 h-7 mb-2" style={{color: themeStyles.success}} />
+          <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>{stats ? stats.totalClosed : 0}</div>
+          <div className="text-sm" style={{color: themeStyles.textMuted}}>Total Closed</div>
         </div>
-        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
-          <DollarSign className="w-7 h-7 mb-2 text-yellow-400" />
-          <div className="text-2xl font-bold">${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
-          <div className="text-sm text-gray-400">Total Deal Size</div>
+        <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <DollarSign className="w-7 h-7 mb-2" style={{color: themeStyles.warning}} />
+          <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>${stats ? stats.totalDealSize.toLocaleString() : 0}</div>
+          <div className="text-sm" style={{color: themeStyles.textMuted}}>Total Deal Size</div>
         </div>
-        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
-          <Phone className="w-7 h-7 mb-2 text-cyan-400" />
-          <div className="text-2xl font-bold">{stats ? stats.totalCalls : 0}</div>
-          <div className="text-sm text-gray-400">Calls Booked</div>
+        <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <Phone className="w-7 h-7 mb-2" style={{color: themeStyles.accent}} />
+          <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>{stats ? stats.totalCalls : 0}</div>
+          <div className="text-sm" style={{color: themeStyles.textMuted}}>Calls Booked</div>
         </div>
-        <div className="rounded-2xl shadow-lg bg-gray-800 p-6 flex flex-col items-center">
-          <BarChart3 className="w-7 h-7 mb-2 text-purple-400" />
-          <div className="text-2xl font-bold">{stats ? stats.winRate.toFixed(1) : 0}%</div>
-          <div className="text-sm text-gray-400">Win Rate</div>
+        <div className="rounded-2xl shadow-lg p-6 flex flex-col items-center transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <BarChart3 className="w-7 h-7 mb-2" style={{color: themeStyles.accent}} />
+          <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>{stats ? stats.winRate.toFixed(1) : 0}%</div>
+          <div className="text-sm" style={{color: themeStyles.textMuted}}>Win Rate</div>
         </div>
       </div>
       {/* Search Bar */}
@@ -232,43 +232,44 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         <div className="relative w-full">
           <input
             type="text"
-            className="w-full rounded-lg bg-[#232526] text-white px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+            className="w-full rounded-lg px-4 py-2 pl-10 focus:outline-none focus:ring-2 transition-all"
+            style={{backgroundColor: themeStyles.secondaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`, focusRing: `2px solid ${themeStyles.accent}`}}
             placeholder="Search by name or email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 w-5 h-5" style={{color: themeStyles.textMuted}} />
         </div>
       </div>
       {/* Toast */}
       {toast && (
-        <div className={`mb-4 px-4 py-2 rounded ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{toast.message}</div>
+        <div className={`mb-4 px-4 py-2 rounded transition-colors duration-300 ${toast.type === 'success' ? 'text-white' : 'text-white'}`} style={{backgroundColor: toast.type === 'success' ? themeStyles.success : themeStyles.error}}>{toast.message}</div>
       )}
       {/* Table of Leads */}
-      <div className="overflow-x-auto rounded-2xl shadow-lg bg-[#232526]">
-        <table className="min-w-full text-white">
+      <div className="overflow-x-auto rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+        <table className="min-w-full" style={{color: themeStyles.textPrimary}}>
           <thead>
-            <tr className="bg-[#1A1C1A] text-gray-300">
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer" onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+            <tr style={{backgroundColor: themeStyles.tertiaryBg}}>
+              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300"><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-lg" style={{color: themeStyles.textSecondary}}><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
             ) : filteredLeads.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg text-gray-300">No CRM leads found.</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-lg" style={{color: themeStyles.textSecondary}}>No CRM leads found.</td></tr>
             ) : (
               filteredLeads.map(lead => (
-                <tr key={lead.id} className="border-t border-gray-700 hover:bg-[#232a2e] transition-colors cursor-pointer" onClick={() => openSidePanel(lead)}>
-                  <td className="px-4 py-2 font-medium flex items-center gap-2"><Mail className="w-4 h-4 text-accent" /> {lead.first_name} {lead.last_name}</td>
-                  <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-blue-900 text-blue-300">{lead.stage}</span></td>
-                  <td className="px-4 py-2">${lead.deal_size?.toLocaleString() || 0}</td>
-                  <td className="px-4 py-2">{lead.call_booked ? 'Yes' : 'No'}</td>
-                  <td className="px-4 py-2">{lead.closed ? 'Yes' : 'No'}</td>
+                <tr key={lead.id} className="border-t transition-colors cursor-pointer hover:opacity-80" style={{borderColor: themeStyles.border}} onClick={() => openSidePanel(lead)}>
+                  <td className="px-4 py-2 font-medium flex items-center gap-2" style={{color: themeStyles.textPrimary}}><Mail className="w-4 h-4" style={{color: themeStyles.accent}} /> {lead.first_name} {lead.last_name}</td>
+                  <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}>{lead.stage}</span></td>
+                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>${lead.deal_size?.toLocaleString() || 0}</td>
+                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>{lead.call_booked ? 'Yes' : 'No'}</td>
+                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>{lead.closed ? 'Yes' : 'No'}</td>
                 </tr>
               ))
             )}
@@ -290,13 +291,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
               minHeight: 0
             }}
           >
-            <button
-              className="absolute top-6 right-8 text-gray-400 hover:text-white text-3xl"
-              onClick={closeSidePanel}
-              style={{color: themeStyles.textMuted}}
-            >
-              <X className="w-8 h-8" />
-            </button>
             {/* Lead Header */}
             <div
               className="p-8 transition-colors duration-300"
@@ -319,13 +313,31 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                       <span>No phone number found</span>
                     </p>
                   )}
+                  {selectedLead.website && (
+                    <p className="text-sm mt-2">
+                      <a href={`https://${selectedLead.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-colors duration-300" style={{color: themeStyles.accent}}>
+                        {selectedLead.website}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => onGoToInboxLead(selectedLead.id)}
-                    className="px-4 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-indigo-700 text-white hover:bg-indigo-800"
+                    className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-blue-600 text-white hover:bg-blue-700"
+                    style={{marginRight: '8px'}}
+                    title="Go to lead in Inbox"
                   >
                     Go to lead in Inbox
+                  </button>
+                  <button
+                    onClick={handleRemoveFromCRM}
+                    className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-red-600 text-white hover:bg-red-700"
+                    style={{marginRight: '8px'}}
+                    title="Remove from CRM"
+                  >
+                    Remove from CRM
                   </button>
                   <button
                     onClick={closeSidePanel}
@@ -347,7 +359,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                       <div>
                         <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Last Reply</span>
                         <p className="font-medium mt-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                          {/* You may need to implement getLastResponseFromThem and formatTime in CRMManager */}
                           {selectedLead.last_reply || 'No replies yet'}
                         </p>
                       </div>
@@ -369,7 +380,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                   </div>
                 </div>
                 {/* Unified Lead Information Section */}
-                <div className="rounded-2xl shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="grid grid-cols-2 gap-8 mb-8">
                     <div>
                       <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Stage</label>
@@ -396,7 +407,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                   </div>
                   <div className="flex gap-4 mt-auto">
                     <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
-                    <button onClick={handleRemoveFromCRM} className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.error, color: '#fff', fontSize: '1.25rem'}} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Remove from CRM'}</button>
                   </div>
                 </div>
               </div>
