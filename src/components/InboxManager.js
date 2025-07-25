@@ -136,6 +136,7 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
+  const [categoryDropdowns, setCategoryDropdowns] = useState(new Set()); // Track which lead category dropdowns are open
 
   // Clean up all timeouts on unmount
   useEffect(() => {
@@ -156,11 +157,16 @@ const InboxManager = ({ user, onSignOut }) => {
       if (showRecentDropdown && !event.target.closest('.recent-dropdown')) {
         setShowRecentDropdown(false);
       }
+      
+      // Close category dropdowns if clicking outside
+      if (categoryDropdowns.size > 0 && !event.target.closest('.category-dropdown')) {
+        setCategoryDropdowns(new Set());
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showRecentDropdown]);
+  }, [showRecentDropdown, categoryDropdowns]);
 
   // Auto-save drafts with debouncing
   const draftTimeoutRef = useRef(null);
@@ -603,6 +609,19 @@ const InboxManager = ({ user, onSignOut }) => {
     8: 'Uncategorizable by AI',
     9: 'Sender Originated Bounce'
   };
+
+  // Category options for dropdown
+  const CATEGORY_OPTIONS = [
+    { value: 1, label: 'Interested', color: '#10B981' },
+    { value: 2, label: 'Meeting Request', color: '#8B5CF6' },
+    { value: 3, label: 'Not Interested', color: '#EF4444' },
+    { value: 4, label: 'Do Not Contact', color: '#DC2626' },
+    { value: 5, label: 'Information Request', color: '#F59E0B' },
+    { value: 6, label: 'Out Of Office', color: '#6B7280' },
+    { value: 7, label: 'Wrong Person', color: '#F97316' },
+    { value: 8, label: 'Uncategorizable by AI', color: '#9CA3AF' },
+    { value: 9, label: 'Sender Originated Bounce', color: '#EF4444' }
+  ];
 
 
 
@@ -2636,6 +2655,59 @@ const InboxManager = ({ user, onSignOut }) => {
       .reduce((count, values) => count + (Array.isArray(values) ? values.length : 0), 0);
   };
 
+  // Update lead category in Supabase
+  const updateLeadCategory = async (leadId, newCategory) => {
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({ lead_category: newCategory })
+        .eq('id', leadId);
+      
+      if (error) throw error;
+
+      // Optimistically update local state
+      setLeads(prevLeads => 
+        prevLeads.map(lead => 
+          lead.id === leadId 
+            ? { 
+                ...lead, 
+                lead_category: newCategory,
+                tags: [leadCategoryMap[newCategory] || 'Uncategorized']
+              }
+            : lead
+        )
+      );
+
+      // Update selected lead if it's the one being changed
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(prev => ({
+          ...prev,
+          lead_category: newCategory,
+          tags: [leadCategoryMap[newCategory] || 'Uncategorized']
+        }));
+      }
+
+      showToast(`Category updated to "${leadCategoryMap[newCategory]}"`, 'success', leadId);
+    } catch (error) {
+      console.error('Error updating lead category:', error);
+      showToast('Error updating category: ' + error.message, 'error', leadId);
+    }
+  };
+
+  // Toggle category dropdown for a specific lead
+  const toggleCategoryDropdown = (leadId) => {
+    setCategoryDropdowns(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(leadId)) {
+        newSet.delete(leadId);
+      } else {
+        newSet.clear(); // Close all other dropdowns
+        newSet.add(leadId);
+      }
+      return newSet;
+    });
+  };
+
   // Update the urgency filter buttons
   const handleUrgencyFilter = (urgencyType) => {
     // If this urgency is already active, clear it
@@ -4143,16 +4215,76 @@ const InboxManager = ({ user, onSignOut }) => {
                     )}
                   </div>
                   
-                  {/* Tags with staggered animations */}
+                  {/* Interactive Category Dropdown */}
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {displayTags.slice(0, 3).map((tag, tagIndex) => (
+                    <div className="relative category-dropdown">
+                      {(() => {
+                        const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS[0];
+                        const isDropdownOpen = categoryDropdowns.has(lead.id);
+                        
+                        return (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCategoryDropdown(lead.id);
+                              }}
+                              className="text-xs px-3 py-1 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-1"
+                              style={{
+                                backgroundColor: `${currentCategory.color}20`,
+                                color: currentCategory.color,
+                                border: `1px solid ${currentCategory.color}30`,
+                                animation: `tagFadeIn 0.5s ease-out ${index * 0.1}s both`
+                              }}
+                            >
+                              <span>{currentCategory.label}</span>
+                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            
+                            {isDropdownOpen && (
+                              <div 
+                                className="absolute top-full left-0 mt-1 rounded-lg shadow-xl z-50 overflow-hidden min-w-40"
+                                style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}
+                              >
+                                {CATEGORY_OPTIONS.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateLeadCategory(lead.id, option.value);
+                                      setCategoryDropdowns(new Set());
+                                    }}
+                                    className="w-full px-3 py-2 text-left transition-all duration-200 hover:opacity-80 text-xs"
+                                    style={{
+                                      backgroundColor: lead.lead_category === option.value ? `${option.color}20` : 'transparent',
+                                      borderBottom: `1px solid ${themeStyles.border}`,
+                                      color: option.color
+                                    }}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium">{option.label}</span>
+                                      {lead.lead_category === option.value && (
+                                        <CheckCircle className="w-3 h-3" style={{color: option.color}} />
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    
+                    {/* Show additional tags if any exist beyond the main category */}
+                    {displayTags.slice(1, 3).map((tag, tagIndex) => (
                       <span key={tag} 
                             className="text-xs px-3 py-1 rounded-full transition-all duration-300 transform hover:scale-110" 
                             style={{
                               backgroundColor: `${themeStyles.accent}15`, 
                               color: themeStyles.textPrimary, 
                               border: `1px solid ${themeStyles.border}`,
-                              animation: `tagFadeIn 0.5s ease-out ${(index * 0.1) + (tagIndex * 0.1)}s both`
+                              animation: `tagFadeIn 0.5s ease-out ${(index * 0.1) + ((tagIndex + 1) * 0.1)}s both`
                             }}>
                         {tag}
                       </span>
