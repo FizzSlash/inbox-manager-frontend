@@ -5114,9 +5114,32 @@ const InboxManager = ({ user, onSignOut }) => {
                                 e.preventDefault();
                                 formatText('underline');
                                 break;
+                              case 'z':
+                                e.preventDefault();
+                                if (e.shiftKey) {
+                                  document.execCommand('redo', false, null);
+                                } else {
+                                  document.execCommand('undo', false, null);
+                                }
+                                handleTextareaChange({ target: e.target });
+                                break;
+                              case 'y':
+                                // Ctrl+Y for redo (alternative to Ctrl+Shift+Z)
+                                e.preventDefault();
+                                document.execCommand('redo', false, null);
+                                handleTextareaChange({ target: e.target });
+                                break;
+                              case 'a':
+                                // Let Ctrl+A work naturally - don't prevent default
+                                break;
+                              case 'c':
+                              case 'v':
+                              case 'x':
+                                // Let copy/paste/cut work naturally
+                                break;
                             }
                           } else if (e.key === 'Enter' && e.shiftKey) {
-                            // Handle Shift+Enter to exit lists and return to normal text
+                            // Handle Shift+Enter to exit lists and create new normal line (keeping current bullet)
                             const selection = window.getSelection();
                             if (selection.rangeCount > 0) {
                               const range = selection.getRangeAt(0);
@@ -5130,14 +5153,60 @@ const InboxManager = ({ user, onSignOut }) => {
                               // Check if we're in a list item
                               if (currentElement && currentElement.tagName === 'LI') {
                                 e.preventDefault();
-                                // Use the browser's outdent command to exit the list
-                                document.execCommand('outdent', false, null);
-                                // Insert a line break to create the new line
-                                document.execCommand('insertHTML', false, '<br><br>');
-                                // Update content
-                                handleTextareaChange({ target: e.target });
+                                
+                                // Find the parent list (ul or ol)
+                                const list = currentElement.closest('ul, ol');
+                                if (list) {
+                                  // Create a new div for normal text after the list
+                                  const newDiv = document.createElement('div');
+                                  newDiv.innerHTML = '<br>';
+                                  
+                                  // Insert the new div after the list
+                                  list.parentNode.insertBefore(newDiv, list.nextSibling);
+                                  
+                                  // Move cursor to the new div
+                                  const newRange = document.createRange();
+                                  newRange.setStart(newDiv, 0);
+                                  newRange.collapse(true);
+                                  selection.removeAllRanges();
+                                  selection.addRange(newRange);
+                                  
+                                  // Update content
+                                  handleTextareaChange({ target: e.target });
+                                }
                               }
                             }
+                          } else if (e.key === 'Tab') {
+                            // Handle Tab for indent/outdent
+                            e.preventDefault();
+                            const selection = window.getSelection();
+                            
+                            if (selection.rangeCount > 0) {
+                              let currentElement = selection.getRangeAt(0).startContainer;
+                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                                currentElement = currentElement.parentNode;
+                              }
+                              
+                              // If we're in a list, use list indenting
+                              if (currentElement && (currentElement.tagName === 'LI' || currentElement.closest('ul, ol'))) {
+                                if (e.shiftKey) {
+                                  document.execCommand('outdent', false, null);
+                                } else {
+                                  document.execCommand('indent', false, null);
+                                }
+                              } else {
+                                // For normal text, insert tab spaces or indent the paragraph
+                                if (e.shiftKey) {
+                                  document.execCommand('outdent', false, null);
+                                } else {
+                                  // Insert 4 spaces as tab
+                                  document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+                                }
+                              }
+                            }
+                            
+                            // Update content
+                            handleTextareaChange({ target: e.target });
                           } else if (e.key === 'Backspace') {
                             // Handle exiting lists when backspacing at the beginning of an empty list item
                             const selection = window.getSelection();
@@ -5174,7 +5243,15 @@ const InboxManager = ({ user, onSignOut }) => {
                           '--tw-ring-color': themeStyles.accent,
                           minHeight: '160px'
                         }}
-                        data-placeholder="Generated draft will appear here, or write your own response..."
+                        data-placeholder="Start typing your response...
+
+Keyboard shortcuts:
+• Ctrl+B/I/U - Bold/Italic/Underline
+• Ctrl+Z/Y - Undo/Redo  
+• Tab/Shift+Tab - Indent/Outdent
+• Bullet button - Toggle lists
+• Backspace on empty bullet - Exit list
+• Shift+Enter in bullet - Exit to normal text"
                       />
                       
                       {/* Show HTML preview for debugging */}
