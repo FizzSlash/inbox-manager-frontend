@@ -5115,6 +5115,29 @@ const InboxManager = ({ user, onSignOut }) => {
                                 formatText('underline');
                                 break;
                             }
+                          } else if (e.key === 'Enter' && e.shiftKey) {
+                            // Handle Shift+Enter to exit lists and return to normal text
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentElement = range.startContainer;
+                              
+                              // Find the list item we're in (if any)
+                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                                currentElement = currentElement.parentNode;
+                              }
+                              
+                              // Check if we're in a list item
+                              if (currentElement && currentElement.tagName === 'LI') {
+                                e.preventDefault();
+                                // Use the browser's outdent command to exit the list
+                                document.execCommand('outdent', false, null);
+                                // Insert a line break to create the new line
+                                document.execCommand('insertHTML', false, '<br><br>');
+                                // Update content
+                                handleTextareaChange({ target: e.target });
+                              }
+                            }
                           } else if (e.key === 'Backspace') {
                             // Handle exiting lists when backspacing at the beginning of an empty list item
                             const selection = window.getSelection();
