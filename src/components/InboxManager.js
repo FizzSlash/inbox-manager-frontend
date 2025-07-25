@@ -2972,6 +2972,9 @@ const InboxManager = ({ user, onSignOut }) => {
       const accountRecords = apiKeysData.accounts.map(account => {
         const accountId = ensureValidUUID(account.id);
         console.log(`📝 Preparing account: ${account.name} (${accountId}) for brand: ${brandId}`);
+        console.log(`   - ESP Provider: ${account.esp.provider}`);
+        console.log(`   - Has API Key: ${account.esp.key ? 'Yes' : 'No'}`);
+        console.log(`   - Is Primary: ${account.is_primary || false}`);
         
         return {
           id: accountId, // Use account.id as primary key for webhook routing
@@ -3018,16 +3021,31 @@ const InboxManager = ({ user, onSignOut }) => {
         recordsToUpsert.push(fullenrichRecord);
       }
 
-      // Use upsert to create or update records
-      if (recordsToUpsert.length > 0) {
-        const { error: upsertError } = await supabase
-          .from('api_settings')
-          .upsert(recordsToUpsert, {
-            onConflict: 'id',
-            ignoreDuplicates: false
-          });
-        
-        if (upsertError) throw upsertError;
+              // Use upsert to create or update records
+        if (recordsToUpsert.length > 0) {
+          console.log(`📤 Upserting ${recordsToUpsert.length} records to Supabase...`);
+          console.log(`📋 Records to upsert:`, recordsToUpsert.map(r => ({
+            id: r.id,
+            account_name: r.account_name,
+            key_type: r.key_type,
+            esp_provider: r.esp_provider,
+            has_encrypted_key: !!r.encrypted_key
+          })));
+          
+          const { data: upsertData, error: upsertError } = await supabase
+            .from('api_settings')
+            .upsert(recordsToUpsert, {
+              onConflict: 'id',
+              ignoreDuplicates: false
+            })
+            .select('id, account_name, brand_id');
+          
+          if (upsertError) {
+            console.error('❌ Upsert error:', upsertError);
+            throw upsertError;
+          }
+          
+          console.log(`✅ Upserted records:`, upsertData);
         
         // Clean up orphaned records for this brand (accounts that were deleted)
         const currentAccountIds = accountRecords.map(acc => acc.id);
@@ -3104,12 +3122,18 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to update an account
   const updateAccount = (accountId, updates) => {
+    console.log(`📝 Updating account ${accountId}:`, updates);
     setApiKeys(prev => ({
       ...prev,
       accounts: prev.accounts.map(acc => 
         acc.id === accountId ? { ...acc, ...updates } : acc
       )
     }));
+    
+    // Show reminder to save if they're updating API keys
+    if (updates.esp && updates.esp.key) {
+      console.log(`⚠️ Remember to click "Save API Keys" to persist changes to database`);
+    }
   };
 
   // Function to set primary account
@@ -3185,13 +3209,36 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to save API keys (with encryption)
   const saveApiKeys = async () => {
+    console.log(`💾 Starting save process...`);
+    console.log(`🏢 Brand ID: ${brandId}`);
+    console.log(`👤 User: ${user?.id}`);
+    console.log(`📊 Accounts to save: ${apiKeys.accounts.length}`);
+    console.log(`🔑 FullEnrich key: ${apiKeys.fullenrich ? 'Present' : 'Not set'}`);
+    
     setIsSavingApi(true);
     try {
       let savedToSupabase = false;
       
+      // Check if we have the required data to save
+      if (!brandId) {
+        console.error('❌ No brand ID available - cannot save to Supabase');
+        throw new Error('Brand ID is required to save API keys');
+      }
+      
+      if (!user) {
+        console.error('❌ No user available - cannot save to Supabase');
+        throw new Error('User authentication required to save API keys');
+      }
+      
+      if (apiKeys.accounts.length === 0) {
+        console.warn('⚠️ No accounts to save');
+      }
+      
       // Try to save to Supabase first if brandId is available
       if (brandId && user) {
+        console.log(`🚀 Attempting to save to Supabase...`);
         savedToSupabase = await saveApiKeysToSupabase(brandId, apiKeys);
+        console.log(`📊 Supabase save result: ${savedToSupabase}`);
       }
       
       // Also save to localStorage as backup (for offline access)
@@ -3912,24 +3959,27 @@ const InboxManager = ({ user, onSignOut }) => {
               >
                 Cancel
               </button>
-              <button
-                onClick={saveApiKeys}
-                disabled={isSavingApi}
-                className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
-                style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
-              >
-                {isSavingApi ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save API Keys
-                  </>
-                )}
-              </button>
+                              <button
+                  onClick={saveApiKeys}
+                  disabled={isSavingApi}
+                  className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
+                  style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                >
+                  {isSavingApi ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save API Keys
+                    </>
+                  )}
+                </button>
+                <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                  💡 Remember to click "Save API Keys" after adding or updating keys to save them to your account
+                </p>
             </div>
           </div>
         </div>
