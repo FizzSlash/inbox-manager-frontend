@@ -163,55 +163,12 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add new state for API settings and tab management
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
-  const [apiKeys, setApiKeys] = useState(() => {
-    console.log('🔄 SIMPLE INIT: Loading initial apiKeys from localStorage...');
-    
-    try {
-      // Try new format first
-      const savedAccounts = localStorage.getItem('apiKeys_accounts');
-      const savedFullenrich = localStorage.getItem('apiKeys_fullenrich') || '';
-      
-      if (savedAccounts) {
-        const accounts = JSON.parse(savedAccounts);
-        console.log(`✅ Found new format: ${accounts.length} accounts`);
-        return {
-          accounts: accounts,
-          fullenrich: savedFullenrich
-        };
-      }
-      
-      // Fallback to legacy format
-      const legacyProvider = localStorage.getItem('esp_provider') || '';
-      const legacyKey = decryptApiKey(localStorage.getItem('esp_api_key_enc') || '');
-      const fullenrichKey = decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '');
-      
-      console.log(`📱 Using legacy format:`, {
-        provider: !!legacyProvider,
-        key: !!legacyKey,
-        fullenrich: !!fullenrichKey
-      });
-      
-      const initialState = {
-        accounts: legacyProvider || legacyKey ? [{
-          id: crypto.randomUUID(),
-          name: 'Primary Account',
-    esp: {
-            provider: legacyProvider,
-            key: legacyKey
-          },
-          is_primary: true
-        }] : [],
-        fullenrich: fullenrichKey
-      };
-      
-      console.log(`🎯 Initial state: ${initialState.accounts.length} accounts, fullenrich: ${!!initialState.fullenrich}`);
-      return initialState;
-      
-    } catch (error) {
-      console.error('❌ Error loading from localStorage:', error);
-      return { accounts: [], fullenrich: '' };
-    }
+  // ===== SIMPLE BULLETPROOF API KEY SYSTEM =====
+  const [apiKeys, setApiKeys] = useState({
+    accounts: [],
+    fullenrich: ''
   });
+  const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState({
     esp: null,
     fullenrich: null
@@ -570,54 +527,223 @@ const InboxManager = ({ user, onSignOut }) => {
     fetchBrandId();
   }, [user]);
 
-  // Track loading state to prevent race conditions (using ref to avoid re-renders)
-  const isLoadingApiKeysRef = useRef(false);
-
-  // Load API keys from Supabase when brandId becomes available
-  useEffect(() => {
-    console.log('🔄 API Keys loading useEffect triggered');
-    console.log(`🏢 brandId: ${brandId}`);
-    console.log(`👤 user: ${user?.id}`);
-    console.log(`🔒 isLoadingApiKeysRef.current: ${isLoadingApiKeysRef.current}`);
+  // SIMPLE SAVE: Save to both Supabase and localStorage
+  const saveApiKeys = async (showSuccessMessage = true) => {
+    console.log('💾 Saving API keys...');
+    setIsSavingApi(true);
     
-    // Prevent multiple simultaneous loads
-    if (isLoadingApiKeysRef.current) {
-      console.log('⏸️ Already loading API keys, skipping...');
-      return;
-    }
-
-    // Double-check we have both values before proceeding
-    if (!brandId || !user) {
-      console.log('⚠️ Missing required data for API key loading:', {
-        hasBrandId: !!brandId,
-        hasUser: !!user
-      });
-      return;
-    }
-
-    console.log('🚀 Starting API keys load from Supabase...');
-
-    const loadApiKeys = async () => {
-      isLoadingApiKeysRef.current = true;
+    try {
+      // STEP 1: Always save to localStorage first
+      localStorage.setItem('apiKeys_backup', JSON.stringify(apiKeys));
+      console.log('✅ Saved to localStorage');
       
-      try {
-        console.log('📥 Calling loadApiKeysFromSupabase...');
-        const success = await loadApiKeysFromSupabase(brandId);
-        console.log(`📊 loadApiKeysFromSupabase result: ${success}`);
+      // STEP 2: Save to Supabase if possible
+      if (brandId && user) {
+        console.log('📤 Saving to Supabase...');
         
-        if (!success) {
-          console.warn('⚠️ Failed to load from Supabase - API keys will remain in initial state');
+        // Prepare all records
+        const recordsToInsert = [];
+        
+        // Separate new accounts from existing accounts
+        const newAccounts = [];
+        const existingAccounts = [];
+        
+        apiKeys.accounts.forEach(account => {
+          const recordData = {
+            brand_id: String(brandId),
+            created_by: String(user.id),
+            account_id: account.account_id || crypto.randomUUID(), // UUID for webhook routing
+            account_name: account.name,
+            esp_api_key: encryptApiKey(account.esp.key),
+            esp_provider: account.esp.provider,
+            fullenrich_api_key: null,
+            is_primary: account.is_primary || false,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          if (account.id && !isNaN(account.id)) {
+            // Existing account - include ID for update
+            recordData.id = parseInt(account.id);
+            existingAccounts.push(recordData);
+          } else {
+            // New account - don't include ID, let database auto-assign
+            newAccounts.push(recordData);
+          }
+        });
+        
+        // STEP 2A: Insert new accounts (no ID, let database auto-assign)
+        if (newAccounts.length > 0) {
+          const { error: insertError } = await supabase
+            .from('api_settings')
+            .insert(newAccounts);
+            
+          if (insertError) throw insertError;
+          console.log(`✅ Inserted ${newAccounts.length} new accounts`);
         }
-      } catch (error) {
-        console.error('❌ Failed to load API keys:', error);
-      } finally {
-        isLoadingApiKeysRef.current = false;
-        console.log('✅ API keys loading completed');
+        
+        // STEP 2B: Update existing accounts
+        if (existingAccounts.length > 0) {
+          const { error: upsertError } = await supabase
+            .from('api_settings')
+            .upsert(existingAccounts, {
+              onConflict: 'id',
+              ignoreDuplicates: false
+            });
+            
+          if (upsertError) throw upsertError;
+          console.log(`✅ Updated ${existingAccounts.length} existing accounts`);
+        }
+        
+        // STEP 2C: Handle FullEnrich
+        if (apiKeys.fullenrich) {
+          // Check if FullEnrich record exists
+          const { data: existingFullenrich } = await supabase
+            .from('api_settings')
+            .select('id')
+            .eq('brand_id', brandId)
+            .eq('account_name', 'FullEnrich Global')
+            .single();
+            
+          const fullenrichData = {
+            brand_id: String(brandId),
+            created_by: String(user.id),
+            account_name: 'FullEnrich Global',
+            esp_api_key: null,
+            esp_provider: null,
+            fullenrich_api_key: encryptApiKey(apiKeys.fullenrich),
+            is_primary: false,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          if (existingFullenrich) {
+            // Update existing FullEnrich
+            fullenrichData.id = existingFullenrich.id;
+            const { error: fullenrichError } = await supabase
+              .from('api_settings')
+              .upsert([fullenrichData], {
+                onConflict: 'id',
+                ignoreDuplicates: false
+              });
+              
+            if (fullenrichError) throw fullenrichError;
+          } else {
+            // Insert new FullEnrich
+            const { error: fullenrichError } = await supabase
+              .from('api_settings')
+              .insert([fullenrichData]);
+              
+            if (fullenrichError) throw fullenrichError;
+          }
+        }
+        
+        console.log('✅ Saved to Supabase');
       }
-    };
+      
+      // Only show success message if explicitly requested (user-initiated saves)
+      if (showSuccessMessage) {
+        setApiToastMessage({
+          type: 'success',
+          message: 'API keys saved successfully!'
+        });
+        setShowApiToast(true);
+        setTimeout(() => setShowApiToast(false), 3000);
+        setShowApiSettings(false);
+      }
+      
+    } catch (error) {
+      console.error('❌ Save failed:', error);
+      if (showSuccessMessage) {
+        setApiToastMessage({
+          type: 'error',
+          message: 'Failed to save: ' + error.message
+        });
+        setShowApiToast(true);
+        setTimeout(() => setShowApiToast(false), 5000);
+      }
+    } finally {
+      setIsSavingApi(false);
+    }
+  };
+
+  // SIMPLE LOAD: Try Supabase first, fallback to localStorage
+  const loadApiKeys = async () => {
+    if (isLoadingApiKeys) return; // Prevent double-loading
     
-    // Load immediately - no artificial delays
-    loadApiKeys();
+    setIsLoadingApiKeys(true);
+    console.log('📥 Loading API keys...');
+    
+    try {
+      // STEP 1: Try Supabase if we have brandId
+      if (brandId && user) {
+        console.log('📊 Trying Supabase...');
+        
+        const { data, error } = await supabase
+          .from('api_settings')
+          .select('*')
+          .eq('brand_id', brandId);
+          
+        if (!error && data && data.length > 0) {
+          console.log(`✅ Found ${data.length} records in Supabase`);
+          
+          const accounts = [];
+          let fullenrichKey = '';
+          
+          data.forEach(record => {
+            if (record.account_name === 'FullEnrich Global') {
+              fullenrichKey = decryptApiKey(record.fullenrich_api_key || '');
+            } else {
+              // Keep the original integer ID from the database
+              accounts.push({
+                id: record.id, // Keep as integer (bigint from database)
+                account_id: record.account_id, // This is the UUID for webhook routing
+                name: record.account_name || 'Account',
+                esp: {
+                  provider: record.esp_provider || '',
+                  key: decryptApiKey(record.esp_api_key || '')
+                },
+                is_primary: record.is_primary || false
+              });
+            }
+          });
+          
+          const newState = { accounts, fullenrich: fullenrichKey };
+          setApiKeys(newState);
+          
+          // Sync to localStorage as backup
+          localStorage.setItem('apiKeys_backup', JSON.stringify(newState));
+          console.log('✅ Loaded from Supabase');
+          
+
+          
+          return;
+        }
+      }
+      
+      // STEP 2: Fallback to localStorage
+      console.log('📱 Trying localStorage...');
+      const backup = localStorage.getItem('apiKeys_backup');
+      if (backup) {
+        const parsed = JSON.parse(backup);
+        setApiKeys(parsed);
+        console.log('✅ Loaded from localStorage backup');
+      }
+      
+    } catch (error) {
+      console.error('❌ Load failed:', error);
+    } finally {
+      setIsLoadingApiKeys(false);
+    }
+  };
+
+  // Load API keys when brandId and user are available
+  useEffect(() => {
+    if (brandId && user) {
+      loadApiKeys();
+    }
   }, [brandId, user]);
 
   // Fetch leads when brandId or API keys are available
@@ -627,7 +753,7 @@ const InboxManager = ({ user, onSignOut }) => {
     if (shouldFetchLeads) {
       // Small delay to avoid rapid re-fetching during initialization
       const timeoutId = setTimeout(() => {
-      fetchLeads();
+        fetchLeads();
       }, 100);
       
       return () => clearTimeout(timeoutId);
@@ -656,19 +782,19 @@ const InboxManager = ({ user, onSignOut }) => {
           decryptApiKey(account.esp.key) || account.esp.key
         ).filter(key => key && key.trim() !== '');
 
-        // Filter leads by account_id (new architecture)
+        // Filter leads by email_account_id 
         filteredData = (data || []).filter(lead => {
-          // Primary filter: Check if lead's account_id matches any of our accounts
-          if (lead.account_id) {
-            const hasMatchingAccount = apiKeys.accounts.some(account => account.id === lead.account_id);
+          // Primary filter: Check if lead's email_account_id matches any of our account_id (UUIDs)
+          if (lead.email_account_id) {
+            const hasMatchingAccount = apiKeys.accounts.some(account => account.account_id === lead.email_account_id);
             if (hasMatchingAccount) {
-              console.log(`✅ Lead matches account: ${lead.account_id}`);
+              console.log(`✅ Lead matches account: ${lead.email_account_id}`);
               return true;
             }
           }
           
-          // Fallback: If no account_id, use brand_id matching (backward compatibility)
-          if (!lead.account_id && brandId && lead.brand_id === brandId) {
+          // Fallback: If no email_account_id, use brand_id matching (backward compatibility)
+          if (!lead.email_account_id && brandId && lead.brand_id === brandId) {
             console.log(`✅ Lead matches brand_id fallback: ${lead.brand_id}`);
             return true;
           }
@@ -3063,217 +3189,17 @@ const InboxManager = ({ user, onSignOut }) => {
     // For account-specific changes, use updateAccount function
   };
 
-  // SIMPLIFIED: Load from Supabase, sync to localStorage, update state
-  const loadApiKeysFromSupabase = async (brandId) => {
-    if (!brandId) return false;
-    
-    try {
-      console.log(`📥 SIMPLE LOAD: Fetching from Supabase for brand: ${brandId}`);
 
-      const { data, error } = await supabase
-        .from('api_settings')
-        .select('*')
-        .eq('brand_id', brandId);
 
-      if (error) throw error;
 
-      if (!data || data.length === 0) {
-        console.log('📭 No data in Supabase - keeping localStorage data');
-        return false;
-      }
 
-      console.log(`📊 Found ${data.length} records in Supabase:`, data);
 
-      // SIMPLE LOGIC: Convert ALL non-FullEnrich records to accounts
-      const accounts = [];
-      let fullenrichKey = '';
-
-      for (const record of data) {
-        console.log(`🔄 Processing record: ${record.account_name} (${record.id})`);
-        
-        if (record.account_name === 'FullEnrich Global') {
-          // This is the FullEnrich record
-          try {
-            fullenrichKey = decryptApiKey(record.encrypted_key || '');
-            console.log(`✅ FullEnrich loaded`);
-          } catch (err) {
-            console.error(`❌ FullEnrich decrypt failed:`, err);
-            fullenrichKey = record.encrypted_key || '';
-          }
-        } else {
-          // This is an ESP account
-          let decryptedKey = '';
-          try {
-            decryptedKey = decryptApiKey(record.encrypted_key || '');
-            console.log(`✅ ESP account loaded: ${record.account_name}`);
-          } catch (err) {
-            console.error(`❌ ESP decrypt failed for ${record.account_name}:`, err);
-            decryptedKey = record.encrypted_key || '';
-          }
-          
-          accounts.push({
-            id: record.id,
-            name: record.account_name || 'Account',
-            esp: {
-              provider: record.esp_provider || '',
-              key: decryptedKey
-            },
-            is_primary: record.is_primary || false
-          });
-        }
-      }
-
-      const newState = {
-        accounts: accounts,
-        fullenrich: fullenrichKey
-      };
-
-      console.log(`🎯 SIMPLE RESULT: ${accounts.length} accounts, fullenrich: ${!!fullenrichKey}`);
-
-      // Update state
-      setApiKeys(newState);
-
-      // Sync to localStorage to keep them in sync
-      localStorage.setItem('apiKeys_accounts', JSON.stringify(accounts));
-      localStorage.setItem('apiKeys_fullenrich', fullenrichKey);
-      console.log(`💾 Synced to localStorage`);
-
-      return true;
-      
-    } catch (error) {
-      console.error('❌ Supabase load failed:', error);
-      return false; // Keep existing localStorage data
-    }
-  };
-
-  // Function to save API keys to Supabase
-  const saveApiKeysToSupabase = async (brandId, apiKeysData) => {
-    try {
-      console.log(`💾 Saving ${apiKeysData.accounts.length} accounts to Supabase for brand: ${brandId}`);
-
-      const recordsToUpsert = [];
-
-      // Prepare email account records (using account.id as the primary key)
-      const accountRecords = apiKeysData.accounts.map(account => {
-        const accountId = ensureValidUUID(account.id);
-        console.log(`📝 Preparing account: ${account.name} (${accountId}) for brand: ${brandId}`);
-        console.log(`   - ESP Provider: ${account.esp.provider}`);
-        console.log(`   - Has API Key: ${account.esp.key ? 'Yes' : 'No'}`);
-        console.log(`   - Is Primary: ${account.is_primary || false}`);
-        
-      return {
-          id: accountId, // Use account.id as primary key for webhook routing
-          brand_id: brandId,
-          created_by: user.id,
-          account_name: account.name,
-          key_type: 'esp_api_key', // Specify this is an ESP account
-          encrypted_key: encryptApiKey(account.esp.key || ''),
-          esp_provider: account.esp.provider || null,
-          is_primary: account.is_primary || false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-      });
-
-      if (accountRecords.length > 0) {
-        recordsToUpsert.push(...accountRecords);
-      }
-
-      // Prepare fullenrich as a separate global record (if it exists)
-      if (apiKeysData.fullenrich) {
-        // Find existing fullenrich record or create new UUID
-        const { data: existingFullenrich } = await supabase
-          .from('api_settings')
-          .select('id')
-          .eq('brand_id', brandId)
-          .eq('key_type', 'fullenrich_api_key')
-          .single();
-
-        const fullenrichId = existingFullenrich?.id || crypto.randomUUID();
-        
-        const fullenrichRecord = {
-          id: fullenrichId,
-          brand_id: brandId,
-          created_by: user.id,
-          account_name: 'FullEnrich Global',
-          key_type: 'fullenrich_api_key',
-          encrypted_key: encryptApiKey(apiKeysData.fullenrich),
-          esp_provider: null,
-          is_primary: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        recordsToUpsert.push(fullenrichRecord);
-      }
-
-              // Use upsert to create or update records
-        if (recordsToUpsert.length > 0) {
-          console.log(`📤 Upserting ${recordsToUpsert.length} records to Supabase...`);
-          console.log(`📋 Records to upsert:`, recordsToUpsert.map(r => ({
-            id: r.id,
-            account_name: r.account_name,
-            key_type: r.key_type,
-            esp_provider: r.esp_provider,
-            has_encrypted_key: !!r.encrypted_key
-          })));
-          
-          const { data: upsertData, error: upsertError } = await supabase
-            .from('api_settings')
-            .upsert(recordsToUpsert, {
-              onConflict: 'id',
-              ignoreDuplicates: false
-            })
-            .select('id, account_name, brand_id');
-          
-          if (upsertError) {
-            console.error('❌ Upsert error:', upsertError);
-            throw upsertError;
-          }
-          
-          console.log(`✅ Upserted records:`, upsertData);
-        
-        // Clean up orphaned records for this brand (accounts that were deleted)
-        const currentAccountIds = accountRecords.map(acc => acc.id);
-        if (currentAccountIds.length > 0) {
-          const { error: cleanupError } = await supabase
-            .from('api_settings')
-            .delete()
-            .eq('brand_id', brandId)
-            .eq('key_type', 'esp_api_key')
-            .not('id', 'in', `(${currentAccountIds.map(id => `"${id}"`).join(',')})`);
-          
-          if (cleanupError) {
-            console.warn('Warning: Failed to clean up orphaned records:', cleanupError);
-          }
-        }
-        
-        console.log(`✅ Successfully saved/updated ${recordsToUpsert.length} records to Supabase`);
-        console.log(`🔗 Webhook URLs available for accounts:`, 
-          accountRecords.map(acc => `${acc.account_name}: /webhook/${acc.id}`));
-      }
-      
-      return true; // Successfully saved to Supabase
-    } catch (error) {
-      console.error('❌ Error saving API keys to Supabase:', error);
-      return false; // Failed to save to Supabase
-    }
-  };
-
-  // Helper function to ensure valid UUID
-  const ensureValidUUID = (id) => {
-    // Check if it's already a valid UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(id)) {
-      return id;
-    }
-    // Generate new UUID if invalid
-    return crypto.randomUUID();
-  };
 
   // Function to add a new email account
   const addEmailAccount = () => {
     const newAccount = {
-      id: crypto.randomUUID(),
+      // Don't set id - database will auto-assign integer ID
+      account_id: crypto.randomUUID(), // UUID for webhook routing
       name: `Account ${apiKeys.accounts.length + 1}`,
       esp: {
         provider: '',
@@ -3288,38 +3214,93 @@ const InboxManager = ({ user, onSignOut }) => {
     }));
   };
 
-  // SIMPLIFIED: Remove from everywhere and auto-sync
+    // CASCADE DELETE: Remove account and all associated leads
   const removeEmailAccount = async (accountId) => {
-    console.log(`🗑️ SIMPLE REMOVE: Removing account ${accountId}`);
+    console.log('🗑️ Removing account and all associated leads:', accountId);
     
-    const updatedAccounts = apiKeys.accounts.filter(acc => acc.id !== accountId);
-    
-    // If we removed the primary account, make the first remaining account primary
-    if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
-      updatedAccounts[0].is_primary = true;
+    if (!confirm('This will delete the API account AND all associated leads. This cannot be undone. Continue?')) {
+      return;
     }
     
-    const newApiKeys = {
-      ...apiKeys,
-      accounts: updatedAccounts
-    };
-    
-    // Update state
-    setApiKeys(newApiKeys);
-    
-    // Update localStorage immediately
-    localStorage.setItem('apiKeys_accounts', JSON.stringify(updatedAccounts));
-    console.log(`💾 Removed from localStorage`);
-    
-    // Auto-save to Supabase if possible
-    if (brandId && user) {
-      console.log(`🚀 Auto-saving to Supabase after removal...`);
-      try {
-        await saveApiKeysToSupabase(brandId, newApiKeys);
-        console.log(`✅ Removal synced to Supabase`);
-      } catch (error) {
-        console.error(`❌ Failed to sync removal to Supabase:`, error);
+    setIsSavingApi(true);
+    try {
+      if (brandId && user) {
+        console.log('🗑️ Step 1: Deleting all leads with email_account_id matching account_id:', accountId);
+        
+        // Find the account to get its account_id (UUID) for lead deletion
+        const accountToDelete = apiKeys.accounts.find(acc => acc.id == accountId);
+        if (!accountToDelete?.account_id) {
+          throw new Error('Account not found or missing account_id');
+        }
+        
+        // STEP 1: Delete all leads associated with this account's UUID
+        const { error: leadsDeleteError, count: deletedLeadsCount } = await supabase
+          .from('retention_harbor')
+          .delete({ count: 'exact' })
+          .eq('email_account_id', accountToDelete.account_id)
+          .eq('brand_id', brandId); // Extra safety check
+          
+        if (leadsDeleteError) {
+          console.error('❌ Failed to delete leads:', leadsDeleteError);
+          throw new Error('Failed to delete associated leads: ' + leadsDeleteError.message);
+        }
+        
+        console.log(`✅ Deleted ${deletedLeadsCount || 0} leads associated with account`);
+        
+        console.log('🗑️ Step 2: Deleting API account:', accountId);
+        
+        // STEP 2: Delete the API account  
+        const { error: accountDeleteError } = await supabase
+          .from('api_settings')
+          .delete()
+          .eq('id', parseInt(accountId)) // Convert to integer for bigint column
+          .eq('brand_id', String(brandId)); // Extra safety check
+          
+        if (accountDeleteError) {
+          console.error('❌ Failed to delete account:', accountDeleteError);
+          throw new Error('Failed to delete API account: ' + accountDeleteError.message);
+        }
+        
+        console.log('✅ Deleted API account from database');
       }
+      
+      // STEP 3: Update local state
+      const updatedAccounts = apiKeys.accounts.filter(acc => acc.id !== accountId);
+      
+      // Make first account primary if needed
+      if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
+        updatedAccounts[0].is_primary = true;
+      }
+      
+      const newApiKeys = { ...apiKeys, accounts: updatedAccounts };
+      setApiKeys(newApiKeys);
+      
+      // Update localStorage
+      localStorage.setItem('apiKeys_backup', JSON.stringify(newApiKeys));
+      
+      // STEP 4: Refresh leads to show the deletions
+      await fetchLeads();
+      
+      console.log('✅ Account and associated leads removed successfully');
+      
+      // Show success message
+      setApiToastMessage({
+        type: 'success',
+        message: 'Account and associated leads deleted successfully'
+      });
+      setShowApiToast(true);
+      setTimeout(() => setShowApiToast(false), 3000);
+      
+    } catch (error) {
+      console.error('❌ Failed to delete account:', error);
+      setApiToastMessage({
+        type: 'error',
+        message: 'Failed to delete account: ' + error.message
+      });
+      setShowApiToast(true);
+      setTimeout(() => setShowApiToast(false), 5000);
+    } finally {
+      setIsSavingApi(false);
     }
   };
 
@@ -3352,32 +3333,23 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to get the correct API key for a lead
   const getApiKeyForLead = (lead, apiKeysData) => {
-    // Option 1: Use account_id from lead (new architecture - most accurate)
-    if (lead.account_id) {
-      const matchedAccount = apiKeysData.accounts.find(acc => acc.id === lead.account_id);
+    // Option 1: Use email_account_id from lead (primary method)
+    if (lead.email_account_id) {
+      const matchedAccount = apiKeysData.accounts.find(acc => acc.account_id === lead.email_account_id);
       if (matchedAccount) {
-        console.log(`🎯 Using account "${matchedAccount.name}" for lead (account_id match)`);
+        console.log(`🎯 Using account "${matchedAccount.name}" for lead (email_account_id match)`);
         return matchedAccount;
       }
     }
     
-    // Option 2: Use email_account_id if exists (legacy support)
-    if (lead.email_account_id) {
-      const account = apiKeysData.accounts.find(acc => acc.id === lead.email_account_id);
-      if (account) {
-        console.log(`🎯 Using account "${account.name}" for lead (email_account_id match)`);
-        return account;
-      }
-    }
-    
-    // Option 3: Use primary account as fallback
+    // Option 2: Use primary account as fallback
     const primaryAccount = apiKeysData.accounts.find(acc => acc.is_primary);
     if (primaryAccount) {
       console.log(`🎯 Using primary account "${primaryAccount.name}" for lead (fallback)`);
       return primaryAccount;
     }
     
-    // Option 4: Use first account if no primary
+    // Option 3: Use first account if no primary
     const firstAccount = apiKeysData.accounts[0] || null;
     if (firstAccount) {
       console.log(`🎯 Using first account "${firstAccount.name}" for lead (last resort)`);
@@ -3410,70 +3382,7 @@ const InboxManager = ({ user, onSignOut }) => {
     });
   };
 
-  // SIMPLIFIED: Save to BOTH Supabase AND localStorage always
-  const saveApiKeys = async () => {
-    console.log(`💾 SIMPLE SAVE: Starting dual save process...`);
-    console.log(`📊 Accounts: ${apiKeys.accounts.length}, FullEnrich: ${apiKeys.fullenrich ? 'Yes' : 'No'}`);
-    
-    setIsSavingApi(true);
-    let success = false;
-    
-    try {
-      // STEP 1: Always save to localStorage first (immediate backup)
-      console.log(`1️⃣ Saving to localStorage...`);
-      
-      // Save all accounts as JSON
-      localStorage.setItem('apiKeys_accounts', JSON.stringify(apiKeys.accounts));
-      localStorage.setItem('apiKeys_fullenrich', apiKeys.fullenrich || '');
-      
-      // Legacy format for backward compatibility
-      const primaryAccount = apiKeys.accounts.find(acc => acc.is_primary) || apiKeys.accounts[0];
-      if (primaryAccount) {
-        localStorage.setItem('esp_provider', primaryAccount.esp.provider);
-        localStorage.setItem('esp_api_key_enc', encryptApiKey(primaryAccount.esp.key));
-      }
-      localStorage.setItem('fullenrich_api_key_enc', encryptApiKey(apiKeys.fullenrich));
-      
-      console.log(`✅ localStorage save complete`);
-      
-      // STEP 2: Save to Supabase if possible  
-      if (brandId && user) {
-        console.log(`2️⃣ Saving to Supabase...`);
-        const supabaseSuccess = await saveApiKeysToSupabase(brandId, apiKeys);
-        
-        if (supabaseSuccess) {
-          console.log(`✅ Supabase save complete`);
-          success = true;
-        } else {
-          console.warn(`⚠️ Supabase save failed, but localStorage backup exists`);
-          success = true; // Still success because localStorage worked
-        }
-      } else {
-        console.warn(`⚠️ No brandId/user - only localStorage save`);
-        success = true; // localStorage save is still success
-      }
-      
-      // Show success message
-      setApiToastMessage({
-        type: 'success',
-        message: (brandId && user) ? 'API keys saved to account & locally' : 'API keys saved locally'
-      });
-      setShowApiToast(true);
-      setTimeout(() => setShowApiToast(false), 3000);
-      setShowApiSettings(false);
-      
-    } catch (error) {
-      console.error('❌ Save failed:', error);
-      setApiToastMessage({
-        type: 'error',
-        message: 'Failed to save API keys: ' + error.message
-      });
-      setShowApiToast(true);
-      setTimeout(() => setShowApiToast(false), 5000);
-    } finally {
-      setIsSavingApi(false);
-    }
-  };
+
 
   // Function to toggle all sections
   const toggleAllSections = () => {
@@ -3782,7 +3691,7 @@ const InboxManager = ({ user, onSignOut }) => {
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
                 Inbox
-              </div>
+        </div>
             </button>
 
             {/* Recent Tab */}
@@ -3941,7 +3850,12 @@ const InboxManager = ({ user, onSignOut }) => {
                   API Settings
                 </h2>
                 <button
-                  onClick={() => setShowApiSettings(false)}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowApiSettings(false);
+                  }}
                   className="transition-colors duration-300 hover:opacity-80"
                   style={{color: themeStyles.textMuted}}
                 >
@@ -3968,7 +3882,12 @@ const InboxManager = ({ user, onSignOut }) => {
                     <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>Email Accounts</h3>
                   </div>
                   <button
-                    onClick={addEmailAccount}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addEmailAccount();
+                    }}
                     className="px-3 py-1 rounded-lg text-sm font-medium transition-all hover:opacity-80 flex items-center gap-2"
                     style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                   >
@@ -3986,6 +3905,12 @@ const InboxManager = ({ user, onSignOut }) => {
                             type="text"
                             value={account.name}
                             onChange={(e) => updateAccount(account.id, { name: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                             className="bg-transparent font-medium border-none outline-none text-sm transition-colors duration-300"
                             style={{color: themeStyles.textPrimary}}
                             placeholder="Account Name"
@@ -3994,12 +3919,17 @@ const InboxManager = ({ user, onSignOut }) => {
                             <span className="px-2 py-1 text-xs rounded-full font-medium" style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}>
                               Primary
                             </span>
-                          )}
-                        </div>
+        )}
+      </div>
                         <div className="flex items-center gap-2">
                           {!account.is_primary && (
                             <button
-                              onClick={() => setPrimaryAccount(account.id)}
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setPrimaryAccount(account.id);
+                              }}
                               className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
                               style={{border: `1px solid ${themeStyles.border}`, color: themeStyles.textMuted}}
                             >
@@ -4008,7 +3938,12 @@ const InboxManager = ({ user, onSignOut }) => {
                           )}
                           {apiKeys.accounts.length > 1 && (
                             <button
-                              onClick={() => removeEmailAccount(account.id)}
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                removeEmailAccount(account.id).catch(console.error);
+                              }}
                               className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
                               style={{border: `1px solid ${themeStyles.error}40`, color: themeStyles.error}}
                             >
@@ -4025,9 +3960,14 @@ const InboxManager = ({ user, onSignOut }) => {
                           return (
                     <button
                       key={provider}
-                              onClick={() => updateAccount(account.id, { 
-                                esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
-                              })}
+                      type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                updateAccount(account.id, { 
+                                  esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
+                                });
+                              }}
                               className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
                               style={{
                                 backgroundColor: isSelected ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
@@ -4047,12 +3987,19 @@ const InboxManager = ({ user, onSignOut }) => {
                           <label className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                             {account.esp.provider.charAt(0).toUpperCase() + account.esp.provider.slice(1).replace('_', ' ')} API Key
                     </label>
+                    <div className="relative">
                                           <input
-                      type="password"
-                            value={account.esp.key}
+                      type="text"
+                            value={account.esp.key || ''}
                             onChange={(e) => updateAccount(account.id, { 
                               esp: { ...account.esp, key: e.target.value }
                             })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                             className="w-full px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
                             style={{
                               backgroundColor: themeStyles.primaryBg,
@@ -4062,6 +4009,7 @@ const InboxManager = ({ user, onSignOut }) => {
                             }}
                             placeholder={`Enter ${account.esp.provider.replace('_', ' ')} API key`}
                           />
+                          </div>
                         </div>
                       )}
 
@@ -4073,8 +4021,14 @@ const InboxManager = ({ user, onSignOut }) => {
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            value={generateWebhookUrl(account.id)}
+                            value={generateWebhookUrl(account.account_id)}
                             readOnly
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                             className="flex-1 px-3 py-2 rounded-lg text-sm transition-all"
                             style={{
                               backgroundColor: themeStyles.tertiaryBg,
@@ -4083,7 +4037,12 @@ const InboxManager = ({ user, onSignOut }) => {
                             }}
                           />
                           <button
-                            onClick={() => copyWebhookUrl(account.id)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              copyWebhookUrl(account.account_id);
+                            }}
                             className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80 flex items-center gap-1"
                             style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                           >
@@ -4123,9 +4082,15 @@ const InboxManager = ({ user, onSignOut }) => {
                   </label>
                   <div className="relative">
                     <input
-                      type="password"
-                      value={apiKeys.fullenrich}
+                      type="text"
+                      value={apiKeys.fullenrich || ''}
                       onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
                       className="w-full px-4 py-2 rounded-lg transition-all focus:ring-1"
                       style={{
                         backgroundColor: themeStyles.primaryBg,
@@ -4148,14 +4113,24 @@ const InboxManager = ({ user, onSignOut }) => {
 
             <div className="p-6 border-t flex justify-end gap-3 transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, borderColor: themeStyles.border}}>
               <button
-                onClick={() => setShowApiSettings(false)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowApiSettings(false);
+                }}
                 className="px-4 py-2 rounded-lg text-sm transition-all hover:opacity-80"
                 style={{color: themeStyles.textPrimary, backgroundColor: themeStyles.tertiaryBg}}
               >
                 Cancel
               </button>
               <button
-                onClick={saveApiKeys}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  saveApiKeys().catch(console.error);
+                }}
                 disabled={isSavingApi}
                   className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
                   style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
