@@ -4217,7 +4217,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   
                   {/* Interactive Category Dropdown */}
                   <div className="flex flex-wrap gap-2 mb-3">
-                    <div className="relative category-dropdown">
+                    <div className="relative category-dropdown" style={{zIndex: 1000}}>
                       {(() => {
                         const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS[0];
                         const isDropdownOpen = categoryDropdowns.has(lead.id);
@@ -4229,28 +4229,30 @@ const InboxManager = ({ user, onSignOut }) => {
                                 e.stopPropagation();
                                 toggleCategoryDropdown(lead.id);
                               }}
-                              className="text-xs px-3 py-1 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-1"
+                              className="text-sm px-4 py-2 rounded-full transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
-                                backgroundColor: `${currentCategory.color}20`,
+                                backgroundColor: `${currentCategory.color}30`,
                                 color: currentCategory.color,
-                                border: `1px solid ${currentCategory.color}30`,
-                                animation: `tagFadeIn 0.5s ease-out ${index * 0.1}s both`
+                                border: `2px solid ${currentCategory.color}`,
+                                animation: `tagFadeIn 0.5s ease-out ${index * 0.1}s both`,
+                                boxShadow: `0 2px 8px ${currentCategory.color}20`
                               }}
                             >
                               <span>{currentCategory.label}</span>
-                              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             
                             {isDropdownOpen && (
                               <div 
-                                className="absolute top-full left-0 mt-1 rounded-lg shadow-xl z-50 overflow-hidden min-w-40"
+                                className="absolute top-full left-0 mt-2 rounded-xl shadow-2xl overflow-hidden min-w-52"
                                 style={{
                                   backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
-                                  border: `1px solid ${themeStyles.borderStrong}`,
-                                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                                  border: `2px solid ${themeStyles.borderStrong}`,
+                                  boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+                                  zIndex: 9999
                                 }}
                               >
-                                {CATEGORY_OPTIONS.map((option) => (
+                                {CATEGORY_OPTIONS.map((option, optionIndex) => (
                                   <button
                                     key={option.value}
                                     onClick={(e) => {
@@ -4258,17 +4260,17 @@ const InboxManager = ({ user, onSignOut }) => {
                                       updateLeadCategory(lead.id, option.value);
                                       setCategoryDropdowns(new Set());
                                     }}
-                                    className="w-full px-3 py-2 text-left transition-all duration-200 hover:opacity-90 text-xs"
+                                    className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
                                     style={{
                                       backgroundColor: lead.lead_category === option.value 
-                                        ? `${option.color}25` 
+                                        ? `${option.color}30` 
                                         : isDarkMode ? '#2A2C2A' : '#F8F9FA',
-                                      borderBottom: `1px solid ${themeStyles.border}`,
+                                      borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
                                       color: option.color
                                     }}
                                     onMouseEnter={(e) => {
                                       if (lead.lead_category !== option.value) {
-                                        e.target.style.backgroundColor = isDarkMode ? '#3A3C3A' : '#E9ECEF';
+                                        e.target.style.backgroundColor = `${option.color}15`;
                                       }
                                     }}
                                     onMouseLeave={(e) => {
@@ -4278,9 +4280,9 @@ const InboxManager = ({ user, onSignOut }) => {
                                     }}
                                   >
                                     <div className="flex items-center justify-between">
-                                      <span className="font-medium">{option.label}</span>
+                                      <span className="font-semibold">{option.label}</span>
                                       {lead.lead_category === option.value && (
-                                        <CheckCircle className="w-3 h-3" style={{color: option.color}} />
+                                        <CheckCircle className="w-4 h-4" style={{color: option.color}} />
                                       )}
                                     </div>
                                   </button>
