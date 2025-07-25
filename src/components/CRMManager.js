@@ -285,26 +285,80 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         <table className="min-w-full" style={{color: themeStyles.textPrimary}}>
           <thead>
             <tr style={{backgroundColor: themeStyles.tertiaryBg}}>
-              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('first_name')}>Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('stage')}>Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('deal_size')}>Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('call_booked')}>Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
-              <th className="px-4 py-2 cursor-pointer transition-colors duration-300" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('closed')}>Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}</th>
+              <th className="px-6 py-4 text-left cursor-pointer transition-colors duration-300 font-semibold" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('first_name')}>
+                Name {sort.field === 'first_name' && (sort.dir === 'asc' ? '▲' : '▼')}
+              </th>
+              <th className="px-4 py-4 text-center cursor-pointer transition-colors duration-300 font-semibold" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('stage')}>
+                Stage {sort.field === 'stage' && (sort.dir === 'asc' ? '▲' : '▼')}
+              </th>
+              <th className="px-4 py-4 text-right cursor-pointer transition-colors duration-300 font-semibold" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('deal_size')}>
+                Deal Size {sort.field === 'deal_size' && (sort.dir === 'asc' ? '▲' : '▼')}
+              </th>
+              <th className="px-4 py-4 text-center cursor-pointer transition-colors duration-300 font-semibold" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('call_booked')}>
+                Call Booked {sort.field === 'call_booked' && (sort.dir === 'asc' ? '▲' : '▼')}
+              </th>
+              <th className="px-4 py-4 text-center cursor-pointer transition-colors duration-300 font-semibold" style={{color: themeStyles.textSecondary}} onClick={() => handleSort('closed')}>
+                Closed {sort.field === 'closed' && (sort.dir === 'asc' ? '▲' : '▼')}
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg" style={{color: themeStyles.textSecondary}}><Loader2 className="animate-spin w-6 h-6 inline" /> Loading CRM leads...</td></tr>
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-lg" style={{color: themeStyles.textSecondary}}>
+                  <div className="flex items-center justify-center gap-3">
+                    <Loader2 className="animate-spin w-6 h-6" />
+                    <span>Loading CRM leads...</span>
+                  </div>
+                </td>
+              </tr>
             ) : filteredLeads.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-lg" style={{color: themeStyles.textSecondary}}>No CRM leads found.</td></tr>
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-lg" style={{color: themeStyles.textSecondary}}>
+                  No CRM leads found.
+                </td>
+              </tr>
             ) : (
               filteredLeads.map(lead => (
                 <tr key={lead.id} className="border-t transition-colors cursor-pointer hover:opacity-80" style={{borderColor: themeStyles.border}} onClick={() => openSidePanel(lead)}>
-                  <td className="px-4 py-2 font-medium flex items-center gap-2" style={{color: themeStyles.textPrimary}}><Mail className="w-4 h-4" style={{color: themeStyles.accent}} /> {lead.first_name} {lead.last_name}</td>
-                  <td className="px-4 py-2"><span className="inline-block px-2 py-1 rounded-full text-xs font-semibold" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}>{lead.stage}</span></td>
-                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>${lead.deal_size?.toLocaleString() || 0}</td>
-                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>{lead.call_booked ? 'Yes' : 'No'}</td>
-                  <td className="px-4 py-2" style={{color: themeStyles.textPrimary}}>{lead.closed ? 'Yes' : 'No'}</td>
+                  <td className="px-6 py-4 font-medium">
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 shrink-0" style={{color: themeStyles.accent}} />
+                      <span style={{color: themeStyles.textPrimary}}>{lead.first_name} {lead.last_name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}>
+                      {lead.stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-right font-medium" style={{color: themeStyles.textPrimary}}>
+                    ${lead.deal_size?.toLocaleString() || 0}
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span 
+                      className="inline-flex items-center justify-center w-12 h-6 rounded-full text-xs font-semibold"
+                      style={{
+                        backgroundColor: lead.call_booked ? `${themeStyles.success}20` : `${themeStyles.textMuted}20`,
+                        color: lead.call_booked ? themeStyles.success : themeStyles.textMuted,
+                        border: `1px solid ${lead.call_booked ? themeStyles.success : themeStyles.textMuted}30`
+                      }}
+                    >
+                      {lead.call_booked ? 'Yes' : 'No'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span 
+                      className="inline-flex items-center justify-center w-12 h-6 rounded-full text-xs font-semibold"
+                      style={{
+                        backgroundColor: lead.closed ? `${themeStyles.success}20` : `${themeStyles.textMuted}20`,
+                        color: lead.closed ? themeStyles.success : themeStyles.textMuted,
+                        border: `1px solid ${lead.closed ? themeStyles.success : themeStyles.textMuted}30`
+                      }}
+                    >
+                      {lead.closed ? 'Yes' : 'No'}
+                    </span>
+                  </td>
                 </tr>
               ))
             )}
