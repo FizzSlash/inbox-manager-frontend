@@ -517,13 +517,20 @@ const InboxManager = ({ user, onSignOut }) => {
       return;
     }
 
+    // Double-check we have both values before proceeding
+    if (!brandId || !user) {
+      console.log('⏸️ Skipping API key load - missing brandId or user');
+      return;
+    }
+
     const loadApiKeys = async () => {
-      // Double-check values exist and capture them to prevent closure issues
+      // Capture values immediately to prevent closure issues
       const currentBrandId = brandId;
       const currentUser = user;
       
+      // Final validation
       if (!currentBrandId || !currentUser) {
-        console.log('⏸️ Skipping API key load - missing brandId or user');
+        console.log('⏸️ Values became null during execution, aborting');
         return;
       }
 
@@ -546,10 +553,15 @@ const InboxManager = ({ user, onSignOut }) => {
       }
     };
     
-    // Load immediately if brandId is available (from cache or database)
-    if (brandId && user) {
+    // Add a small delay to prevent rapid-fire executions during initialization
+    const timeoutId = setTimeout(() => {
       loadApiKeys();
-    }
+    }, 150); // 150ms delay
+    
+    // Cleanup timeout if useEffect re-runs
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [brandId, user]);
 
   // Fetch leads when brandId or API keys are available
