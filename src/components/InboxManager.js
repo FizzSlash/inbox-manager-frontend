@@ -5115,8 +5115,33 @@ const InboxManager = ({ user, onSignOut }) => {
                                 formatText('underline');
                                 break;
                             }
+                          } else if (e.key === 'Backspace') {
+                            // Handle exiting lists when backspacing at the beginning of an empty list item
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentElement = range.startContainer;
+                              
+                              // Find the list item we're in (if any)
+                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                                currentElement = currentElement.parentNode;
+                              }
+                              
+                              // Check if we're at the beginning of an empty list item
+                              if (currentElement && currentElement.tagName === 'LI') {
+                                const isEmpty = currentElement.textContent.trim() === '';
+                                const atStart = range.startOffset === 0;
+                                
+                                if (isEmpty && atStart) {
+                                  e.preventDefault();
+                                  // Use the browser's outdent command to exit the list
+                                  document.execCommand('outdent', false, null);
+                                  // Update content
+                                  handleTextareaChange({ target: e.target });
+                                }
+                              }
+                            }
                           }
-                          // Let the browser handle all other key events naturally
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
                         style={{
