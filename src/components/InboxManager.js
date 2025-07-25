@@ -144,11 +144,19 @@ const InboxManager = ({ user, onSignOut }) => {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState(() => {
     // Initial load from localStorage for immediate availability
+    const legacyProvider = localStorage.getItem('esp_provider') || '';
+    const legacyKey = decryptApiKey(localStorage.getItem('esp_api_key_enc') || '');
+    
     return {
-      esp: {
-        provider: localStorage.getItem('esp_provider') || '',
-        key: decryptApiKey(localStorage.getItem('esp_api_key_enc') || '')
-      },
+      accounts: legacyProvider || legacyKey ? [{
+        id: 'legacy-account',
+        name: 'Primary Account',
+        esp: {
+          provider: legacyProvider,
+          key: legacyKey
+        },
+        is_primary: true
+      }] : [],
       fullenrich: decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '')
     };
   });
@@ -1080,9 +1088,16 @@ const InboxManager = ({ user, onSignOut }) => {
         },
         body: JSON.stringify({
           ...lead,
-          smartlead_api_key: apiKeys.smartlead,
-          claude_api_key: apiKeys.claude,
-          fullenrich_api_key: apiKeys.fullenrich
+          ...((() => {
+            const leadApiKey = getApiKeyForLead(lead, apiKeys);
+            return {
+              esp_provider: leadApiKey?.esp.provider || '',
+              esp_api_key: leadApiKey?.esp.key || '',
+              account_name: leadApiKey?.name || '',
+              account_id: leadApiKey?.id || '',
+              fullenrich_api_key: apiKeys.fullenrich
+            };
+          })())
         })
       });
 
@@ -2527,9 +2542,17 @@ const InboxManager = ({ user, onSignOut }) => {
           // Add recipient info
           cc_recipients: ccEmails.map(cc => cc.address)
         },
-        smartlead_api_key: apiKeys.smartlead,
-        claude_api_key: apiKeys.claude,
-        fullenrich_api_key: apiKeys.fullenrich
+        // Get the correct API key for this lead
+        ...((() => {
+          const leadApiKey = getApiKeyForLead(selectedLead, apiKeys);
+          return {
+            esp_provider: leadApiKey?.esp.provider || '',
+            esp_api_key: leadApiKey?.esp.key || '',
+            account_name: leadApiKey?.name || '',
+            account_id: leadApiKey?.id || '',
+            fullenrich_api_key: apiKeys.fullenrich
+          };
+        })())
       };
 
       console.log('Sending message with rich formatting:', {
@@ -2599,9 +2622,16 @@ const InboxManager = ({ user, onSignOut }) => {
         },
         body: JSON.stringify({
           ...lead,
-          smartlead_api_key: apiKeys.smartlead,
-          claude_api_key: apiKeys.claude,
-          fullenrich_api_key: apiKeys.fullenrich
+          ...((() => {
+            const leadApiKey = getApiKeyForLead(lead, apiKeys);
+            return {
+              esp_provider: leadApiKey?.esp.provider || '',
+              esp_api_key: leadApiKey?.esp.key || '',
+              account_name: leadApiKey?.name || '',
+              account_id: leadApiKey?.id || '',
+              fullenrich_api_key: apiKeys.fullenrich
+            };
+          })())
         })
       });
 
@@ -2745,22 +2775,16 @@ const InboxManager = ({ user, onSignOut }) => {
     );
   }
 
-  // Function to handle API key updates
+  // Function to handle API key updates (updated for multiple accounts)
   const handleApiKeyChange = (key, value) => {
-    setApiKeys(prev => {
-      if (key === 'esp') {
-        // For ESP, we need to handle both provider and key
-        return {
-          ...prev,
-          esp: value
-        };
-      }
-      // For other keys, direct update
-      return {
+    if (key === 'fullenrich') {
+      // For fullenrich, direct update (shared across all accounts)
+      setApiKeys(prev => ({
         ...prev,
-        [key]: value
-      };
-    });
+        fullenrich: value
+      }));
+    }
+    // For account-specific changes, use updateAccount function
   };
 
   // Function to load API keys from Supabase
@@ -2771,20 +2795,31 @@ const InboxManager = ({ user, onSignOut }) => {
         .select('*')
         .eq('brand_id', brandId)
         .eq('is_active', true)
-        .single();
+        .order('is_primary', { ascending: false }); // Primary accounts first
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      if (error) {
         throw error;
       }
 
-      if (data) {
+      if (data && data.length > 0) {
+        // Convert database records to accounts structure
+        const accounts = data.map(record => ({
+          id: record.account_id,
+          name: record.account_name || 'Account',
+          esp: {
+            provider: record.esp_provider || '',
+            key: decryptApiKey(record.esp_api_key || '')
+          },
+          is_primary: record.is_primary || false
+        }));
+
+        // Use the first record for fullenrich (shared across all accounts)
+        const fullenrichKey = decryptApiKey(data[0].fullenrich_api_key || '');
+
         // Update API keys state with data from Supabase
         setApiKeys({
-          esp: {
-            provider: data.esp_provider || '',
-            key: decryptApiKey(data.esp_api_key || '')
-          },
-          fullenrich: decryptApiKey(data.fullenrich_api_key || '')
+          accounts: accounts,
+          fullenrich: fullenrichKey
         });
         return true; // Successfully loaded from Supabase
       }
@@ -2798,37 +2833,33 @@ const InboxManager = ({ user, onSignOut }) => {
   // Function to save API keys to Supabase
   const saveApiKeysToSupabase = async (brandId, apiKeysData) => {
     try {
-      const apiSettingsData = {
+      // Delete existing records for this brand first
+      const { error: deleteError } = await supabase
+        .from('api_settings')
+        .delete()
+        .eq('brand_id', brandId);
+      
+      if (deleteError) throw deleteError;
+
+      // Insert all accounts
+      const accountRecords = apiKeysData.accounts.map(account => ({
         brand_id: brandId,
         created_by: user.id,
-        esp_provider: apiKeysData.esp.provider || null,
-        esp_api_key: encryptApiKey(apiKeysData.esp.key || '') || null,
+        account_id: account.id,
+        account_name: account.name,
+        esp_provider: account.esp.provider || null,
+        esp_api_key: encryptApiKey(account.esp.key || '') || null,
         fullenrich_api_key: encryptApiKey(apiKeysData.fullenrich || '') || null,
+        is_primary: account.is_primary || false,
         updated_at: new Date().toISOString()
-      };
+      }));
 
-      // Try to update existing record first
-      const { data: existing } = await supabase
-        .from('api_settings')
-        .select('id')
-        .eq('brand_id', brandId)
-        .single();
-
-      if (existing) {
-        // Update existing record
-        const { error } = await supabase
+      if (accountRecords.length > 0) {
+        const { error: insertError } = await supabase
           .from('api_settings')
-          .update(apiSettingsData)
-          .eq('brand_id', brandId);
+          .insert(accountRecords);
         
-        if (error) throw error;
-      } else {
-        // Insert new record
-        const { error } = await supabase
-          .from('api_settings')
-          .insert([apiSettingsData]);
-        
-        if (error) throw error;
+        if (insertError) throw insertError;
       }
       
       return true; // Successfully saved to Supabase
@@ -2836,6 +2867,78 @@ const InboxManager = ({ user, onSignOut }) => {
       console.error('Error saving API keys to Supabase:', error);
       return false; // Failed to save to Supabase
     }
+  };
+
+  // Function to add a new email account
+  const addEmailAccount = () => {
+    const newAccount = {
+      id: crypto.randomUUID(),
+      name: `Account ${apiKeys.accounts.length + 1}`,
+      esp: {
+        provider: '',
+        key: ''
+      },
+      is_primary: apiKeys.accounts.length === 0 // First account is primary
+    };
+
+    setApiKeys(prev => ({
+      ...prev,
+      accounts: [...prev.accounts, newAccount]
+    }));
+  };
+
+  // Function to remove an email account
+  const removeEmailAccount = (accountId) => {
+    setApiKeys(prev => {
+      const updatedAccounts = prev.accounts.filter(acc => acc.id !== accountId);
+      
+      // If we removed the primary account, make the first remaining account primary
+      if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
+        updatedAccounts[0].is_primary = true;
+      }
+      
+      return {
+        ...prev,
+        accounts: updatedAccounts
+      };
+    });
+  };
+
+  // Function to update an account
+  const updateAccount = (accountId, updates) => {
+    setApiKeys(prev => ({
+      ...prev,
+      accounts: prev.accounts.map(acc => 
+        acc.id === accountId ? { ...acc, ...updates } : acc
+      )
+    }));
+  };
+
+  // Function to set primary account
+  const setPrimaryAccount = (accountId) => {
+    setApiKeys(prev => ({
+      ...prev,
+      accounts: prev.accounts.map(acc => ({
+        ...acc,
+        is_primary: acc.id === accountId
+      }))
+    }));
+  };
+
+  // Function to get the correct API key for a lead
+  const getApiKeyForLead = (lead, apiKeysData) => {
+    // Option 1: Use email_account_id if exists
+    if (lead.email_account_id) {
+      const account = apiKeysData.accounts.find(acc => acc.id === lead.email_account_id);
+      if (account) return account;
+    }
+    
+    // Option 2: Use primary account as fallback
+    const primaryAccount = apiKeysData.accounts.find(acc => acc.is_primary);
+    if (primaryAccount) return primaryAccount;
+    
+    // Option 3: Use first account if no primary
+    return apiKeysData.accounts[0] || null;
   };
 
   // Function to save API keys (with encryption)
@@ -2850,10 +2953,11 @@ const InboxManager = ({ user, onSignOut }) => {
       }
       
       // Also save to localStorage as backup (for offline access)
-      // Save ESP settings
-      if (apiKeys.esp.provider) {
-        localStorage.setItem('esp_provider', apiKeys.esp.provider);
-        const encryptedEspKey = encryptApiKey(apiKeys.esp.key);
+      // Save primary account ESP settings for backward compatibility
+      const primaryAccount = apiKeys.accounts.find(acc => acc.is_primary) || apiKeys.accounts[0];
+      if (primaryAccount) {
+        localStorage.setItem('esp_provider', primaryAccount.esp.provider);
+        const encryptedEspKey = encryptApiKey(primaryAccount.esp.key);
         localStorage.setItem('esp_api_key_enc', encryptedEspKey);
       }
 
@@ -2915,9 +3019,16 @@ const InboxManager = ({ user, onSignOut }) => {
         },
         body: JSON.stringify({
           ...lead,
-          smartlead_api_key: apiKeys.smartlead,
-          claude_api_key: apiKeys.claude,
-          fullenrich_api_key: apiKeys.fullenrich
+          ...((() => {
+            const leadApiKey = getApiKeyForLead(lead, apiKeys);
+            return {
+              esp_provider: leadApiKey?.esp.provider || '',
+              esp_api_key: leadApiKey?.esp.key || '',
+              account_name: leadApiKey?.name || '',
+              account_id: leadApiKey?.id || '',
+              fullenrich_api_key: apiKeys.fullenrich
+            };
+          })())
         })
       });
 
@@ -3364,51 +3475,108 @@ const InboxManager = ({ user, onSignOut }) => {
                 <p className="text-xs text-[#00FF8C]/80 mt-1">API keys are encrypted before storage for enhanced security</p>
               </div>
 
-              {/* Email Service Provider Section */}
+              {/* Multiple Email Accounts Section */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <h3 className="font-medium text-[#54FCFF]">Email Service Provider</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4" style={{color: '#54FCFF'}} />
+                    <h3 className="font-medium text-[#54FCFF]">Email Accounts</h3>
+                  </div>
+                  <button
+                    onClick={addEmailAccount}
+                    className="px-3 py-1 rounded-lg text-sm font-medium transition-all bg-[#54FCFF] text-black hover:opacity-80 flex items-center gap-2"
+                  >
+                    <span className="text-lg">+</span> Add Account
+                  </button>
                 </div>
 
-                {/* ESP Selection */}
-                <div className="grid grid-cols-3 gap-3">
-                  {['Email Bison', 'Smartlead', 'Instantly'].map(provider => (
-                    <button
-                      key={provider}
-                      onClick={() => handleApiKeyChange('esp', { ...apiKeys.esp, provider: provider.toLowerCase() })}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all text-white ${
-                        apiKeys.esp.provider === provider.toLowerCase() 
-                          ? 'bg-[#54FCFF]/10 border-[#54FCFF] text-[#54FCFF]' 
-                          : 'bg-[#1A1C1A] border-white/10 hover:bg-[#1A1C1A]/80'
-                      }`}
-                      style={{border: '1px solid'}}
-                    >
-                      {provider}
-                    </button>
-                  ))}
-                </div>
+                {/* Email Accounts List */}
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {apiKeys.accounts.map((account, index) => (
+                    <div key={account.id} className="p-4 rounded-lg border border-white/10 bg-[#2A2C2A]">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={account.name}
+                            onChange={(e) => updateAccount(account.id, { name: e.target.value })}
+                            className="bg-transparent text-white font-medium border-none outline-none text-sm"
+                            placeholder="Account Name"
+                          />
+                          {account.is_primary && (
+                            <span className="px-2 py-1 text-xs rounded-full bg-[#54FCFF] text-black font-medium">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!account.is_primary && (
+                            <button
+                              onClick={() => setPrimaryAccount(account.id)}
+                              className="px-2 py-1 text-xs rounded-lg border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-all"
+                            >
+                              Set Primary
+                            </button>
+                          )}
+                          {apiKeys.accounts.length > 1 && (
+                            <button
+                              onClick={() => removeEmailAccount(account.id)}
+                              className="px-2 py-1 text-xs rounded-lg border border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 transition-all"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
-                {/* ESP API Key Input */}
-                {apiKeys.esp.provider && (
-                  <div className="space-y-2">
-                    <label className="text-sm text-white/60">
-                      {apiKeys.esp.provider.charAt(0).toUpperCase() + apiKeys.esp.provider.slice(1)} API Key
-                    </label>
-                    <div className="relative">
-                                          <input
-                      type="password"
-                      value={apiKeys.esp.key}
-                      onChange={(e) => handleApiKeyChange('esp', { ...apiKeys.esp, key: e.target.value })}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all"
-                      placeholder={`Enter ${apiKeys.esp.provider} API key`}
-                    />
-                      {apiTestStatus.esp === true && (
-                        <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                      {/* ESP Provider Selection */}
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        {['Email Bison', 'Smartlead', 'Instantly'].map(provider => (
+                          <button
+                            key={provider}
+                            onClick={() => updateAccount(account.id, { 
+                              esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
+                            })}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                              account.esp.provider === provider.toLowerCase().replace(' ', '_')
+                                ? 'bg-[#54FCFF]/10 border-[#54FCFF] text-[#54FCFF]' 
+                                : 'bg-[#1A1C1A] border-white/10 text-white hover:bg-[#1A1C1A]/80'
+                            }`}
+                            style={{border: '1px solid'}}
+                          >
+                            {provider}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* ESP API Key Input */}
+                      {account.esp.provider && (
+                        <div className="space-y-2">
+                          <label className="text-xs text-white/60">
+                            {account.esp.provider.charAt(0).toUpperCase() + account.esp.provider.slice(1).replace('_', ' ')} API Key
+                          </label>
+                          <input
+                            type="password"
+                            value={account.esp.key}
+                            onChange={(e) => updateAccount(account.id, { 
+                              esp: { ...account.esp, key: e.target.value }
+                            })}
+                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all text-sm"
+                            placeholder={`Enter ${account.esp.provider.replace('_', ' ')} API key`}
+                          />
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  ))}
+                  
+                  {apiKeys.accounts.length === 0 && (
+                    <div className="text-center py-8 text-white/40">
+                      <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No email accounts configured</p>
+                      <p className="text-xs mt-1">Click "Add Account" to get started</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Data Enrichment Section */}
