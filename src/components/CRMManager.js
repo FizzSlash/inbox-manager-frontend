@@ -36,13 +36,13 @@ const getThemeStyles = (isDarkMode) => {
 };
 
 const STAGE_OPTIONS = [
-  { value: 'Lead', label: 'Lead', color: '#9CA3AF', icon: '👤' },
-  { value: 'Contacted', label: 'Contacted', color: '#3B82F6', icon: '📞' },
-  { value: 'Qualified', label: 'Qualified', color: '#8B5CF6', icon: '✅' },
-  { value: 'Proposal Sent', label: 'Proposal Sent', color: '#F59E0B', icon: '📋' },
-  { value: 'Closed Won', label: 'Closed Won', color: '#10B981', icon: '🎉' },
-  { value: 'Closed Lost', label: 'Closed Lost', color: '#EF4444', icon: '❌' },
-  { value: 'Nurture', label: 'Nurture', color: '#06B6D4', icon: '🌱' }
+  { value: 'Lead', label: 'Lead', color: '#9CA3AF' },
+  { value: 'Contacted', label: 'Contacted', color: '#3B82F6' },
+  { value: 'Qualified', label: 'Qualified', color: '#8B5CF6' },
+  { value: 'Proposal Sent', label: 'Proposal Sent', color: '#F59E0B' },
+  { value: 'Closed Won', label: 'Closed Won', color: '#10B981' },
+  { value: 'Closed Lost', label: 'Closed Lost', color: '#EF4444' },
+  { value: 'Nurture', label: 'Nurture', color: '#06B6D4' }
 ];
 
 const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
@@ -345,14 +345,13 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                       const stageOption = STAGE_OPTIONS.find(opt => opt.value === lead.stage);
                       return (
                         <span 
-                          className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold"
+                          className="inline-block px-3 py-1 rounded-full text-xs font-semibold"
                           style={{
                             backgroundColor: `${stageOption?.color || themeStyles.accent}20`, 
                             color: stageOption?.color || themeStyles.accent, 
                             border: `1px solid ${stageOption?.color || themeStyles.accent}30`
                           }}
                         >
-                          <span className="text-sm">{stageOption?.icon}</span>
                           {lead.stage}
                         </span>
                       );
@@ -516,10 +515,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                           className="w-full rounded-xl px-4 py-3 text-xl font-semibold transition-colors duration-300 flex items-center justify-between"
                           style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}}
                         >
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">{STAGE_OPTIONS.find(opt => opt.value === editFields.stage)?.icon}</span>
-                            <span>{STAGE_OPTIONS.find(opt => opt.value === editFields.stage)?.label}</span>
-                          </div>
+                          <span>{STAGE_OPTIONS.find(opt => opt.value === editFields.stage)?.label}</span>
                           <ChevronDown className={`w-6 h-6 transition-transform duration-200 ${stageDropdownOpen ? 'rotate-180' : ''}`} style={{color: themeStyles.textMuted}} />
                         </button>
                         
@@ -536,13 +532,12 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                                   handleFieldChange('stage', option.value);
                                   setStageDropdownOpen(false);
                                 }}
-                                className="w-full px-4 py-4 text-left transition-all duration-200 flex items-center gap-3 hover:opacity-80"
+                                className="w-full px-4 py-4 text-left transition-all duration-200 flex items-center justify-between hover:opacity-80"
                                 style={{
                                   backgroundColor: editFields.stage === option.value ? `${option.color}20` : 'transparent',
                                   borderBottom: `1px solid ${themeStyles.border}`
                                 }}
                               >
-                                <span className="text-2xl">{option.icon}</span>
                                 <span 
                                   className="font-semibold text-lg"
                                   style={{color: option.color}}
