@@ -283,6 +283,40 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
     }
   };
 
+  // Clone template (create duplicate)
+  const cloneTemplate = async (template) => {
+    if (!template || !brandId) return;
+
+    setSaving(true);
+    try {
+      const clonedTemplateData = {
+        brand_id: brandId,
+        name: `${template.name} (Copy)`,
+        description: template.description ? `${template.description} (Cloned)` : 'Cloned template',
+        content: template.content,
+        html_content: template.html_content || null,
+        created_by: user.id,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('email_templates')
+        .insert([clonedTemplateData]);
+        
+      if (error) throw error;
+
+      // Refresh templates list
+      await fetchTemplates();
+      
+      console.log('Template cloned successfully');
+    } catch (err) {
+      console.error('Error cloning template:', err);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Show preview
   const showTemplatePreview = (template) => {
     setPreviewTemplate(template);
@@ -417,7 +451,10 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                   if (onTemplateSelect) {
                     onTemplateSelect(template);
                   }
-                } : undefined}
+                } : () => {
+                  // In normal mode, clicking the card opens edit mode
+                  openEditTemplate(template);
+                }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-semibold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
@@ -455,11 +492,12 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyTemplate(template);
+                            cloneTemplate(template);
                           }}
                           className="p-1 rounded hover:opacity-80 transition-colors"
-                          style={{color: themeStyles.accent}}
-                          title="Copy"
+                          style={{color: themeStyles.success}}
+                          title="Clone Template"
+                          disabled={saving}
                         >
                           <Copy className="w-4 h-4" />
                         </button>
@@ -470,7 +508,7 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                           }}
                           className="p-1 rounded hover:opacity-80 transition-colors"
                           style={{color: themeStyles.warning}}
-                          title="Edit"
+                          title="Edit Template (or click anywhere on card)"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
