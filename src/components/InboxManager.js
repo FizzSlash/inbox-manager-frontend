@@ -108,6 +108,10 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add state for file attachments
   const [attachedFiles, setAttachedFiles] = useState([]);
 
+  // Add state for message scheduling
+  const [scheduledTime, setScheduledTime] = useState(null);
+  const [showScheduler, setShowScheduler] = useState(false);
+
   // Add ref for recent dropdown positioning
   const recentButtonRef = useRef(null);
 
@@ -188,11 +192,20 @@ const InboxManager = ({ user, onSignOut }) => {
           setDropdownPositions({});
         }
       }
+      
+      // Close scheduler if clicking outside
+      if (showScheduler) {
+        const isClickOnScheduler = event.target.closest('.scheduler-container');
+        
+        if (!isClickOnScheduler) {
+          setShowScheduler(false);
+        }
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showRecentDropdown, categoryDropdowns]);
+  }, [showRecentDropdown, categoryDropdowns, showScheduler]);
 
   // Auto-save drafts with debouncing
   const draftTimeoutRef = useRef(null);
@@ -749,8 +762,10 @@ const InboxManager = ({ user, onSignOut }) => {
                      setSelectedLead(lead);
                      setShowRecentDropdown(false);
                      setActiveTab('all'); // Switch to inbox to show the selected lead
-                     // Clear attachments when switching leads
+                     // Clear attachments and scheduling when switching leads
                      setAttachedFiles([]);
+                     setScheduledTime(null);
+                     setShowScheduler(false);
                    }
                   onClose();
                 }}
@@ -2365,6 +2380,11 @@ const InboxManager = ({ user, onSignOut }) => {
           attachments: attachments
         },
         
+        // Add scheduled time if set (in ISO format for API)
+        ...(scheduledTime && {
+          reply_email_time: scheduledTime.toISOString()
+        }),
+        
         // Lead data
         lead: {
           id: selectedLead.id,
@@ -2431,6 +2451,10 @@ const InboxManager = ({ user, onSignOut }) => {
       
       // Clear attachments
       setAttachedFiles([]);
+      
+      // Clear scheduling
+      setScheduledTime(null);
+      setShowScheduler(false);
       
       // Optionally refresh leads to get updated data
       await fetchLeads();
@@ -4319,8 +4343,10 @@ const InboxManager = ({ user, onSignOut }) => {
                 key={lead.id}
                 onClick={() => {
                   setSelectedLead(lead);
-                  // Clear attachments when switching leads
+                  // Clear attachments and scheduling when switching leads
                   setAttachedFiles([]);
+                  setScheduledTime(null);
+                  setShowScheduler(false);
                 }}
                 className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
@@ -5265,16 +5291,88 @@ Keyboard shortcuts:
                       )}
                     </div>
 
-                    <div className="flex justify-end">
-                      <button
-                        onClick={sendMessage}
-                        disabled={!draftResponse.trim() || isSending}
-                        className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
-                        style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
-                      >
-                        <Send className="w-4 h-4" />
-                        {isSending ? 'Sending...' : 'Send Message'}
-                      </button>
+                    <div className="flex items-center justify-between">
+                      {/* Schedule Button */}
+                      <div className="relative scheduler-container">
+                        <button
+                          onClick={() => setShowScheduler(!showScheduler)}
+                          className="px-4 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300"
+                          style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
+                        >
+                          <Clock className="w-4 h-4" />
+                          {scheduledTime ? 'Scheduled' : 'Schedule'}
+                        </button>
+                        
+                        {/* Schedule Picker */}
+                        {showScheduler && (
+                          <div className="absolute left-0 bottom-full mb-2 p-4 rounded-lg shadow-lg z-50 min-w-[300px] transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                            <h4 className="font-medium mb-3 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Schedule Message</h4>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-xs block mb-1 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Send Date & Time:</label>
+                                <input
+                                  type="datetime-local"
+                                  value={scheduledTime ? new Date(scheduledTime.getTime() - scheduledTime.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      setScheduledTime(new Date(e.target.value));
+                                    } else {
+                                      setScheduledTime(null);
+                                    }
+                                  }}
+                                  min={new Date().toISOString().slice(0, 16)}
+                                  className="w-full px-3 py-2 rounded-lg text-sm focus:ring-2 transition-colors duration-300"
+                                  style={{
+                                    backgroundColor: themeStyles.tertiaryBg, 
+                                    border: `1px solid ${themeStyles.border}`, 
+                                    color: themeStyles.textPrimary,
+                                    '--tw-ring-color': themeStyles.accent
+                                  }}
+                                />
+                              </div>
+                              
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setScheduledTime(null);
+                                    setShowScheduler(false);
+                                  }}
+                                  className="flex-1 px-3 py-2 rounded-lg text-sm hover:opacity-80 transition-all duration-300"
+                                  style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted, border: `1px solid ${themeStyles.border}`}}
+                                >
+                                  Clear
+                                </button>
+                                <button
+                                  onClick={() => setShowScheduler(false)}
+                                  className="flex-1 px-3 py-2 rounded-lg text-sm hover:opacity-80 transition-all duration-300"
+                                  style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                                >
+                                  Done
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Send Button */}
+                      <div className="flex items-center gap-2">
+                        {scheduledTime && (
+                          <span className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            Scheduled for {scheduledTime.toLocaleString()}
+                          </span>
+                        )}
+                        <button
+                          onClick={sendMessage}
+                          disabled={!draftResponse.trim() || isSending}
+                          className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
+                        >
+                          <Send className="w-4 h-4" />
+                          {isSending ? 'Sending...' : scheduledTime ? 'Schedule Message' : 'Send Message'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
