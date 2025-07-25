@@ -367,7 +367,15 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </div>
       {/* Side Panel for Lead Details */}
       {sidePanelOpen && selectedLead && (
-        <div className="fixed inset-0 bg-transparent flex items-center justify-end z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50"
+          onClick={(e) => {
+            // Close panel if clicking on overlay (not on the panel itself)
+            if (e.target === e.currentTarget) {
+              closeSidePanel();
+            }
+          }}
+        >
           <div
             className="w-full max-w-2xl h-full flex flex-col relative overflow-y-auto"
             style={{
