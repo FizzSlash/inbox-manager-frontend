@@ -549,18 +549,10 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   }, [brandId, apiKeys.accounts?.length]); // Only depend on accounts length, not entire apiKeys object
 
-  const fetchLeads = async () => {
+    const fetchLeads = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // For new users with no API keys, show empty state but don't return early
-      if (!apiKeys.accounts || apiKeys.accounts.length === 0) {
-        console.log('📝 No API keys configured - showing empty state for new user');
-        setLeads([]);
-        setLoading(false);
-        return;
-      }
       
       // Fetch all leads first
       const { data, error } = await supabase
@@ -568,20 +560,35 @@ const InboxManager = ({ user, onSignOut }) => {
         .select('*');
       if (error) throw error;
 
-      // Get current user's API keys for filtering
-      const userApiKeys = apiKeys.accounts.map(account => 
-        decryptApiKey(account.esp.key) || account.esp.key
-      ).filter(key => key && key.trim() !== '');
+      let filteredData = [];
 
-      // Filter leads to only those matching user's API keys
-      const filteredData = (data || []).filter(lead => {
-        // For backward compatibility: if no source_api_key, fall back to brand_id matching
-        if (!lead.source_api_key && brandId) {
-          return lead.brand_id === brandId;
-        }
-        // New approach: match by API key
-        return lead.source_api_key && userApiKeys.includes(lead.source_api_key);
-             });
+      // If API keys are configured, use API key filtering
+      if (apiKeys.accounts && apiKeys.accounts.length > 0) {
+        console.log('🔑 Filtering leads by API keys');
+        
+        // Get current user's API keys for filtering
+        const userApiKeys = apiKeys.accounts.map(account => 
+          decryptApiKey(account.esp.key) || account.esp.key
+        ).filter(key => key && key.trim() !== '');
+
+        // Filter leads to only those matching user's API keys
+        filteredData = (data || []).filter(lead => {
+          // For backward compatibility: if no source_api_key, fall back to brand_id matching
+          if (!lead.source_api_key && brandId) {
+            return lead.brand_id === brandId;
+          }
+          // New approach: match by API key
+          return lead.source_api_key && userApiKeys.includes(lead.source_api_key);
+        });
+      } else if (brandId) {
+        // Fallback: If no API keys configured, filter by brand ID only
+        console.log('🏢 No API keys found - filtering leads by brand ID');
+        filteredData = (data || []).filter(lead => lead.brand_id === brandId);
+      } else {
+        // No API keys and no brand ID - show empty
+        console.log('❌ No API keys or brand ID - showing empty state');
+        filteredData = [];
+      }
       // Transform the filtered data to match the expected format
       const transformedLeads = filteredData.map(lead => {
         // ... your existing transformation code ...
