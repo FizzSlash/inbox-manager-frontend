@@ -105,6 +105,9 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add state for template selection
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
+  // Add state for file attachments
+  const [attachedFiles, setAttachedFiles] = useState([]);
+
   // Add ref for recent dropdown positioning
   const recentButtonRef = useRef(null);
 
@@ -2062,85 +2065,63 @@ const InboxManager = ({ user, onSignOut }) => {
       const selectedText = selection.toString().trim();
       
       if (selectedText) {
-        // Convert selected text into a formatted list
-        const lines = selectedText.split('\n');
-        const listContainer = document.createElement('div');
-        listContainer.style.cssText = `
-          margin: 8px 0;
-          padding-left: 8px;
-        `;
-        
-        lines
+        // Convert selected text into a standard HTML list
+        const lines = selectedText
+          .split('\n')
           .map(line => line.trim())
-          .filter(line => line.length > 0)
-          .forEach(line => {
-            const listItem = document.createElement('div');
-            listItem.style.cssText = `
-              position: relative;
-              padding-left: 20px;
-              margin: 4px 0;
+          .filter(line => line.length > 0);
+        
+        if (lines.length > 0) {
+          const ul = document.createElement('ul');
+          ul.style.cssText = `
+            margin: 8px 0;
+            padding-left: 20px;
+            list-style-type: disc;
+          `;
+          
+          lines.forEach(line => {
+            const li = document.createElement('li');
+            li.style.cssText = `
+              margin: 2px 0;
               line-height: 1.5;
             `;
-            
-            // Create bullet point
-            const bullet = document.createElement('span');
-            bullet.textContent = '•';
-            bullet.style.cssText = `
-              position: absolute;
-              left: 4px;
-              font-size: 1.2em;
-              line-height: 1;
-              top: 50%;
-              transform: translateY(-50%);
-            `;
-            
-            // Create text content without explicit color
-            const textContent = document.createElement('span');
-            textContent.textContent = line;
-            
-            listItem.appendChild(bullet);
-            listItem.appendChild(textContent);
-            listContainer.appendChild(listItem);
+            li.textContent = line;
+            ul.appendChild(li);
           });
-        
-        // Insert the formatted list
-      range.deleteContents();
-        range.insertNode(listContainer);
+          
+          range.deleteContents();
+          range.insertNode(ul);
+          
+          // Move cursor after the list
+          const newRange = document.createRange();
+          newRange.setStartAfter(ul);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
       } else {
-        // Insert a single formatted bullet point
-        const listItem = document.createElement('div');
-        listItem.style.cssText = `
-          position: relative;
+        // Insert a new list with one empty item
+        const ul = document.createElement('ul');
+        ul.style.cssText = `
+          margin: 8px 0;
           padding-left: 20px;
-          margin: 4px 0;
+          list-style-type: disc;
+        `;
+        
+        const li = document.createElement('li');
+        li.style.cssText = `
+          margin: 2px 0;
           line-height: 1.5;
         `;
+        li.innerHTML = '<br>'; // Make it editable
+        ul.appendChild(li);
         
-        // Create bullet point
-        const bullet = document.createElement('span');
-        bullet.textContent = '•';
-        bullet.style.cssText = `
-          position: absolute;
-          left: 4px;
-          font-size: 1.2em;
-          line-height: 1;
-          top: 50%;
-          transform: translateY(-50%);
-        `;
-        
-        // Create editable content area without explicit color
-        const textContent = document.createElement('span');
-        
-        listItem.appendChild(bullet);
-        listItem.appendChild(textContent);
-        
-        // Insert at cursor position
         range.deleteContents();
-        range.insertNode(listItem);
+        range.insertNode(ul);
         
-        // Move cursor to text content
+        // Move cursor into the list item
         const newRange = document.createRange();
-        newRange.setStart(textContent, 0);
+        newRange.setStart(li, 0);
         newRange.collapse(true);
         selection.removeAllRanges();
         selection.addRange(newRange);
@@ -2179,6 +2160,36 @@ const InboxManager = ({ user, onSignOut }) => {
 
   const convertToHtml = (text) => {
     return text.replace(/\n/g, '<br>');
+  };
+
+  // Handle file attachment selection
+  const handleFileAttachment = (event) => {
+    const files = Array.from(event.target.files);
+    const newAttachments = files.map(file => ({
+      id: Date.now() + Math.random(), // Unique ID
+      file: file,
+      name: file.name,
+      size: file.size,
+      type: file.type
+    }));
+    
+    setAttachedFiles(prev => [...prev, ...newAttachments]);
+    // Clear the input so the same file can be selected again if needed
+    event.target.value = '';
+  };
+
+  // Remove file attachment
+  const removeAttachment = (attachmentId) => {
+    setAttachedFiles(prev => prev.filter(file => file.id !== attachmentId));
+  };
+
+  // Format file size for display
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
   const formatResponseTime = (hours) => {
     if (hours < 1) return `${Math.round(hours * 60)}m`;
@@ -2385,23 +2396,22 @@ const InboxManager = ({ user, onSignOut }) => {
         .filter(email => email.length > 0)
         .map(email => ({ name: '', address: email }));
 
-      // Get file attachments
-      const attachmentInput = document.getElementById('attachment-input');
+      // Get file attachments from state
       const attachments = [];
-      if (attachmentInput && attachmentInput.files.length > 0) {
-        for (let file of attachmentInput.files) {
+      if (attachedFiles.length > 0) {
+        for (let attachment of attachedFiles) {
           // Convert file to base64 for sending
           const base64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(attachment.file);
           });
           
           attachments.push({
-            filename: file.name,
+            filename: attachment.name,
             content: base64,
             encoding: 'base64',
-            contentType: file.type
+            contentType: attachment.type
           });
         }
       }
@@ -2483,10 +2493,8 @@ const InboxManager = ({ user, onSignOut }) => {
         editor.innerHTML = '';
       }
       
-      // Clear file input
-      if (attachmentInput) {
-        attachmentInput.value = '';
-      }
+      // Clear attachments
+      setAttachedFiles([]);
       
       // Optionally refresh leads to get updated data
       await fetchLeads();
@@ -5052,6 +5060,7 @@ const InboxManager = ({ user, onSignOut }) => {
                           accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
                           className="hidden"
                           id="attachment-input"
+                          onChange={handleFileAttachment}
                         />
                         <label
                           htmlFor="attachment-input"
@@ -5062,6 +5071,54 @@ const InboxManager = ({ user, onSignOut }) => {
                           📎 Attach
                         </label>
                       </div>
+
+                      {/* Attached Files Display */}
+                      {attachedFiles.length > 0 && (
+                        <div className="p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                          <h4 className="text-sm font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                            Attached Files ({attachedFiles.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {attachedFiles.map((attachment) => (
+                              <div
+                                key={attachment.id}
+                                className="flex items-center justify-between p-2 rounded-lg transition-colors duration-300"
+                                style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <div className="flex-shrink-0">
+                                    {attachment.type.startsWith('image/') ? (
+                                      <span className="text-lg">🖼️</span>
+                                    ) : attachment.type.includes('pdf') ? (
+                                      <span className="text-lg">📄</span>
+                                    ) : attachment.type.includes('doc') ? (
+                                      <span className="text-lg">📝</span>
+                                    ) : (
+                                      <span className="text-lg">📎</span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                      {attachment.name}
+                                    </p>
+                                    <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                                      {formatFileSize(attachment.size)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => removeAttachment(attachment.id)}
+                                  className="flex-shrink-0 p-1 rounded-lg hover:opacity-80 transition-all duration-300"
+                                  style={{color: themeStyles.error}}
+                                  title="Remove attachment"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Rich Text Editor */}
                       <div
@@ -5085,77 +5142,53 @@ const InboxManager = ({ user, onSignOut }) => {
                                 formatText('underline');
                                 break;
                             }
-                                } else if (e.key === 'Enter') {
-                                  const selection = window.getSelection();
-                                  if (selection.rangeCount > 0) {
-                                    const range = selection.getRangeAt(0);
-                                    let currentListItem = range.startContainer;
-                                    
-                                    // Navigate up to find the list item div
-                                    while (currentListItem && (!currentListItem.style || currentListItem.style.position !== 'relative')) {
-                                      currentListItem = currentListItem.parentNode;
-                                    }
-                                    
-                                    // If we're in a list item
-                                    if (currentListItem && currentListItem.style && currentListItem.style.position === 'relative') {
-                                      e.preventDefault();
-                                      
-                                      // Check if current list item is empty (except for bullet)
-                                      const textContent = currentListItem.textContent.replace('•', '').trim();
-                                      
-                                      if (textContent === '') {
-                                        // Exit list if empty
-                                        const newLine = document.createElement('div');
-                                        newLine.innerHTML = '<br>';
-                                        currentListItem.parentNode.replaceChild(newLine, currentListItem);
-                                        
-                                        // Place cursor in new line
-                                        const newRange = document.createRange();
-                                        newRange.setStart(newLine, 0);
-                                        newRange.collapse(true);
-                                        selection.removeAllRanges();
-                                        selection.addRange(newRange);
-                                      } else {
-                                        // Create new bullet point
-                                        const listItem = document.createElement('div');
-                                        listItem.style.cssText = `
-                                          position: relative;
-                                          padding-left: 20px;
-                                          margin: 4px 0;
-                                          line-height: 1.5;
-                                        `;
-                                        
-                                        const bullet = document.createElement('span');
-                                        bullet.textContent = '•';
-                                        bullet.style.cssText = `
-                                          position: absolute;
-                                          left: 4px;
-                                          font-size: 1.2em;
-                                          line-height: 1;
-                                          top: 50%;
-                                          transform: translateY(-50%);
-                                        `;
-                                        
-                                        const textContent = document.createElement('span');
-                                        textContent.style.color = 'white';
-                                        
-                                        listItem.appendChild(bullet);
-                                        listItem.appendChild(textContent);
-                                        
-                                        // Insert after current list item
-                                        currentListItem.parentNode.insertBefore(listItem, currentListItem.nextSibling);
-                                        
-                                        // Move cursor to new list item
-                                        const newRange = document.createRange();
-                                        newRange.setStart(textContent, 0);
-                                        newRange.collapse(true);
-                                        selection.removeAllRanges();
-                                        selection.addRange(newRange);
-                                      }
-                                      
-                                      // Update content
-                                      handleTextareaChange({ target: e.target });
-                                    }
+                          } else if (e.key === 'Enter') {
+                            // Handle Enter key in lists more simply
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentElement = range.startContainer;
+                              
+                              // Navigate up to find if we're in a list item
+                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
+                                currentElement = currentElement.parentNode;
+                              }
+                              
+                              // Check if we're in a list item
+                              if (currentElement && currentElement.tagName === 'LI') {
+                                const listItem = currentElement;
+                                const isEmpty = listItem.textContent.trim() === '';
+                                
+                                if (isEmpty) {
+                                  // Exit list by creating a new paragraph after the list
+                                  e.preventDefault();
+                                  const ul = listItem.parentNode;
+                                  const newPara = document.createElement('div');
+                                  newPara.innerHTML = '<br>';
+                                  
+                                  // Remove empty list item
+                                  listItem.remove();
+                                  
+                                  // If list is now empty, replace it with the paragraph
+                                  if (ul.children.length === 0) {
+                                    ul.parentNode.replaceChild(newPara, ul);
+                                  } else {
+                                    // Insert paragraph after the list
+                                    ul.parentNode.insertBefore(newPara, ul.nextSibling);
+                                  }
+                                  
+                                  // Move cursor to new paragraph
+                                  const newRange = document.createRange();
+                                  newRange.setStart(newPara, 0);
+                                  newRange.collapse(true);
+                                  selection.removeAllRanges();
+                                  selection.addRange(newRange);
+                                  
+                                  // Update content
+                                  handleTextareaChange({ target: e.target });
+                                }
+                                // If not empty, let default behavior create new list item
+                              }
                             }
                           }
                         }}
