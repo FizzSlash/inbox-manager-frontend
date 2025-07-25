@@ -2899,9 +2899,6 @@ const InboxManager = ({ user, onSignOut }) => {
             fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
           }
         }
-        
-        const decryptTime = Date.now() - decryptStart;
-        console.log(`🔓 Decryption took: ${decryptTime}ms`);
 
         // Update API keys state with data from Supabase
         setApiKeys({
