@@ -2886,6 +2886,8 @@ const InboxManager = ({ user, onSignOut }) => {
         return false;
       }
 
+      console.log(`📥 Loading API keys from Supabase for brand: ${brandId}`);
+
       const { data, error } = await supabase
         .from('api_settings')
         .select('*')
@@ -2895,22 +2897,29 @@ const InboxManager = ({ user, onSignOut }) => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Separate email accounts from global services
-        const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
-        const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
+        console.log(`📊 Found ${data.length} API settings records`);
 
-        // Convert email account records to accounts structure
-        const accounts = emailAccounts.map(record => {
+        // Separate ESP accounts from FullEnrich using key_type
+        const espAccounts = data.filter(record => record.key_type === 'esp_api_key');
+        const fullenrichRecord = data.find(record => record.key_type === 'fullenrich_api_key');
+
+        console.log(`🔑 ESP accounts: ${espAccounts.length}, FullEnrich: ${fullenrichRecord ? 1 : 0}`);
+
+        // Convert ESP account records to accounts structure
+        const accounts = espAccounts.map(record => {
           let decryptedKey = '';
           try {
             decryptedKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(record.esp_api_key || '') : (record.esp_api_key || '');
+              decryptApiKey(record.encrypted_key || '') : (record.encrypted_key || '');
           } catch (err) {
-            decryptedKey = record.esp_api_key || '';
+            console.warn(`Failed to decrypt key for account ${record.account_name}:`, err);
+            decryptedKey = record.encrypted_key || '';
           }
           
+          console.log(`✅ Loaded account: ${record.account_name} (${record.id})`);
+          
           return {
-            id: record.account_id,
+            id: record.id, // Use the primary key as account ID for webhook routing
             name: record.account_name || 'Account',
             esp: {
               provider: record.esp_provider || '',
@@ -2925,9 +2934,10 @@ const InboxManager = ({ user, onSignOut }) => {
         if (fullenrichRecord) {
           try {
             fullenrichKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : (fullenrichRecord.fullenrich_api_key || '');
+              decryptApiKey(fullenrichRecord.encrypted_key || '') : (fullenrichRecord.encrypted_key || '');
           } catch (err) {
-            fullenrichKey = fullenrichRecord.fullenrich_api_key || '';
+            console.warn('Failed to decrypt FullEnrich key:', err);
+            fullenrichKey = fullenrichRecord.encrypted_key || '';
           }
         }
 
@@ -2937,11 +2947,16 @@ const InboxManager = ({ user, onSignOut }) => {
           fullenrich: fullenrichKey
         });
 
+        console.log(`🎯 Successfully loaded ${accounts.length} accounts and FullEnrich key`);
+        console.log(`🔗 Webhook URLs:`, accounts.map(acc => `${acc.name}: /webhook/${acc.id}`));
+
         return true; // Successfully loaded from Supabase
       }
+      
+      console.log('📭 No API settings found in Supabase');
       return false; // No data found in Supabase
     } catch (error) {
-      console.error('Error loading API keys from Supabase:', error);
+      console.error('❌ Error loading API keys from Supabase:', error);
       return false; // Fallback to localStorage
     }
   };
@@ -2949,64 +2964,94 @@ const InboxManager = ({ user, onSignOut }) => {
   // Function to save API keys to Supabase
   const saveApiKeysToSupabase = async (brandId, apiKeysData) => {
     try {
-      // Delete existing records for this brand first
-      const { error: deleteError } = await supabase
-        .from('api_settings')
-        .delete()
-        .eq('brand_id', brandId);
-      
-      if (deleteError) throw deleteError;
+      console.log(`💾 Saving ${apiKeysData.accounts.length} accounts to Supabase for brand: ${brandId}`);
 
-      const recordsToInsert = [];
+      const recordsToUpsert = [];
 
-      // Insert email account records (without fullenrich duplication)
-      const accountRecords = apiKeysData.accounts.map(account => ({
-        brand_id: brandId,
-        created_by: user.id,
-        account_id: ensureValidUUID(account.id), // Ensure valid UUID
-        account_name: account.name,
-        esp_provider: account.esp.provider || null,
-        esp_api_key: encryptApiKey(account.esp.key || '') || null,
-        fullenrich_api_key: null, // Remove from individual accounts
-        is_primary: account.is_primary || false,
-        updated_at: new Date().toISOString()
-      }));
-
-      if (accountRecords.length > 0) {
-        recordsToInsert.push(...accountRecords);
-      }
-
-      // Insert fullenrich as a separate global record (if it exists)
-      if (apiKeysData.fullenrich) {
-        const fullenrichRecord = {
+      // Prepare email account records (using account.id as the primary key)
+      const accountRecords = apiKeysData.accounts.map(account => {
+        const accountId = ensureValidUUID(account.id);
+        console.log(`📝 Preparing account: ${account.name} (${accountId}) for brand: ${brandId}`);
+        
+        return {
+          id: accountId, // Use account.id as primary key for webhook routing
           brand_id: brandId,
           created_by: user.id,
-          account_id: crypto.randomUUID(),
-          account_name: 'FullEnrich Global',
-          esp_provider: null,
-          esp_api_key: null,
-          fullenrich_api_key: encryptApiKey(apiKeysData.fullenrich),
-          is_primary: false,
+          account_name: account.name,
+          key_type: 'esp_api_key', // Specify this is an ESP account
+          encrypted_key: encryptApiKey(account.esp.key || ''),
+          esp_provider: account.esp.provider || null,
+          is_primary: account.is_primary || false,
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-        recordsToInsert.push(fullenrichRecord);
+      });
+
+      if (accountRecords.length > 0) {
+        recordsToUpsert.push(...accountRecords);
       }
 
-      if (recordsToInsert.length > 0) {
-        const { error: insertError } = await supabase
+      // Prepare fullenrich as a separate global record (if it exists)
+      if (apiKeysData.fullenrich) {
+        // Find existing fullenrich record or create new UUID
+        const { data: existingFullenrich } = await supabase
           .from('api_settings')
-          .insert(recordsToInsert);
+          .select('id')
+          .eq('brand_id', brandId)
+          .eq('key_type', 'fullenrich_api_key')
+          .single();
+
+        const fullenrichId = existingFullenrich?.id || crypto.randomUUID();
         
-        if (insertError) throw insertError;
+        const fullenrichRecord = {
+          id: fullenrichId,
+          brand_id: brandId,
+          created_by: user.id,
+          account_name: 'FullEnrich Global',
+          key_type: 'fullenrich_api_key',
+          encrypted_key: encryptApiKey(apiKeysData.fullenrich),
+          esp_provider: null,
+          is_primary: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        recordsToUpsert.push(fullenrichRecord);
+      }
+
+      // Use upsert to create or update records
+      if (recordsToUpsert.length > 0) {
+        const { error: upsertError } = await supabase
+          .from('api_settings')
+          .upsert(recordsToUpsert, {
+            onConflict: 'id',
+            ignoreDuplicates: false
+          });
         
-        const emailAccounts = accountRecords.length;
-        const fullenrichCount = apiKeysData.fullenrich ? 1 : 0;
-        console.log(`Successfully saved ${emailAccounts} email account(s) and ${fullenrichCount} global service(s) to Supabase`);
+        if (upsertError) throw upsertError;
+        
+        // Clean up orphaned records for this brand (accounts that were deleted)
+        const currentAccountIds = accountRecords.map(acc => acc.id);
+        if (currentAccountIds.length > 0) {
+          const { error: cleanupError } = await supabase
+            .from('api_settings')
+            .delete()
+            .eq('brand_id', brandId)
+            .eq('key_type', 'esp_api_key')
+            .not('id', 'in', `(${currentAccountIds.map(id => `"${id}"`).join(',')})`);
+          
+          if (cleanupError) {
+            console.warn('Warning: Failed to clean up orphaned records:', cleanupError);
+          }
+        }
+        
+        console.log(`✅ Successfully saved/updated ${recordsToUpsert.length} records to Supabase`);
+        console.log(`🔗 Webhook URLs available for accounts:`, 
+          accountRecords.map(acc => `${acc.account_name}: /webhook/${acc.id}`));
       }
       
       return true; // Successfully saved to Supabase
     } catch (error) {
-      console.error('Error saving API keys to Supabase:', error);
+      console.error('❌ Error saving API keys to Supabase:', error);
       return false; // Failed to save to Supabase
     }
   };
