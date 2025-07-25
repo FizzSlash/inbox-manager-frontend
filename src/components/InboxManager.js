@@ -23,11 +23,25 @@ const encryptApiKey = (key) => {
 
 const decryptApiKey = (encryptedKey) => {
   if (!encryptedKey) return '';
+  
+  // Check if it looks like base64 (contains only valid base64 characters)
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!base64Regex.test(encryptedKey)) {
+    // Not base64, return as plain text
+    return encryptedKey;
+  }
+  
   try {
     const decoded = atob(encryptedKey);
-    return decoded.replace(ENCRYPTION_SALT, '');
+    // Check if the decoded value contains our salt (indicating it was encrypted by us)
+    if (decoded.includes(ENCRYPTION_SALT)) {
+      return decoded.replace(ENCRYPTION_SALT, '');
+    } else {
+      // Decoded successfully but no salt found, likely just base64 encoded plain text
+      return decoded;
+    }
   } catch (error) {
-    console.warn('Failed to decrypt API key, treating as plain text:', error);
+    // atob failed, treat as plain text
     return encryptedKey;
   }
 };
