@@ -149,7 +149,7 @@ const InboxManager = ({ user, onSignOut }) => {
     
     return {
       accounts: legacyProvider || legacyKey ? [{
-        id: 'legacy-account',
+        id: crypto.randomUUID(), // Generate proper UUID
         name: 'Primary Account',
         esp: {
           provider: legacyProvider,
@@ -2833,29 +2833,19 @@ const InboxManager = ({ user, onSignOut }) => {
   // Function to save API keys to Supabase
   const saveApiKeysToSupabase = async (brandId, apiKeysData) => {
     try {
-      console.log('=== SUPABASE SAVE DEBUG ===');
-      console.log('brandId:', brandId);
-      console.log('user.id:', user?.id);
-      console.log('apiKeysData:', apiKeysData);
-      
       // Delete existing records for this brand first
-      console.log('Deleting existing records for brand:', brandId);
       const { error: deleteError } = await supabase
         .from('api_settings')
         .delete()
         .eq('brand_id', brandId);
       
-      if (deleteError) {
-        console.error('Delete error:', deleteError);
-        throw deleteError;
-      }
-      console.log('Successfully deleted existing records');
+      if (deleteError) throw deleteError;
 
-      // Insert all accounts
+      // Insert all accounts (ensure valid UUIDs)
       const accountRecords = apiKeysData.accounts.map(account => ({
         brand_id: brandId,
         created_by: user.id,
-        account_id: account.id,
+        account_id: ensureValidUUID(account.id), // Ensure valid UUID
         account_name: account.name,
         esp_provider: account.esp.provider || null,
         esp_api_key: encryptApiKey(account.esp.key || '') || null,
@@ -2864,33 +2854,31 @@ const InboxManager = ({ user, onSignOut }) => {
         updated_at: new Date().toISOString()
       }));
 
-      console.log('Records to insert:', accountRecords);
-
       if (accountRecords.length > 0) {
         const { error: insertError } = await supabase
           .from('api_settings')
           .insert(accountRecords);
         
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          throw insertError;
-        }
-        console.log('Successfully inserted', accountRecords.length, 'records');
+        if (insertError) throw insertError;
+        console.log(`Successfully saved ${accountRecords.length} email account(s) to Supabase`);
       }
       
-      console.log('=== SUPABASE SAVE SUCCESS ===');
       return true; // Successfully saved to Supabase
     } catch (error) {
-      console.error('=== SUPABASE SAVE ERROR ===');
       console.error('Error saving API keys to Supabase:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      });
       return false; // Failed to save to Supabase
     }
+  };
+
+  // Helper function to ensure valid UUID
+  const ensureValidUUID = (id) => {
+    // Check if it's already a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(id)) {
+      return id;
+    }
+    // Generate new UUID if invalid
+    return crypto.randomUUID();
   };
 
   // Function to add a new email account
@@ -2967,22 +2955,13 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Function to save API keys (with encryption)
   const saveApiKeys = async () => {
-    console.log('=== SAVE API KEYS DEBUG ===');
-    console.log('brandId:', brandId);
-    console.log('user:', user);
-    console.log('apiKeys:', apiKeys);
-    
     setIsSavingApi(true);
     try {
       let savedToSupabase = false;
       
       // Try to save to Supabase first if brandId is available
       if (brandId && user) {
-        console.log('Attempting to save to Supabase...');
         savedToSupabase = await saveApiKeysToSupabase(brandId, apiKeys);
-        console.log('Supabase save result:', savedToSupabase);
-      } else {
-        console.log('Skipping Supabase save - brandId:', brandId, 'user:', !!user);
       }
       
       // Also save to localStorage as backup (for offline access)
