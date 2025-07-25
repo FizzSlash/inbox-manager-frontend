@@ -32,13 +32,71 @@ const decryptApiKey = (encryptedKey) => {
   }
 };
 
+// Clean up messy browser-generated HTML and convert to semantic tags
+const cleanFormattingHtml = (html) => {
+  if (!html) return '';
+  
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  // Convert spans with font-weight: bold to <strong>
+  const boldSpans = temp.querySelectorAll('span[style*="font-weight"], span[style*="bold"]');
+  boldSpans.forEach(span => {
+    if (span.style.fontWeight === 'bold' || span.style.fontWeight === '700' || span.style.fontWeight === 'bolder') {
+      const strong = document.createElement('strong');
+      strong.innerHTML = span.innerHTML;
+      span.parentNode.replaceChild(strong, span);
+    }
+  });
+  
+  // Convert spans with font-style: italic to <em>
+  const italicSpans = temp.querySelectorAll('span[style*="font-style"]');
+  italicSpans.forEach(span => {
+    if (span.style.fontStyle === 'italic') {
+      const em = document.createElement('em');
+      em.innerHTML = span.innerHTML;
+      span.parentNode.replaceChild(em, span);
+    }
+  });
+  
+  // Convert spans with text-decoration: underline to <u>
+  const underlineSpans = temp.querySelectorAll('span[style*="text-decoration"]');
+  underlineSpans.forEach(span => {
+    if (span.style.textDecoration === 'underline') {
+      const u = document.createElement('u');
+      u.innerHTML = span.innerHTML;
+      span.parentNode.replaceChild(u, span);
+    }
+  });
+  
+  // Remove empty spans and spans with only whitespace or background colors
+  const emptySpans = temp.querySelectorAll('span');
+  emptySpans.forEach(span => {
+    const hasText = span.textContent.trim().length > 0;
+    const hasImportantStyle = span.style.fontWeight || span.style.fontStyle || span.style.textDecoration;
+    
+    if (!hasImportantStyle && hasText) {
+      // Just replace with text content if it's just a wrapper
+      span.outerHTML = span.innerHTML;
+    } else if (!hasText) {
+      // Remove completely empty spans
+      span.remove();
+    }
+  });
+  
+  return temp.innerHTML;
+};
+
 // HTML sanitization function (basic XSS protection)
 const sanitizeHtml = (html) => {
   if (!html) return '';
   
+  // First clean up messy formatting
+  const cleanedHtml = cleanFormattingHtml(html);
+  
   // Create a temporary element to parse HTML
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  temp.innerHTML = cleanedHtml;
   
   // Remove potentially dangerous elements and attributes
   const dangerousElements = ['script', 'object', 'embed', 'iframe', 'form'];
@@ -1784,9 +1842,45 @@ const InboxManager = ({ user, onSignOut }) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  // Rich text formatting functions
+  // Rich text formatting functions - Generate clean semantic HTML
   const formatText = (command, value = null) => {
-    document.execCommand(command, false, value);
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+    
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString();
+    
+    if (!selectedText) return;
+    
+    let wrapper;
+    switch (command) {
+      case 'bold':
+        wrapper = document.createElement('strong');
+        break;
+      case 'italic':
+        wrapper = document.createElement('em');
+        break;
+      case 'underline':
+        wrapper = document.createElement('u');
+        break;
+      default:
+        // Fallback to execCommand for other commands
+        document.execCommand(command, false, value);
+        return;
+    }
+    
+    if (wrapper) {
+      wrapper.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(wrapper);
+      
+      // Clear selection and update content
+      selection.removeAllRanges();
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        handleTextareaChange({ target: editor });
+      }
+    }
   };
 
   const insertLink = () => {
@@ -2334,7 +2428,14 @@ const InboxManager = ({ user, onSignOut }) => {
   const sendMessage = async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
     const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
+    
+    // Debug: Log the raw HTML being generated
+    console.log('=== HTML DEBUG ===');
+    console.log('Raw HTML from editor:', rawHtmlContent);
+    console.log('Cleaned HTML (spans converted):', cleanFormattingHtml(rawHtmlContent));
+    
     const htmlContent = sanitizeHtml(rawHtmlContent);
+    console.log('Final sanitized HTML:', htmlContent);
     
     if (!textContent.trim()) return;
     
