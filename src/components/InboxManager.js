@@ -2924,6 +2924,7 @@ const InboxManager = ({ user, onSignOut }) => {
       <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
           <div className="flex space-x-4">
+            {/* Inbox Tab */}
             <button
               onClick={() => setActiveTab('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -2937,6 +2938,78 @@ const InboxManager = ({ user, onSignOut }) => {
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
                 Inbox
+              </div>
+            </button>
+
+            {/* Recent Tab */}
+            <div className="relative recent-dropdown">
+              <button
+                onClick={() => setShowRecentDropdown(!showRecentDropdown)}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
+                style={{color: themeStyles.textPrimary}}
+              >
+                <Clock className="w-4 h-4" />
+                Recent ({recentlyViewed.length})
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showRecentDropdown && recentlyViewed.length > 0 && (
+                <div className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div className="p-3">
+                    <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
+                    <div className="space-y-1">
+                      {recentlyViewed.map((recent) => (
+                        <button
+                          key={recent.id}
+                          onClick={() => {
+                            const lead = leads.find(l => l.id === recent.id);
+                            if (lead) {
+                              setSelectedLead(lead);
+                              setShowRecentDropdown(false);
+                              setActiveTab('all'); // Switch to inbox to show the selected lead
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
+                          style={{
+                            backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                            color: themeStyles.textPrimary
+                          }}
+                        >
+                          <div className="font-medium">{recent.name}</div>
+                          <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>{recent.email}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setRecentlyViewed([]);
+                        localStorage.removeItem('inbox_manager_recent_leads');
+                        setShowRecentDropdown(false);
+                      }}
+                      className="w-full mt-3 px-3 py-2 text-xs rounded-lg transition-all duration-300 hover:opacity-80"
+                      style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
+                    >
+                      Clear Recent
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Templates Tab */}
+            <button
+              onClick={() => setActiveTab('templates')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'templates' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'templates' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'templates' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Templates
               </div>
             </button>
 
@@ -2958,94 +3031,6 @@ const InboxManager = ({ user, onSignOut }) => {
             </button>
 
             <button
-              onClick={() => setActiveTab('analytics')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'analytics' ? `text-white` : `hover:bg-white/5`
-              }`}
-              style={{
-                backgroundColor: activeTab === 'analytics' ? `${themeStyles.accent}20` : 'transparent',
-                color: activeTab === 'analytics' ? themeStyles.accent : themeStyles.textPrimary
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Analytics
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('templates')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'templates' ? `text-white` : `hover:bg-white/5`
-              }`}
-              style={{
-                backgroundColor: activeTab === 'templates' ? `${themeStyles.accent}20` : 'transparent',
-                color: activeTab === 'templates' ? themeStyles.accent : themeStyles.textPrimary
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Templates
-              </div>
-            </button>
-
-            {/* Recently Viewed Dropdown */}
-            {recentlyViewed.length > 0 && (
-              <div className="relative recent-dropdown">
-                <button
-                  onClick={() => setShowRecentDropdown(!showRecentDropdown)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
-                  style={{color: themeStyles.textPrimary}}
-                >
-                  <Clock className="w-4 h-4" />
-                  Recent ({recentlyViewed.length})
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-
-                {showRecentDropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
-                    <div className="p-3">
-                      <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
-                      <div className="space-y-1">
-                        {recentlyViewed.map((recent) => (
-                          <button
-                            key={recent.id}
-                            onClick={() => {
-                              const lead = leads.find(l => l.id === recent.id);
-                              if (lead) {
-                                setSelectedLead(lead);
-                                setShowRecentDropdown(false);
-                              }
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
-                            style={{
-                              backgroundColor: selectedLead?.id === recent.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
-                              color: themeStyles.textPrimary
-                            }}
-                          >
-                            <div className="font-medium">{recent.name}</div>
-                            <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>{recent.email}</div>
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => {
-                          setRecentlyViewed([]);
-                          localStorage.removeItem('inbox_manager_recent_leads');
-                          setShowRecentDropdown(false);
-                        }}
-                        className="w-full mt-3 px-3 py-2 text-xs rounded-lg transition-all duration-300 hover:opacity-80"
-                        style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}
-                      >
-                        Clear Recent
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
               onClick={() => setShowApiSettings(true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 showApiSettings ? 'text-white' : 'hover:bg-white/5'
@@ -3063,6 +3048,23 @@ const InboxManager = ({ user, onSignOut }) => {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Analytics Tab */}
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'analytics' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'analytics' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'analytics' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Analytics
+              </div>
+            </button>
+
             {/* User Info */}
             {user && (
               <div className="flex items-center space-x-2 px-3 py-1 rounded-lg text-sm" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}>
