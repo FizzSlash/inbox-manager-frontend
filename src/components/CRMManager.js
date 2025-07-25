@@ -431,7 +431,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
                   </div>
                   <div className="mb-10">
                     <label className="block text-lg font-medium mb-2" style={{color: themeStyles.textSecondary}}>Notes</label>
-                    <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[120px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
+                    <textarea className="w-full rounded-xl px-4 py-3 text-xl min-h-[200px] transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, color: themeStyles.textPrimary, border: `1px solid ${themeStyles.border}`}} value={editFields.notes} onChange={e => handleFieldChange('notes', e.target.value)} />
                   </div>
                   <div className="flex gap-4 mt-auto">
                     <button className="px-8 py-4 rounded-xl font-bold shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.success, color: '#fff', fontSize: '1.25rem'}} onClick={saveEdit} disabled={savingId === selectedLead.id}>{savingId === selectedLead.id ? <Loader2 className="animate-spin w-7 h-7" /> : 'Save Changes'}</button>
