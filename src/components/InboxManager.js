@@ -4517,7 +4517,7 @@ const InboxManager = ({ user, onSignOut }) => {
 
               {/* Sort Popup */}
               {showSortPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: '#181A1B', border: `1px solid ${themeStyles.border}`}}>
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
                       <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Sort Options</h4>
@@ -4616,7 +4616,7 @@ const InboxManager = ({ user, onSignOut }) => {
 
                               {/* Filter Popup */}
                 {showFilterPopup && (
-                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: '#181A1B', border: `1px solid ${themeStyles.border}`}}>
+                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
                     <div className="p-4">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Filter Options</h4>
