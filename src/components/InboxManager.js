@@ -2059,77 +2059,11 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   const insertList = () => {
-    const editor = document.querySelector('[contenteditable]');
-    const selection = window.getSelection();
+    document.execCommand('insertUnorderedList', false, null);
     
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const selectedText = selection.toString().trim();
-      
-      if (selectedText) {
-        // Convert selected text into a standard HTML list
-        const lines = selectedText
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0);
-        
-        if (lines.length > 0) {
-          const ul = document.createElement('ul');
-          ul.style.cssText = `
-            margin: 8px 0;
-            padding-left: 20px;
-            list-style-type: disc;
-          `;
-          
-          lines.forEach(line => {
-            const li = document.createElement('li');
-            li.style.cssText = `
-              margin: 2px 0;
-              line-height: 1.5;
-            `;
-            li.textContent = line;
-            ul.appendChild(li);
-          });
-          
-          range.deleteContents();
-          range.insertNode(ul);
-          
-          // Move cursor after the list
-          const newRange = document.createRange();
-          newRange.setStartAfter(ul);
-          newRange.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
-        }
-      } else {
-        // Insert a new list with one empty item
-        const ul = document.createElement('ul');
-        ul.style.cssText = `
-          margin: 8px 0;
-          padding-left: 20px;
-          list-style-type: disc;
-        `;
-        
-        const li = document.createElement('li');
-        li.style.cssText = `
-          margin: 2px 0;
-          line-height: 1.5;
-        `;
-        li.innerHTML = '<br>'; // Make it editable
-        ul.appendChild(li);
-        
-        range.deleteContents();
-        range.insertNode(ul);
-        
-        // Move cursor into the list item
-        const newRange = document.createRange();
-        newRange.setStart(li, 0);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      }
-      
-      // Update the draft content
+    // Update the draft content
+    const editor = document.querySelector('[contenteditable]');
+    if (editor) {
       handleTextareaChange({ target: editor });
     }
   };
@@ -3418,6 +3352,29 @@ const InboxManager = ({ user, onSignOut }) => {
           font-style: italic;
           pointer-events: none;
           white-space: pre-line;
+        }
+
+        /* Simple list styling for contenteditable */
+        div[contenteditable] ul {
+          margin: 8px 0;
+          padding-left: 20px;
+          list-style-type: disc;
+        }
+
+        div[contenteditable] ul li {
+          margin: 2px 0;
+          line-height: 1.5;
+        }
+
+        div[contenteditable] ol {
+          margin: 8px 0;
+          padding-left: 20px;
+          list-style-type: decimal;
+        }
+
+        div[contenteditable] ol li {
+          margin: 2px 0;
+          line-height: 1.5;
         }
       `}</style>
 
@@ -5158,105 +5115,8 @@ const InboxManager = ({ user, onSignOut }) => {
                                 formatText('underline');
                                 break;
                             }
-                          } else if (e.key === 'Enter') {
-                            // Handle Enter key in lists - exit list on empty item or Shift+Enter
-                            const selection = window.getSelection();
-                            if (selection.rangeCount > 0) {
-                              const range = selection.getRangeAt(0);
-                              let currentElement = range.startContainer;
-                              
-                              // Navigate up to find if we're in a list item
-                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
-                                currentElement = currentElement.parentNode;
-                              }
-                              
-                              // Check if we're in a list item
-                              if (currentElement && currentElement.tagName === 'LI') {
-                                const listItem = currentElement;
-                                // More robust empty detection
-                                const textContent = listItem.textContent || listItem.innerText || '';
-                                const isEmpty = textContent.trim() === '' || textContent.trim() === '\n';
-                                
-                                // Exit list if: empty item OR Shift+Enter pressed
-                                if (isEmpty || e.shiftKey) {
-                                  e.preventDefault();
-                                  
-                                  const ul = listItem.parentNode;
-                                  const newPara = document.createElement('div');
-                                  newPara.innerHTML = '<br>';
-                                  
-                                  // Always insert paragraph after the list (don't remove the list if it has other items)
-                                  if (ul.children.length === 1) {
-                                    // Only one item (the empty one), replace entire list
-                                    ul.parentNode.replaceChild(newPara, ul);
-                                  } else {
-                                    // Multiple items, just remove empty one and add paragraph after list
-                                    listItem.remove();
-                                    ul.parentNode.insertBefore(newPara, ul.nextSibling);
-                                  }
-                                  
-                                  // Focus the new paragraph
-                                  const newRange = document.createRange();
-                                  newRange.setStart(newPara, 0);
-                                  newRange.collapse(true);
-                                  selection.removeAllRanges();
-                                  selection.addRange(newRange);
-                                  
-                                  // Update content
-                                  handleTextareaChange({ target: e.target });
-                                }
-                                // If not empty and not Shift+Enter, let default behavior create new list item
-                              }
-                            }
-                          } else if (e.key === 'Backspace') {
-                            // Handle Backspace key in lists - exit list if bullet is empty and backspace again
-                            const selection = window.getSelection();
-                            if (selection.rangeCount > 0) {
-                              const range = selection.getRangeAt(0);
-                              let currentElement = range.startContainer;
-                              
-                              // Navigate up to find if we're in a list item
-                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
-                                currentElement = currentElement.parentNode;
-                              }
-                              
-                              // Check if we're in a list item and at the beginning
-                              if (currentElement && currentElement.tagName === 'LI') {
-                                const listItem = currentElement;
-                                const textContent = listItem.textContent || listItem.innerText || '';
-                                const isEmpty = textContent.trim() === '' || textContent.trim() === '\n';
-                                
-                                // Check if cursor is at the beginning of an empty list item
-                                if (isEmpty && range.startOffset === 0) {
-                                  e.preventDefault();
-                                  
-                                  const ul = listItem.parentNode;
-                                  const newPara = document.createElement('div');
-                                  newPara.innerHTML = '<br>';
-                                  
-                                  // Exit the list
-                                  if (ul.children.length === 1) {
-                                    // Only one item (the empty one), replace entire list
-                                    ul.parentNode.replaceChild(newPara, ul);
-                                  } else {
-                                    // Multiple items, just remove empty one and add paragraph before list
-                                    listItem.remove();
-                                    ul.parentNode.insertBefore(newPara, ul);
-                                  }
-                                  
-                                  // Focus the new paragraph
-                                  const newRange = document.createRange();
-                                  newRange.setStart(newPara, 0);
-                                  newRange.collapse(true);
-                                  selection.removeAllRanges();
-                                  selection.addRange(newRange);
-                                  
-                                  // Update content
-                                  handleTextareaChange({ target: e.target });
-                                }
-                              }
-                            }
                           }
+                          // Let the browser handle all other key events naturally
                         }}
                         className="w-full h-40 p-3 rounded-lg resize-none focus:ring-2 focus:outline-none overflow-y-auto transition-colors duration-300"
                         style={{
