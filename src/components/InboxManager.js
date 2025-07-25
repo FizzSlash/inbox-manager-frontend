@@ -242,6 +242,8 @@ const InboxManager = ({ user, onSignOut }) => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
     localStorage.setItem('inbox_manager_theme', newTheme ? 'dark' : 'light');
+    // Dispatch custom event for other components to listen to
+    window.dispatchEvent(new CustomEvent('themeChanged'));
     showToast(`Switched to ${newTheme ? 'dark' : 'light'} mode`, 'success');
   };
 

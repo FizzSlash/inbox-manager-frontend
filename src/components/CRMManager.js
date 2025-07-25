@@ -3,9 +3,9 @@ import { supabase } from '../lib/supabase';
 import { Users, DollarSign, CheckCircle, BarChart3, Search, Edit3, Loader2, X, Mail, Phone, ExternalLink } from 'lucide-react';
 
 // ThemeStyles and dark mode detection (copied from InboxManager)
-const getThemeStyles = () => {
-  const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+const getThemeStyles = (isDarkMode) => {
   return isDarkMode ? {
+    // Dark mode colors
     primaryBg: '#1A1C1A',
     secondaryBg: 'rgba(26, 28, 26, 0.8)',
     tertiaryBg: 'rgba(255, 255, 255, 0.05)',
@@ -19,6 +19,7 @@ const getThemeStyles = () => {
     warning: '#F59E0B',
     error: '#EF4444',
   } : {
+    // Light mode colors (fixed contrast)
     primaryBg: '#F8FAFC',
     secondaryBg: '#FFFFFF',
     tertiaryBg: '#F1F5F9',
@@ -55,7 +56,40 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   const [savingId, setSavingId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState({ field: 'created_at', dir: 'desc' });
-  const [themeStyles, setThemeStyles] = useState(getThemeStyles());
+  
+  // Theme management (matching InboxManager pattern)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('inbox_manager_theme');
+    return savedTheme ? savedTheme === 'dark' : true; // Default to dark mode
+  });
+  
+  const themeStyles = getThemeStyles(isDarkMode);
+
+  // Listen for theme changes from localStorage
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'inbox_manager_theme') {
+        const newTheme = e.newValue === 'dark';
+        setIsDarkMode(newTheme);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events in case theme is changed in the same window
+    const handleThemeChange = () => {
+      const savedTheme = localStorage.getItem('inbox_manager_theme');
+      const newTheme = savedTheme ? savedTheme === 'dark' : true;
+      setIsDarkMode(newTheme);
+    };
+
+    window.addEventListener('themeChanged', handleThemeChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themeChanged', handleThemeChange);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchCrmLeads = async () => {
@@ -75,12 +109,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
     };
     if (brandId) fetchCrmLeads();
   }, [brandId, sort]);
-
-  useEffect(() => {
-    const updateTheme = () => setThemeStyles(getThemeStyles());
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
-    return () => window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', updateTheme);
-  }, []);
 
   // Stats calculations
   const stats = useMemo(() => {
