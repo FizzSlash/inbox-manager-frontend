@@ -313,11 +313,11 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       </div>
       {/* Side Panel for Lead Details */}
       {sidePanelOpen && selectedLead && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
+        <div className="fixed inset-0 bg-black flex items-center justify-end z-50">
           <div
             className="w-full max-w-2xl h-full flex flex-col relative overflow-y-auto"
             style={{
-              backgroundColor: themeStyles.secondaryBg,
+              backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
               borderRadius: '12px',
               border: `1px solid ${themeStyles.border}`,
               margin: '8px',
