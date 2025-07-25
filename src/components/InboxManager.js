@@ -3234,7 +3234,7 @@ const InboxManager = ({ user, onSignOut }) => {
 
       {/* API Settings Modal */}
       {showApiSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20000] p-4">
           <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
             <div className="p-6 border-b border-white/10">
               <div className="flex justify-between items-center">
@@ -5611,7 +5611,7 @@ Keyboard shortcuts:
 
       {/* Template Selector Modal */}
       {showTemplateSelector && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20000] p-4">
           <div className="w-full max-w-4xl h-[80vh] rounded-xl shadow-xl overflow-hidden" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
             <TemplateManager 
               user={user} 
