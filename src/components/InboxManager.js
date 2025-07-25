@@ -3592,16 +3592,17 @@ const InboxManager = ({ user, onSignOut }) => {
       {/* API Settings Modal */}
       {showApiSettings && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20000] p-4">
-          <div className="bg-[#1A1C1A] rounded-xl shadow-xl max-w-2xl w-full border border-white/10 overflow-hidden">
-            <div className="p-6 border-b border-white/10">
+          <div className="rounded-xl shadow-xl max-w-2xl w-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                  <Key className="w-5 h-5" style={{color: '#54FCFF'}} />
+                <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <Key className="w-5 h-5" style={{color: themeStyles.accent}} />
                   API Settings
                 </h2>
                 <button
                   onClick={() => setShowApiSettings(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="transition-colors duration-300 hover:opacity-80"
+                  style={{color: themeStyles.textMuted}}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -3610,24 +3611,25 @@ const InboxManager = ({ user, onSignOut }) => {
             
             <div className="p-6 space-y-6">
               {/* Security Notice */}
-              <div className="bg-[#1A1C1A] border border-[#00FF8C]/20 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-[#00FF8C] text-sm">
+              <div className="rounded-lg p-3 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.success}40`}}>
+                <div className="flex items-center gap-2 text-sm" style={{color: themeStyles.success}}>
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Secure Storage Enabled</span>
                 </div>
-                <p className="text-xs text-[#00FF8C]/80 mt-1">API keys are encrypted before storage for enhanced security</p>
+                <p className="text-xs mt-1" style={{color: `${themeStyles.success}CC`}}>API keys are encrypted before storage for enhanced security</p>
               </div>
 
               {/* Multiple Email Accounts Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" style={{color: '#54FCFF'}} />
-                    <h3 className="font-medium text-[#54FCFF]">Email Accounts</h3>
+                    <Mail className="w-4 h-4" style={{color: themeStyles.accent}} />
+                    <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>Email Accounts</h3>
                   </div>
                   <button
                     onClick={addEmailAccount}
-                    className="px-3 py-1 rounded-lg text-sm font-medium transition-all bg-[#54FCFF] text-black hover:opacity-80 flex items-center gap-2"
+                    className="px-3 py-1 rounded-lg text-sm font-medium transition-all hover:opacity-80 flex items-center gap-2"
+                    style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                   >
                     <span className="text-lg">+</span> Add Account
                   </button>
@@ -3636,18 +3638,19 @@ const InboxManager = ({ user, onSignOut }) => {
                 {/* Email Accounts List */}
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {apiKeys.accounts.map((account, index) => (
-                    <div key={account.id} className="p-4 rounded-lg border border-white/10 bg-[#2A2C2A]">
+                    <div key={account.id} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={account.name}
                             onChange={(e) => updateAccount(account.id, { name: e.target.value })}
-                            className="bg-transparent text-white font-medium border-none outline-none text-sm"
+                            className="bg-transparent font-medium border-none outline-none text-sm transition-colors duration-300"
+                            style={{color: themeStyles.textPrimary}}
                             placeholder="Account Name"
                           />
                           {account.is_primary && (
-                            <span className="px-2 py-1 text-xs rounded-full bg-[#54FCFF] text-black font-medium">
+                            <span className="px-2 py-1 text-xs rounded-full font-medium" style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}>
                               Primary
                             </span>
                           )}
@@ -3656,7 +3659,8 @@ const InboxManager = ({ user, onSignOut }) => {
                           {!account.is_primary && (
                             <button
                               onClick={() => setPrimaryAccount(account.id)}
-                              className="px-2 py-1 text-xs rounded-lg border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-all"
+                              className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
+                              style={{border: `1px solid ${themeStyles.border}`, color: themeStyles.textMuted}}
                             >
                               Set Primary
                             </button>
@@ -3664,7 +3668,8 @@ const InboxManager = ({ user, onSignOut }) => {
                           {apiKeys.accounts.length > 1 && (
                             <button
                               onClick={() => removeEmailAccount(account.id)}
-                              className="px-2 py-1 text-xs rounded-lg border border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 transition-all"
+                              className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
+                              style={{border: `1px solid ${themeStyles.error}40`, color: themeStyles.error}}
                             >
                               Remove
                             </button>
@@ -3674,28 +3679,31 @@ const InboxManager = ({ user, onSignOut }) => {
 
                       {/* ESP Provider Selection */}
                       <div className="grid grid-cols-3 gap-2 mb-3">
-                        {['Email Bison', 'Smartlead', 'Instantly'].map(provider => (
-                          <button
-                            key={provider}
-                            onClick={() => updateAccount(account.id, { 
-                              esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
-                            })}
-                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                              account.esp.provider === provider.toLowerCase().replace(' ', '_')
-                                ? 'bg-[#54FCFF]/10 border-[#54FCFF] text-[#54FCFF]' 
-                                : 'bg-[#1A1C1A] border-white/10 text-white hover:bg-[#1A1C1A]/80'
-                            }`}
-                            style={{border: '1px solid'}}
-                          >
-                            {provider}
-                          </button>
-                        ))}
+                        {['Email Bison', 'Smartlead', 'Instantly'].map(provider => {
+                          const isSelected = account.esp.provider === provider.toLowerCase().replace(' ', '_');
+                          return (
+                            <button
+                              key={provider}
+                              onClick={() => updateAccount(account.id, { 
+                                esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
+                              })}
+                              className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
+                              style={{
+                                backgroundColor: isSelected ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
+                                border: `1px solid ${isSelected ? themeStyles.accent : themeStyles.border}`,
+                                color: isSelected ? themeStyles.accent : themeStyles.textPrimary
+                              }}
+                            >
+                              {provider}
+                            </button>
+                          );
+                        })}
                       </div>
 
                       {/* ESP API Key Input */}
                       {account.esp.provider && (
                         <div className="space-y-2">
-                          <label className="text-xs text-white/60">
+                          <label className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                             {account.esp.provider.charAt(0).toUpperCase() + account.esp.provider.slice(1).replace('_', ' ')} API Key
                           </label>
                           <input
@@ -3704,7 +3712,13 @@ const InboxManager = ({ user, onSignOut }) => {
                             onChange={(e) => updateAccount(account.id, { 
                               esp: { ...account.esp, key: e.target.value }
                             })}
-                            className="w-full px-3 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all text-sm"
+                            className="w-full px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
+                            style={{
+                              backgroundColor: themeStyles.primaryBg,
+                              border: `1px solid ${themeStyles.border}`,
+                              color: themeStyles.textPrimary,
+                              '--tw-ring-color': themeStyles.accent
+                            }}
                             placeholder={`Enter ${account.esp.provider.replace('_', ' ')} API key`}
                           />
                         </div>
@@ -3713,7 +3727,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   ))}
                   
                   {apiKeys.accounts.length === 0 && (
-                    <div className="text-center py-8 text-white/40">
+                    <div className="text-center py-8 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                       <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">No email accounts configured</p>
                       <p className="text-xs mt-1">Click "Add Account" to get started</p>
@@ -3723,14 +3737,14 @@ const InboxManager = ({ user, onSignOut }) => {
               </div>
 
               {/* Data Enrichment Section */}
-              <div className="space-y-4 pt-6 mt-6 border-t border-white/10">
+              <div className="space-y-4 pt-6 mt-6 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}}>
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4" style={{color: '#54FCFF'}} />
-                  <h3 className="font-medium text-[#54FCFF]">Data Enrichment</h3>
+                  <Database className="w-4 h-4" style={{color: themeStyles.accent}} />
+                  <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>Data Enrichment</h3>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm text-white/60">
+                  <label className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                     Full Enrich API Key
                   </label>
                   <div className="relative">
@@ -3738,31 +3752,39 @@ const InboxManager = ({ user, onSignOut }) => {
                       type="password"
                       value={apiKeys.fullenrich}
                       onChange={(e) => handleApiKeyChange('fullenrich', e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg text-white placeholder-gray-400 bg-[#1A1C1A] border border-white/10 focus:border-[#54FCFF] focus:ring-1 focus:ring-[#54FCFF] transition-all"
+                      className="w-full px-4 py-2 rounded-lg transition-all focus:ring-1"
+                      style={{
+                        backgroundColor: themeStyles.primaryBg,
+                        border: `1px solid ${themeStyles.border}`,
+                        color: themeStyles.textPrimary,
+                        '--tw-ring-color': themeStyles.accent
+                      }}
                       placeholder="Enter Full Enrich API key"
                     />
                     {apiTestStatus.fullenrich === true && (
-                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400" />
+                      <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5" style={{color: themeStyles.success}} />
                     )}
                   </div>
-                  <p className="text-xs text-white/40 mt-2">
+                  <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                     Used for finding phone numbers, company data, and social profiles
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-[#1A1C1A] border-t border-white/10 flex justify-end gap-3">
+            <div className="p-6 border-t flex justify-end gap-3 transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, borderColor: themeStyles.border}}>
               <button
                 onClick={() => setShowApiSettings(false)}
-                className="px-4 py-2 rounded-lg text-white hover:bg-white/5 transition-colors text-sm"
+                className="px-4 py-2 rounded-lg text-sm transition-all hover:opacity-80"
+                style={{color: themeStyles.textPrimary, backgroundColor: themeStyles.tertiaryBg}}
               >
                 Cancel
               </button>
               <button
                 onClick={saveApiKeys}
                 disabled={isSavingApi}
-                className="px-4 py-2 rounded-lg bg-[#54FCFF] text-black font-medium hover:opacity-90 transition-all text-sm flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
+                style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
               >
                 {isSavingApi ? (
                   <>
