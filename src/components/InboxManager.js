@@ -5254,21 +5254,21 @@ const InboxManager = ({ user, onSignOut }) => {
             )}
           </>
         )}
+
+        {/* Main Content - CRM */}
+        {activeTab === 'crm' && (
+          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+            <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
+          </div>
+        )}
+
+        {/* Main Content - Templates */}
+        {activeTab === 'templates' && (
+          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+            <TemplateManager user={user} brandId={brandId} />
+          </div>
+        )}
       </div>
-
-      {/* Main Content - CRM */}
-      {activeTab === 'crm' && (
-        <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-          <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
-        </div>
-      )}
-
-      {/* Main Content - Templates */}
-      {activeTab === 'templates' && (
-        <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-          <TemplateManager user={user} brandId={brandId} />
-        </div>
-      )}
 
       {/* Template Selector Modal */}
       {showTemplateSelector && (
