@@ -182,18 +182,285 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
   const insertLink = () => {
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
-    const url = prompt('Enter URL:', 'https://');
+    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const editor = document.querySelector('[contenteditable]');
+
+    // Create modal with clean styling
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
     
-    if (url && url.trim() !== '' && url !== 'https://') {
-      const linkText = selectedText || url;
-      document.execCommand('createLink', false, url);
-      
-      // Update content
-      const editor = document.querySelector('[contenteditable]');
-      if (editor) {
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: #1A1C1A;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 24px;
+      width: 400px;
+      max-width: 90vw;
+    `;
+
+    // Title
+    const title = document.createElement('h3');
+    title.textContent = 'Insert Link';
+    title.style.cssText = `
+      color: white;
+      font-weight: bold;
+      margin: 0 0 20px 0;
+      font-size: 16px;
+    `;
+
+    // Text input
+    const textContainer = document.createElement('div');
+    textContainer.style.marginBottom = '16px';
+    
+    const textLabel = document.createElement('label');
+    textLabel.textContent = 'Text to display:';
+    textLabel.style.cssText = `
+      display: block;
+      color: white;
+      font-size: 12px;
+      margin-bottom: 4px;
+    `;
+
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.value = selectedText;
+    textInput.placeholder = 'Link text';
+    textInput.style.cssText = `
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+    `;
+
+    // URL input
+    const urlContainer = document.createElement('div');
+    urlContainer.style.marginBottom = '24px';
+    
+    const urlLabel = document.createElement('label');
+    urlLabel.textContent = 'URL:';
+    urlLabel.style.cssText = textLabel.style.cssText;
+
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.placeholder = 'https://example.com';
+    urlInput.style.cssText = textInput.style.cssText;
+
+    // Error message
+    const errorMessage = document.createElement('div');
+    errorMessage.style.cssText = `
+      color: #ff4444;
+      font-size: 12px;
+      margin-bottom: 16px;
+      min-height: 16px;
+    `;
+
+    // Buttons
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.style.cssText = `
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    `;
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.cssText = `
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    `;
+
+    const insertButton = document.createElement('button');
+    insertButton.textContent = 'Insert Link';
+    insertButton.style.cssText = `
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #54FCFF;
+      color: #1A1C1A;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    `;
+
+    // Assemble the modal
+    textContainer.appendChild(textLabel);
+    textContainer.appendChild(textInput);
+    urlContainer.appendChild(urlLabel);
+    urlContainer.appendChild(urlInput);
+    buttonsContainer.appendChild(cancelButton);
+    buttonsContainer.appendChild(insertButton);
+
+    content.appendChild(title);
+    content.appendChild(textContainer);
+    content.appendChild(urlContainer);
+    content.appendChild(errorMessage);
+    content.appendChild(buttonsContainer);
+    modal.appendChild(content);
+
+    document.body.appendChild(modal);
+
+    // Focus URL input if text is selected, otherwise focus text input
+    setTimeout(() => {
+      if (selectedText) {
+        urlInput.focus();
+      } else {
+        textInput.focus();
+      }
+    }, 50);
+
+    const validateAndInsert = () => {
+      const text = textInput.value.trim();
+      let url = urlInput.value.trim();
+
+      // Validate inputs
+      if (!text) {
+        errorMessage.textContent = 'Please enter the text to display';
+        return;
+      }
+
+      if (!url) {
+        errorMessage.textContent = 'Please enter a URL';
+        return;
+      }
+
+      // Add protocol if missing
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch (e) {
+        errorMessage.textContent = 'Please enter a valid URL';
+        return;
+      }
+
+      if (range && editor) {
+        // Create link wrapper div to help with positioning the remove button
+        const linkWrapper = document.createElement('span');
+        linkWrapper.style.position = 'relative';
+        linkWrapper.style.display = 'inline-block';
+        
+        // Create the link
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = text;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.cssText = `
+          color: #0066cc;
+          text-decoration: underline;
+          cursor: pointer;
+        `;
+        
+        // Create remove button (always visible)
+        const removeBtn = document.createElement('span');
+        removeBtn.textContent = '×';
+        removeBtn.style.cssText = `
+          position: absolute;
+          top: -8px;
+          right: -12px;
+          background: #e0e0e0;
+          color: #333;
+          border-radius: 50%;
+          width: 16px;
+          height: 16px;
+          font-size: 12px;
+          line-height: 16px;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+          opacity: 0;
+          transition: opacity 0.2s;
+        `;
+        
+        // Show/hide remove button on hover
+        linkWrapper.addEventListener('mouseenter', () => {
+          removeBtn.style.opacity = '1';
+          link.style.color = '#004499';
+        });
+        
+        linkWrapper.addEventListener('mouseleave', () => {
+          removeBtn.style.opacity = '0';
+          link.style.color = '#0066cc';
+        });
+        
+        // Handle remove button click
+        removeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const text = document.createTextNode(link.textContent);
+          linkWrapper.parentNode.replaceChild(text, linkWrapper);
+          handleContentChange({ target: editor });
+        });
+        
+        // Assemble the link component
+        linkWrapper.appendChild(link);
+        linkWrapper.appendChild(removeBtn);
+        
+        // Insert into document
+        range.deleteContents();
+        range.insertNode(linkWrapper);
+        
+        // Update editor content
         handleContentChange({ target: editor });
       }
-    }
+
+      // Close modal
+      document.body.removeChild(modal);
+    };
+    
+    // Event Listeners
+    cancelButton.addEventListener('click', () => document.body.removeChild(modal));
+    insertButton.addEventListener('click', validateAndInsert);
+    
+    // Handle Enter key
+    [textInput, urlInput].forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          validateAndInsert();
+        }
+      });
+    });
+
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
+
+    // Handle Escape key
+    document.addEventListener('keydown', function escapeHandler(e) {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    });
   };
 
   // Save template
