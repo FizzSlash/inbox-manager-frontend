@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, createPortal } from 'react';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
@@ -137,7 +137,7 @@ const InboxManager = ({ user, onSignOut }) => {
   });
   const [showRecentDropdown, setShowRecentDropdown] = useState(false);
   const [categoryDropdowns, setCategoryDropdowns] = useState(new Set()); // Track which lead category dropdowns are open
-  const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown positions
+  const [dropdownPositions, setDropdownPositions] = useState({}); // Track dropdown button positions
 
   // Clean up all timeouts on unmount
   useEffect(() => {
@@ -151,7 +151,7 @@ const InboxManager = ({ user, onSignOut }) => {
     };
   }, []);
 
-  // Click outside to close dropdowns
+  // Click outside to close dropdowns and handle window events
   useEffect(() => {
     const handleClickOutside = (event) => {
       // Close recent dropdown if clicking outside
@@ -160,22 +160,16 @@ const InboxManager = ({ user, onSignOut }) => {
       }
       
       // Close category dropdowns if clicking outside
-      if (categoryDropdowns.size > 0 && !event.target.closest('.category-dropdown')) {
-        setCategoryDropdowns(new Set());
-        setDropdownPositions({}); // Clear all positions
-      }
-    };
-
-    const handleScroll = () => {
-      // Close dropdowns on scroll to avoid positioning issues
-      if (categoryDropdowns.size > 0) {
+      if (categoryDropdowns.size > 0 && 
+          !event.target.closest('.category-dropdown') && 
+          !event.target.closest('[data-category-dropdown]')) {
         setCategoryDropdowns(new Set());
         setDropdownPositions({});
       }
     };
 
-    const handleResize = () => {
-      // Close dropdowns on resize to avoid positioning issues
+    const handleWindowEvents = () => {
+      // Close dropdowns on scroll or resize to prevent misalignment
       if (categoryDropdowns.size > 0) {
         setCategoryDropdowns(new Set());
         setDropdownPositions({});
@@ -183,13 +177,13 @@ const InboxManager = ({ user, onSignOut }) => {
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true); // Use capture to catch all scroll eventos
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleWindowEvents, true);
+    window.addEventListener('resize', handleWindowEvents);
     
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleWindowEvents, true);
+      window.removeEventListener('resize', handleWindowEvents);
     };
   }, [showRecentDropdown, categoryDropdowns]);
 
@@ -2720,12 +2714,12 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   // Toggle category dropdown for a specific lead
-  const toggleCategoryDropdown = (leadId, buttonElement = null) => {
+  const toggleCategoryDropdown = (leadId, buttonElement) => {
     setCategoryDropdowns(prev => {
       const newSet = new Set(prev);
       if (newSet.has(leadId)) {
         newSet.delete(leadId);
-        // Clear position when closing
+        // Remove position when closing
         setDropdownPositions(prevPos => {
           const newPos = { ...prevPos };
           delete newPos[leadId];
@@ -2735,15 +2729,14 @@ const InboxManager = ({ user, onSignOut }) => {
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
         
-        // Calculate and store position if button element is provided
+        // Calculate and store position when opening
         if (buttonElement) {
           const rect = buttonElement.getBoundingClientRect();
           setDropdownPositions(prevPos => ({
             ...prevPos,
             [leadId]: {
-              top: rect.bottom + 8,
-              left: rect.left,
-              width: Math.max(rect.width, 200)
+              top: rect.bottom + window.scrollY + 8,
+              left: rect.left + window.scrollX
             }
           }));
         }
@@ -4286,17 +4279,19 @@ const InboxManager = ({ user, onSignOut }) => {
                               <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             
-                            {isDropdownOpen && dropdownPositions[lead.id] && (
+                            {/* Portal-based dropdown to escape container clipping */}
+                            {isDropdownOpen && dropdownPositions[lead.id] && createPortal(
                               <div 
-                                className="fixed rounded-xl shadow-2xl overflow-hidden"
+                                className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52"
+                                data-category-dropdown
                                 style={{
                                   backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
                                   border: `2px solid ${themeStyles.borderStrong}`,
                                   boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                                  zIndex: 99999,
+                                  zIndex: 999999,
                                   top: `${dropdownPositions[lead.id].top}px`,
                                   left: `${dropdownPositions[lead.id].left}px`,
-                                  minWidth: `${dropdownPositions[lead.id].width}px`
+                                  pointerEvents: 'auto'
                                 }}
                               >
                                 {CATEGORY_OPTIONS.map((option, optionIndex) => (
@@ -4306,6 +4301,7 @@ const InboxManager = ({ user, onSignOut }) => {
                                       e.stopPropagation();
                                       updateLeadCategory(lead.id, option.value);
                                       setCategoryDropdowns(new Set());
+                                      setDropdownPositions({});
                                     }}
                                     className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
                                     style={{
@@ -4334,7 +4330,8 @@ const InboxManager = ({ user, onSignOut }) => {
                                     </div>
                                   </button>
                                 ))}
-                              </div>
+                              </div>,
+                              document.body
                             )}
                           </>
                         );
