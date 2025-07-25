@@ -639,13 +639,19 @@ const InboxManager = ({ user, onSignOut }) => {
     return createPortal(
       <div
         data-portal-dropdown
-        className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52 z-[10000]"
+        className="fixed rounded-xl shadow-2xl overflow-hidden z-[10000]"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,
+          minWidth: '220px',
+          maxWidth: '300px',
+          width: 'auto',
           backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
           border: `2px solid ${themeStyles.borderStrong}`,
-          boxShadow: '0 20px 40px rgba(0,0,0,0.9)'
+          boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
+          boxSizing: 'border-box',
+          borderRadius: '12px',
+          overflow: 'hidden'
         }}
       >
         {CATEGORY_OPTIONS.map((option, optionIndex) => (
@@ -656,13 +662,17 @@ const InboxManager = ({ user, onSignOut }) => {
               onSelect(leadId, option.value);
               onClose();
             }}
-            className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+            className="w-full px-5 py-4 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
             style={{
               backgroundColor: lead.lead_category === option.value 
                 ? `${option.color}30` 
                 : isDarkMode ? '#2A2C2A' : '#F8F9FA',
               borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
-              color: option.color
+              color: option.color,
+              boxSizing: 'border-box',
+              minHeight: '50px',
+              display: 'flex',
+              alignItems: 'center'
             }}
             onMouseEnter={(e) => {
               if (lead.lead_category !== option.value) {
@@ -675,10 +685,10 @@ const InboxManager = ({ user, onSignOut }) => {
               }
             }}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">{option.label}</span>
+            <div className="flex items-center justify-between w-full">
+              <span className="font-semibold text-sm whitespace-nowrap">{option.label}</span>
               {lead.lead_category === option.value && (
-                <CheckCircle className="w-4 h-4" style={{color: option.color}} />
+                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: option.color}} />
               )}
             </div>
           </button>
