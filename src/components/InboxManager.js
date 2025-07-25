@@ -4244,13 +4244,25 @@ const InboxManager = ({ user, onSignOut }) => {
                             
                             {isDropdownOpen && (
                               <div 
-                                className="absolute top-full left-0 mt-2 rounded-xl shadow-2xl overflow-hidden min-w-52"
+                                className="fixed rounded-xl shadow-2xl overflow-hidden min-w-52 max-h-80 overflow-y-auto"
                                 style={{
                                   backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
                                   border: `2px solid ${themeStyles.borderStrong}`,
                                   boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
                                   zIndex: 9999,
-                                  position: 'absolute'
+                                  top: 'auto',
+                                  left: 'auto',
+                                  transform: 'translateY(8px)'
+                                }}
+                                ref={(el) => {
+                                  if (el && isDropdownOpen) {
+                                    const button = el.parentNode.querySelector('button');
+                                    if (button) {
+                                      const rect = button.getBoundingClientRect();
+                                      el.style.top = `${rect.bottom + 8}px`;
+                                      el.style.left = `${rect.left}px`;
+                                    }
+                                  }
                                 }}
                               >
                                 {CATEGORY_OPTIONS.map((option, optionIndex) => (
