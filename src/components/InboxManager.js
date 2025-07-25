@@ -3681,7 +3681,7 @@ const InboxManager = ({ user, onSignOut }) => {
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-10 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-50 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
         {/* Header with Metrics */}
         <div className="p-6 relative transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}>
           {/* Glowing accent line */}
@@ -4217,7 +4217,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   
                   {/* Interactive Category Dropdown */}
                   <div className="flex flex-wrap gap-2 mb-3">
-                    <div className="relative category-dropdown" style={{zIndex: 1000}}>
+                    <div className="relative category-dropdown" style={{zIndex: 10000}}>
                       {(() => {
                         const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS[0];
                         const isDropdownOpen = categoryDropdowns.has(lead.id);
@@ -4249,7 +4249,8 @@ const InboxManager = ({ user, onSignOut }) => {
                                   backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
                                   border: `2px solid ${themeStyles.borderStrong}`,
                                   boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                                  zIndex: 9999
+                                  zIndex: 9999,
+                                  position: 'absolute'
                                 }}
                               >
                                 {CATEGORY_OPTIONS.map((option, optionIndex) => (
