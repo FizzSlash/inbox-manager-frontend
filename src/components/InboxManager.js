@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
 import CRMManager from './CRMManager';
+import TemplateManager from './TemplateManager';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -2942,6 +2943,22 @@ const InboxManager = ({ user, onSignOut }) => {
               </div>
             </button>
 
+            <button
+              onClick={() => setActiveTab('templates')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'templates' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'templates' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'templates' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Templates
+              </div>
+            </button>
+
             {/* Recently Viewed Dropdown */}
             {recentlyViewed.length > 0 && (
               <div className="relative recent-dropdown">
@@ -4882,6 +4899,15 @@ const InboxManager = ({ user, onSignOut }) => {
                         <Edit3 className="w-4 h-4" />
                         {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
                       </button>
+                      
+                      <button
+                        onClick={() => setActiveTab('templates')}
+                        className="px-4 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300"
+                        style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
+                      >
+                        <FileText className="w-4 h-4" />
+                        Use Template
+                      </button>
                     </div>
 
                     {/* Rich Text Editor with Formatting */}
@@ -5204,6 +5230,13 @@ const InboxManager = ({ user, onSignOut }) => {
       {activeTab === 'crm' && (
         <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
           <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
+        </div>
+      )}
+
+      {/* Main Content - Templates */}
+      {activeTab === 'templates' && (
+        <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+          <TemplateManager user={user} brandId={brandId} />
         </div>
       )}
 
