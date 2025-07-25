@@ -2794,7 +2794,6 @@ const InboxManager = ({ user, onSignOut }) => {
         .from('api_settings')
         .select('*')
         .eq('brand_id', brandId)
-        .eq('is_active', true)
         .order('is_primary', { ascending: false }); // Primary accounts first
 
       if (error) {
@@ -2802,8 +2801,12 @@ const InboxManager = ({ user, onSignOut }) => {
       }
 
       if (data && data.length > 0) {
-        // Convert database records to accounts structure
-        const accounts = data.map(record => ({
+        // Separate email accounts from global services
+        const emailAccounts = data.filter(record => record.account_name !== 'FullEnrich Global');
+        const fullenrichRecord = data.find(record => record.account_name === 'FullEnrich Global');
+
+        // Convert email account records to accounts structure
+        const accounts = emailAccounts.map(record => ({
           id: record.account_id,
           name: record.account_name || 'Account',
           esp: {
@@ -2813,14 +2816,17 @@ const InboxManager = ({ user, onSignOut }) => {
           is_primary: record.is_primary || false
         }));
 
-        // Use the first record for fullenrich (shared across all accounts)
-        const fullenrichKey = decryptApiKey(data[0].fullenrich_api_key || '');
+        // Extract fullenrich from its dedicated record
+        const fullenrichKey = fullenrichRecord ? decryptApiKey(fullenrichRecord.fullenrich_api_key || '') : '';
 
         // Update API keys state with data from Supabase
         setApiKeys({
           accounts: accounts,
           fullenrich: fullenrichKey
         });
+
+        const fullenrichCount = fullenrichKey ? 1 : 0;
+        console.log(`Loaded ${accounts.length} email account(s) and ${fullenrichCount} global service(s) from Supabase`);
         return true; // Successfully loaded from Supabase
       }
       return false; // No data found in Supabase
@@ -2841,7 +2847,9 @@ const InboxManager = ({ user, onSignOut }) => {
       
       if (deleteError) throw deleteError;
 
-      // Insert all accounts (ensure valid UUIDs)
+      const recordsToInsert = [];
+
+      // Insert email account records (without fullenrich duplication)
       const accountRecords = apiKeysData.accounts.map(account => ({
         brand_id: brandId,
         created_by: user.id,
@@ -2849,18 +2857,41 @@ const InboxManager = ({ user, onSignOut }) => {
         account_name: account.name,
         esp_provider: account.esp.provider || null,
         esp_api_key: encryptApiKey(account.esp.key || '') || null,
-        fullenrich_api_key: encryptApiKey(apiKeysData.fullenrich || '') || null,
+        fullenrich_api_key: null, // Remove from individual accounts
         is_primary: account.is_primary || false,
         updated_at: new Date().toISOString()
       }));
 
       if (accountRecords.length > 0) {
+        recordsToInsert.push(...accountRecords);
+      }
+
+      // Insert fullenrich as a separate global record (if it exists)
+      if (apiKeysData.fullenrich) {
+        const fullenrichRecord = {
+          brand_id: brandId,
+          created_by: user.id,
+          account_id: crypto.randomUUID(),
+          account_name: 'FullEnrich Global',
+          esp_provider: null,
+          esp_api_key: null,
+          fullenrich_api_key: encryptApiKey(apiKeysData.fullenrich),
+          is_primary: false,
+          updated_at: new Date().toISOString()
+        };
+        recordsToInsert.push(fullenrichRecord);
+      }
+
+      if (recordsToInsert.length > 0) {
         const { error: insertError } = await supabase
           .from('api_settings')
-          .insert(accountRecords);
+          .insert(recordsToInsert);
         
         if (insertError) throw insertError;
-        console.log(`Successfully saved ${accountRecords.length} email account(s) to Supabase`);
+        
+        const emailAccounts = accountRecords.length;
+        const fullenrichCount = apiKeysData.fullenrich ? 1 : 0;
+        console.log(`Successfully saved ${emailAccounts} email account(s) and ${fullenrichCount} global service(s) to Supabase`);
       }
       
       return true; // Successfully saved to Supabase
