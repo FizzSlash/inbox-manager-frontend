@@ -23,7 +23,7 @@ const encryptApiKey = (key) => {
 
 const decryptApiKey = (encryptedKey) => {
   try {
-    if (!encryptedKey) return '';
+  if (!encryptedKey) return '';
     
     // Check if it looks like base64 (contains only valid base64 characters)
     const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -32,19 +32,19 @@ const decryptApiKey = (encryptedKey) => {
       return encryptedKey;
     }
     
-    try {
-      const decoded = atob(encryptedKey);
+  try {
+    const decoded = atob(encryptedKey);
       // Check if the decoded value contains our salt (indicating it was encrypted by us)
       if (decoded.includes(ENCRYPTION_SALT)) {
-        return decoded.replace(ENCRYPTION_SALT, '');
+    return decoded.replace(ENCRYPTION_SALT, '');
       } else {
         // Decoded successfully but no salt found, likely just base64 encoded plain text
         return decoded;
       }
-    } catch (error) {
+  } catch (error) {
       // atob failed, treat as plain text
       console.warn('atob decoding failed for key:', error);
-      return encryptedKey;
+    return encryptedKey;
     }
   } catch (error) {
     // Catch any unexpected errors (like the "jn" initialization error)
@@ -195,7 +195,7 @@ const InboxManager = ({ user, onSignOut }) => {
         accounts: legacyProvider || legacyKey ? [{
           id: crypto.randomUUID(),
           name: 'Primary Account',
-          esp: {
+    esp: {
             provider: legacyProvider,
             key: legacyKey
           },
@@ -312,7 +312,7 @@ const InboxManager = ({ user, onSignOut }) => {
         const isClickOnRecentPortalDropdown = event.target.closest('[data-portal-dropdown]');
         
         if (!isClickOnRecentButton && !isClickOnRecentPortalDropdown) {
-          setShowRecentDropdown(false);
+        setShowRecentDropdown(false);
           setRecentDropdownPosition(null);
         }
       }
@@ -627,14 +627,14 @@ const InboxManager = ({ user, onSignOut }) => {
     if (shouldFetchLeads) {
       // Small delay to avoid rapid re-fetching during initialization
       const timeoutId = setTimeout(() => {
-        fetchLeads();
+      fetchLeads();
       }, 100);
       
       return () => clearTimeout(timeoutId);
     }
   }, [brandId, apiKeys.accounts?.length]); // Only depend on accounts length, not entire apiKeys object
 
-    const fetchLeads = async () => {
+  const fetchLeads = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -1255,7 +1255,7 @@ const InboxManager = ({ user, onSignOut }) => {
               esp_api_key: leadApiKey?.esp.key || '',
               account_name: leadApiKey?.name || '',
               account_id: leadApiKey?.id || '',
-              fullenrich_api_key: apiKeys.fullenrich
+          fullenrich_api_key: apiKeys.fullenrich
             };
           })())
         })
@@ -2060,7 +2060,7 @@ const InboxManager = ({ user, onSignOut }) => {
         break;
       default:
         // Fallback to execCommand for other commands
-        document.execCommand(command, false, value);
+    document.execCommand(command, false, value);
         return;
     }
     
@@ -2364,8 +2364,8 @@ const InboxManager = ({ user, onSignOut }) => {
 
   const insertList = () => {
     document.execCommand('insertUnorderedList', false, null);
-    
-    // Update the draft content
+      
+      // Update the draft content
     const editor = document.querySelector('[contenteditable]');
     if (editor) {
       handleTextareaChange({ target: editor });
@@ -2702,16 +2702,16 @@ const InboxManager = ({ user, onSignOut }) => {
     };
 
     const response = await fetch('https://api.instantly.ai/api/v1/send/email', {
-      method: 'POST',
-      headers: {
+        method: 'POST',
+        headers: { 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
-      },
+        },
       body: JSON.stringify(payload)
-    });
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+      if (!response.ok) {
+        const errorText = await response.text();
       throw new Error(`Instantly API error: ${response.status} - ${errorText}`);
     }
 
@@ -2905,7 +2905,7 @@ const InboxManager = ({ user, onSignOut }) => {
               esp_api_key: leadApiKey?.esp.key || '',
               account_name: leadApiKey?.name || '',
               account_id: leadApiKey?.id || '',
-              fullenrich_api_key: apiKeys.fullenrich
+          fullenrich_api_key: apiKeys.fullenrich
             };
           })())
         })
@@ -3056,7 +3056,7 @@ const InboxManager = ({ user, onSignOut }) => {
     if (key === 'fullenrich') {
       // For fullenrich, direct update (shared across all accounts)
       setApiKeys(prev => ({
-        ...prev,
+          ...prev,
         fullenrich: value
       }));
     }
@@ -3161,7 +3161,7 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log(`   - Has API Key: ${account.esp.key ? 'Yes' : 'No'}`);
         console.log(`   - Is Primary: ${account.is_primary || false}`);
         
-        return {
+      return {
           id: accountId, // Use account.id as primary key for webhook routing
           brand_id: brandId,
           created_by: user.id,
@@ -3283,7 +3283,7 @@ const InboxManager = ({ user, onSignOut }) => {
     };
 
     setApiKeys(prev => ({
-      ...prev,
+        ...prev,
       accounts: [...prev.accounts, newAccount]
     }));
   };
@@ -3510,7 +3510,7 @@ const InboxManager = ({ user, onSignOut }) => {
               esp_api_key: leadApiKey?.esp.key || '',
               account_name: leadApiKey?.name || '',
               account_id: leadApiKey?.id || '',
-              fullenrich_api_key: apiKeys.fullenrich
+          fullenrich_api_key: apiKeys.fullenrich
             };
           })())
         })
@@ -3866,7 +3866,7 @@ const InboxManager = ({ user, onSignOut }) => {
                 Analytics
               </div>
             </button>
-          </div>
+                      </div>
 
           <div className="flex items-center space-x-3">
             {/* API Settings Tab */}
@@ -3963,7 +3963,7 @@ const InboxManager = ({ user, onSignOut }) => {
               {/* Multiple Email Accounts Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4" style={{color: themeStyles.accent}} />
                     <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>Email Accounts</h3>
                   </div>
@@ -4023,8 +4023,8 @@ const InboxManager = ({ user, onSignOut }) => {
                         {['Email Bison', 'Smartlead', 'Instantly'].map(provider => {
                           const isSelected = account.esp.provider === provider.toLowerCase().replace(' ', '_');
                           return (
-                            <button
-                              key={provider}
+                    <button
+                      key={provider}
                               onClick={() => updateAccount(account.id, { 
                                 esp: { ...account.esp, provider: provider.toLowerCase().replace(' ', '_') }
                               })}
@@ -4034,21 +4034,21 @@ const InboxManager = ({ user, onSignOut }) => {
                                 border: `1px solid ${isSelected ? themeStyles.accent : themeStyles.border}`,
                                 color: isSelected ? themeStyles.accent : themeStyles.textPrimary
                               }}
-                            >
-                              {provider}
-                            </button>
+                    >
+                      {provider}
+                    </button>
                           );
                         })}
-                      </div>
+                </div>
 
-                      {/* ESP API Key Input */}
+                {/* ESP API Key Input */}
                       {account.esp.provider && (
-                        <div className="space-y-2">
+                  <div className="space-y-2">
                           <label className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                             {account.esp.provider.charAt(0).toUpperCase() + account.esp.provider.slice(1).replace('_', ' ')} API Key
-                          </label>
-                          <input
-                            type="password"
+                    </label>
+                                          <input
+                      type="password"
                             value={account.esp.key}
                             onChange={(e) => updateAccount(account.id, { 
                               esp: { ...account.esp, key: e.target.value }
@@ -4092,7 +4092,7 @@ const InboxManager = ({ user, onSignOut }) => {
                             </svg>
                             Copy
                           </button>
-                        </div>
+                    </div>
                         <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                           Use this URL in your email platform's webhook settings
                         </p>
@@ -4105,8 +4105,8 @@ const InboxManager = ({ user, onSignOut }) => {
                       <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">No email accounts configured</p>
                       <p className="text-xs mt-1">Click "Add Account" to get started</p>
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
 
@@ -4154,24 +4154,24 @@ const InboxManager = ({ user, onSignOut }) => {
               >
                 Cancel
               </button>
-                              <button
-                  onClick={saveApiKeys}
-                  disabled={isSavingApi}
+              <button
+                onClick={saveApiKeys}
+                disabled={isSavingApi}
                   className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
                   style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
-                >
-                  {isSavingApi ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Save API Keys
-                    </>
-                  )}
-                </button>
+              >
+                {isSavingApi ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save API Keys
+                  </>
+                )}
+              </button>
                 <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                   💡 Remember to click "Save API Keys" after adding or updating keys to save them to your account
                 </p>
@@ -6080,9 +6080,9 @@ const InboxManager = ({ user, onSignOut }) => {
                             }
                           } else if (e.key === 'Enter' && e.shiftKey) {
                             // Handle Shift+Enter to exit lists and create new normal line (keeping current bullet)
-                            const selection = window.getSelection();
-                            if (selection.rangeCount > 0) {
-                              const range = selection.getRangeAt(0);
+                                  const selection = window.getSelection();
+                                  if (selection.rangeCount > 0) {
+                                    const range = selection.getRangeAt(0);
                               let currentElement = range.startContainer;
                               
                               // Find the list item we're in (if any)
@@ -6092,8 +6092,8 @@ const InboxManager = ({ user, onSignOut }) => {
                               
                               // Check if we're in a list item
                               if (currentElement && currentElement.tagName === 'LI') {
-                                e.preventDefault();
-                                
+                                      e.preventDefault();
+                                      
                                 // Find the parent list (ul or ol)
                                 const list = currentElement.closest('ul, ol');
                                 if (list) {
@@ -6105,11 +6105,11 @@ const InboxManager = ({ user, onSignOut }) => {
                                   list.parentNode.insertBefore(newDiv, list.nextSibling);
                                   
                                   // Move cursor to the new div
-                                  const newRange = document.createRange();
+                                        const newRange = document.createRange();
                                   newRange.setStart(newDiv, 0);
-                                  newRange.collapse(true);
-                                  selection.removeAllRanges();
-                                  selection.addRange(newRange);
+                                        newRange.collapse(true);
+                                        selection.removeAllRanges();
+                                        selection.addRange(newRange);
                                   
                                   // Update content
                                   handleTextareaChange({ target: e.target });
@@ -6168,10 +6168,10 @@ const InboxManager = ({ user, onSignOut }) => {
                                   e.preventDefault();
                                   // Use the browser's outdent command to exit the list
                                   document.execCommand('outdent', false, null);
-                                  // Update content
-                                  handleTextareaChange({ target: e.target });
+                                      // Update content
+                                      handleTextareaChange({ target: e.target });
                                 }
-                              }
+                                    }
                             }
                           }
                         }}
@@ -6277,15 +6277,15 @@ Keyboard shortcuts:
                             Scheduled for {scheduledTime.toLocaleString()}
                           </span>
                         )}
-                        <button
-                          onClick={sendMessage}
-                          disabled={!draftResponse.trim() || isSending}
-                          className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
-                          style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
-                        >
-                          <Send className="w-4 h-4" />
+                      <button
+                        onClick={sendMessage}
+                        disabled={!draftResponse.trim() || isSending}
+                        className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
+                        style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
+                      >
+                        <Send className="w-4 h-4" />
                           {isSending ? 'Sending...' : scheduledTime ? 'Schedule Message' : 'Send Message'}
-                        </button>
+                      </button>
                       </div>
                     </div>
                   </div>
@@ -6407,11 +6407,11 @@ Keyboard shortcuts:
           </>
         )}
 
-        {/* Main Content - CRM */}
-        {activeTab === 'crm' && (
-          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-            <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
-          </div>
+      {/* Main Content - CRM */}
+      {activeTab === 'crm' && (
+        <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+          <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
+        </div>
         )}
 
         {/* Main Content - Templates */}
