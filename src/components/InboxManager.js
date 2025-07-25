@@ -1309,12 +1309,7 @@ const InboxManager = ({ user, onSignOut }) => {
     return { bg: '', border: '', text: 'text-white', label: intent >= 7 ? 'High Intent' : intent >= 4 ? 'Medium Intent' : 'Low Intent' };
   };
 
-  // Get engagement color
-  const getEngagementColor = (score) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
-  };
+
 
   // Enhanced filter and sort leads
   const filteredAndSortedLeads = useMemo(() => {
@@ -4295,20 +4290,7 @@ const InboxManager = ({ user, onSignOut }) => {
                     {lead.subject}
                   </p>
                   
-                  {/* Enhanced metadata with animations */}
-                  <div className="flex items-center gap-3 text-xs mb-2" style={{color: themeStyles.textSecondary}}>
-                    <span className={`font-medium transition-all duration-300 group-hover:scale-105`} style={{color: getEngagementColor(lead.engagement_score)}}>
-                      {lead.engagement_score}% engagement
-                    </span>
-                    <span className="transition-all duration-300 group-hover:scale-105" style={{color: themeStyles.accent}}>
-                      {lead.conversation.filter(m => m.type === 'REPLY').length} replies
-                    </span>
-                    {urgency !== 'none' && lastMessage && (
-                      <span className="font-bold animate-pulse transition-all duration-300 group-hover:scale-105" style={{color: themeStyles.error}}>
-                        {Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60 * 24))} days
-                      </span>
-                    )}
-                  </div>
+
                   
                   {/* Interactive Category Dropdown */}
                   <div className="flex flex-wrap gap-2 mb-3">
