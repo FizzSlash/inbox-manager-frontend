@@ -105,6 +105,9 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add state for template selection
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
+  // Add ref for recent dropdown positioning
+  const recentButtonRef = useRef(null);
+
   // Replace single loading states with maps of lead IDs
   const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
@@ -2942,8 +2945,9 @@ const InboxManager = ({ user, onSignOut }) => {
             </button>
 
             {/* Recent Tab */}
-            <div className="relative recent-dropdown">
+            <div className="relative recent-dropdown" style={{zIndex: 10000}}>
               <button
+                ref={recentButtonRef}
                 onClick={() => setShowRecentDropdown(!showRecentDropdown)}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-white/5 flex items-center gap-2"
                 style={{color: themeStyles.textPrimary}}
@@ -2953,8 +2957,17 @@ const InboxManager = ({ user, onSignOut }) => {
                 <ChevronDown className="w-3 h-3" />
               </button>
 
-              {showRecentDropdown && recentlyViewed.length > 0 && (
-                <div className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                            {showRecentDropdown && recentlyViewed.length > 0 && (
+                <div className="fixed rounded-lg shadow-lg max-h-80 overflow-y-auto transition-colors duration-300" 
+                     style={{
+                       backgroundColor: themeStyles.secondaryBg, 
+                       border: `1px solid ${themeStyles.border}`, 
+                       boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
+                       zIndex: 10000,
+                       width: '256px',
+                       left: '120px',
+                       top: '56px' // 48px nav height + 8px margin
+                     }}>
                   <div className="p-3">
                     <h4 className="font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Recently Viewed</h4>
                     <div className="space-y-1">
@@ -3030,24 +3043,6 @@ const InboxManager = ({ user, onSignOut }) => {
               </div>
             </button>
 
-            <button
-              onClick={() => setShowApiSettings(true)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                showApiSettings ? 'text-white' : 'hover:bg-white/5'
-              }`}
-              style={{
-                backgroundColor: showApiSettings ? `${themeStyles.accent}20` : 'transparent',
-                color: showApiSettings ? themeStyles.accent : themeStyles.textPrimary
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Key className="w-4 h-4" />
-                API Settings
-              </div>
-            </button>
-          </div>
-
-          <div className="flex items-center space-x-3">
             {/* Analytics Tab */}
             <button
               onClick={() => setActiveTab('analytics')}
@@ -3062,6 +3057,25 @@ const InboxManager = ({ user, onSignOut }) => {
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 Analytics
+              </div>
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            {/* API Settings Tab */}
+            <button
+              onClick={() => setShowApiSettings(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                showApiSettings ? 'text-white' : 'hover:bg-white/5'
+              }`}
+              style={{
+                backgroundColor: showApiSettings ? `${themeStyles.accent}20` : 'transparent',
+                color: showApiSettings ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4" />
+                API Settings
               </div>
             </button>
 
