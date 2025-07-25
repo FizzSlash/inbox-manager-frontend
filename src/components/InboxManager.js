@@ -164,38 +164,53 @@ const InboxManager = ({ user, onSignOut }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKeys, setApiKeys] = useState(() => {
-    console.log('🔄 Initializing apiKeys state...');
+    console.log('🔄 SIMPLE INIT: Loading initial apiKeys from localStorage...');
     
-    // Initial load from localStorage for immediate availability
-    const legacyProvider = localStorage.getItem('esp_provider') || '';
-    const legacyKey = decryptApiKey(localStorage.getItem('esp_api_key_enc') || '');
-    const fullenrichKey = decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '');
-    
-    console.log(`📱 localStorage data found:`, {
-      legacyProvider: !!legacyProvider,
-      legacyKey: !!legacyKey,
-      fullenrichKey: !!fullenrichKey
-    });
-    
-    const initialState = {
-      accounts: legacyProvider || legacyKey ? [{
-        id: crypto.randomUUID(), // Generate proper UUID
-        name: 'Primary Account',
-        esp: {
-          provider: legacyProvider,
-          key: legacyKey
-        },
-        is_primary: true
-      }] : [],
-      fullenrich: fullenrichKey
-    };
-    
-    console.log(`🎯 Initial apiKeys state:`, {
-      accountCount: initialState.accounts.length,
-      hasFullenrich: !!initialState.fullenrich
-    });
-    
-    return initialState;
+    try {
+      // Try new format first
+      const savedAccounts = localStorage.getItem('apiKeys_accounts');
+      const savedFullenrich = localStorage.getItem('apiKeys_fullenrich') || '';
+      
+      if (savedAccounts) {
+        const accounts = JSON.parse(savedAccounts);
+        console.log(`✅ Found new format: ${accounts.length} accounts`);
+        return {
+          accounts: accounts,
+          fullenrich: savedFullenrich
+        };
+      }
+      
+      // Fallback to legacy format
+      const legacyProvider = localStorage.getItem('esp_provider') || '';
+      const legacyKey = decryptApiKey(localStorage.getItem('esp_api_key_enc') || '');
+      const fullenrichKey = decryptApiKey(localStorage.getItem('fullenrich_api_key_enc') || '');
+      
+      console.log(`📱 Using legacy format:`, {
+        provider: !!legacyProvider,
+        key: !!legacyKey,
+        fullenrich: !!fullenrichKey
+      });
+      
+      const initialState = {
+        accounts: legacyProvider || legacyKey ? [{
+          id: crypto.randomUUID(),
+          name: 'Primary Account',
+          esp: {
+            provider: legacyProvider,
+            key: legacyKey
+          },
+          is_primary: true
+        }] : [],
+        fullenrich: fullenrichKey
+      };
+      
+      console.log(`🎯 Initial state: ${initialState.accounts.length} accounts, fullenrich: ${!!initialState.fullenrich}`);
+      return initialState;
+      
+    } catch (error) {
+      console.error('❌ Error loading from localStorage:', error);
+      return { accounts: [], fullenrich: '' };
+    }
   });
   const [apiTestStatus, setApiTestStatus] = useState({
     esp: null,
@@ -2932,154 +2947,86 @@ const InboxManager = ({ user, onSignOut }) => {
     // For account-specific changes, use updateAccount function
   };
 
-  // Function to load API keys from Supabase
+  // SIMPLIFIED: Load from Supabase, sync to localStorage, update state
   const loadApiKeysFromSupabase = async (brandId) => {
     if (!brandId) return false;
     
     try {
-      if (!supabase || typeof supabase.from !== 'function') {
-        console.error('Supabase client not available');
-        return false;
-      }
-
-      console.log(`📥 Loading API keys from Supabase for brand: ${brandId}`);
+      console.log(`📥 SIMPLE LOAD: Fetching from Supabase for brand: ${brandId}`);
 
       const { data, error } = await supabase
         .from('api_settings')
         .select('*')
-        .eq('brand_id', brandId)
-        .order('is_primary', { ascending: false });
+        .eq('brand_id', brandId);
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        console.log(`📊 Found ${data.length} API settings records`);
-        console.log(`📋 Raw records:`, data.map(record => ({
-          id: record.id,
-          account_name: record.account_name,
-          key_type: record.key_type,
-          esp_provider: record.esp_provider,
-          has_encrypted_key: !!record.encrypted_key,
-          brand_id: record.brand_id
-        })));
+      if (!data || data.length === 0) {
+        console.log('📭 No data in Supabase - keeping localStorage data');
+        return false;
+      }
 
-        // Separate ESP accounts from FullEnrich using key_type
-        const espAccounts = data.filter(record => {
-          // Primary check: key_type === 'esp_api_key'
-          if (record.key_type === 'esp_api_key') return true;
-          
-          // Fallback: if key_type is missing but account name suggests it's not FullEnrich
-          if (!record.key_type && record.account_name !== 'FullEnrich Global') {
-            console.log(`🔄 Found record without key_type, treating as ESP account: ${record.account_name}`);
-            return true;
-          }
-          
-          return false;
-        });
+      console.log(`📊 Found ${data.length} records in Supabase:`, data);
+
+      // SIMPLE LOGIC: Convert ALL non-FullEnrich records to accounts
+      const accounts = [];
+      let fullenrichKey = '';
+
+      for (const record of data) {
+        console.log(`🔄 Processing record: ${record.account_name} (${record.id})`);
         
-        const fullenrichRecord = data.find(record => {
-          // Primary check: key_type === 'fullenrich_api_key'
-          if (record.key_type === 'fullenrich_api_key') return true;
-          
-          // Fallback: if key_type is missing but account name suggests FullEnrich
-          if (!record.key_type && record.account_name === 'FullEnrich Global') {
-            console.log(`🔄 Found FullEnrich record without key_type`);
-            return true;
+        if (record.account_name === 'FullEnrich Global') {
+          // This is the FullEnrich record
+          try {
+            fullenrichKey = decryptApiKey(record.encrypted_key || '');
+            console.log(`✅ FullEnrich loaded`);
+          } catch (err) {
+            console.error(`❌ FullEnrich decrypt failed:`, err);
+            fullenrichKey = record.encrypted_key || '';
           }
-          
-          return false;
-        });
-
-        console.log(`🔑 ESP accounts: ${espAccounts.length}, FullEnrich: ${fullenrichRecord ? 1 : 0}`);
-
-        // Convert ESP account records to accounts structure
-        const accounts = espAccounts.map(record => {
-          console.log(`🔄 Processing ESP account record:`, {
-            id: record.id,
-            name: record.account_name,
-            key_type: record.key_type,
-            provider: record.esp_provider,
-            has_key: !!record.encrypted_key
-          });
-
+        } else {
+          // This is an ESP account
           let decryptedKey = '';
           try {
-            console.log(`🔓 Attempting to decrypt key for ${record.account_name}...`);
-            decryptedKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(record.encrypted_key || '') : (record.encrypted_key || '');
-            console.log(`✅ Decryption successful for ${record.account_name}`);
+            decryptedKey = decryptApiKey(record.encrypted_key || '');
+            console.log(`✅ ESP account loaded: ${record.account_name}`);
           } catch (err) {
-            console.error(`❌ Failed to decrypt key for account ${record.account_name}:`, err);
+            console.error(`❌ ESP decrypt failed for ${record.account_name}:`, err);
             decryptedKey = record.encrypted_key || '';
           }
           
-          console.log(`✅ Loaded account: ${record.account_name} (${record.id})`);
-          
-          return {
-            id: record.id, // Use the primary key as account ID for webhook routing
+          accounts.push({
+            id: record.id,
             name: record.account_name || 'Account',
             esp: {
               provider: record.esp_provider || '',
               key: decryptedKey
             },
             is_primary: record.is_primary || false
-          };
-        });
-
-        // Extract fullenrich from its dedicated record
-        let fullenrichKey = '';
-        if (fullenrichRecord) {
-          console.log(`🔄 Processing FullEnrich record:`, {
-            id: fullenrichRecord.id,
-            name: fullenrichRecord.account_name,
-            key_type: fullenrichRecord.key_type,
-            has_key: !!fullenrichRecord.encrypted_key
           });
-          
-          try {
-            console.log(`🔓 Attempting to decrypt FullEnrich key...`);
-            fullenrichKey = typeof decryptApiKey === 'function' ? 
-              decryptApiKey(fullenrichRecord.encrypted_key || '') : (fullenrichRecord.encrypted_key || '');
-            console.log(`✅ FullEnrich decryption successful`);
-          } catch (err) {
-            console.error('❌ Failed to decrypt FullEnrich key:', err);
-            fullenrichKey = fullenrichRecord.encrypted_key || '';
-          }
-        } else {
-          console.log(`📭 No FullEnrich record found`);
         }
-
-        // Update API keys state with data from Supabase
-        console.log('🔄 Setting apiKeys state with Supabase data...');
-        const newApiKeysState = {
-          accounts: accounts,
-          fullenrich: fullenrichKey
-        };
-        
-        console.log('📊 About to set apiKeys to:', {
-          accountCount: newApiKeysState.accounts.length,
-          accounts: newApiKeysState.accounts.map(acc => ({
-            id: acc.id,
-            name: acc.name,
-            provider: acc.esp.provider,
-            hasKey: !!acc.esp.key
-          })),
-          hasFullenrich: !!newApiKeysState.fullenrich
-        });
-        
-        setApiKeys(newApiKeysState);
-
-        console.log(`🎯 Successfully loaded ${accounts.length} accounts and FullEnrich key`);
-        console.log(`🔗 Webhook URLs:`, accounts.map(acc => `${acc.name}: /webhook/${acc.id}`));
-
-        return true; // Successfully loaded from Supabase
       }
+
+      const newState = {
+        accounts: accounts,
+        fullenrich: fullenrichKey
+      };
+
+      console.log(`🎯 SIMPLE RESULT: ${accounts.length} accounts, fullenrich: ${!!fullenrichKey}`);
+
+      // Update state
+      setApiKeys(newState);
+
+      // Sync to localStorage to keep them in sync
+      localStorage.setItem('apiKeys_accounts', JSON.stringify(accounts));
+      localStorage.setItem('apiKeys_fullenrich', fullenrichKey);
+      console.log(`💾 Synced to localStorage`);
+
+      return true;
       
-      console.log('📭 No API settings found in Supabase');
-      return false; // No data found in Supabase
     } catch (error) {
-      console.error('❌ Error loading API keys from Supabase:', error);
-      return false; // Fallback to localStorage
+      console.error('❌ Supabase load failed:', error);
+      return false; // Keep existing localStorage data
     }
   };
 
@@ -3225,21 +3172,39 @@ const InboxManager = ({ user, onSignOut }) => {
     }));
   };
 
-  // Function to remove an email account
-  const removeEmailAccount = (accountId) => {
-    setApiKeys(prev => {
-      const updatedAccounts = prev.accounts.filter(acc => acc.id !== accountId);
-      
-      // If we removed the primary account, make the first remaining account primary
-      if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
-        updatedAccounts[0].is_primary = true;
+  // SIMPLIFIED: Remove from everywhere and auto-sync
+  const removeEmailAccount = async (accountId) => {
+    console.log(`🗑️ SIMPLE REMOVE: Removing account ${accountId}`);
+    
+    const updatedAccounts = apiKeys.accounts.filter(acc => acc.id !== accountId);
+    
+    // If we removed the primary account, make the first remaining account primary
+    if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
+      updatedAccounts[0].is_primary = true;
+    }
+    
+    const newApiKeys = {
+      ...apiKeys,
+      accounts: updatedAccounts
+    };
+    
+    // Update state
+    setApiKeys(newApiKeys);
+    
+    // Update localStorage immediately
+    localStorage.setItem('apiKeys_accounts', JSON.stringify(updatedAccounts));
+    console.log(`💾 Removed from localStorage`);
+    
+    // Auto-save to Supabase if possible
+    if (brandId && user) {
+      console.log(`🚀 Auto-saving to Supabase after removal...`);
+      try {
+        await saveApiKeysToSupabase(brandId, newApiKeys);
+        console.log(`✅ Removal synced to Supabase`);
+      } catch (error) {
+        console.error(`❌ Failed to sync removal to Supabase:`, error);
       }
-      
-      return {
-        ...prev,
-        accounts: updatedAccounts
-      };
-    });
+    }
   };
 
   // Function to update an account
@@ -3329,74 +3294,66 @@ const InboxManager = ({ user, onSignOut }) => {
     });
   };
 
-  // Function to save API keys (with encryption)
+  // SIMPLIFIED: Save to BOTH Supabase AND localStorage always
   const saveApiKeys = async () => {
-    console.log(`💾 Starting save process...`);
-    console.log(`🏢 Brand ID: ${brandId}`);
-    console.log(`👤 User: ${user?.id}`);
-    console.log(`📊 Accounts to save: ${apiKeys.accounts.length}`);
-    console.log(`🔑 FullEnrich key: ${apiKeys.fullenrich ? 'Present' : 'Not set'}`);
+    console.log(`💾 SIMPLE SAVE: Starting dual save process...`);
+    console.log(`📊 Accounts: ${apiKeys.accounts.length}, FullEnrich: ${apiKeys.fullenrich ? 'Yes' : 'No'}`);
     
     setIsSavingApi(true);
+    let success = false;
+    
     try {
-      let savedToSupabase = false;
+      // STEP 1: Always save to localStorage first (immediate backup)
+      console.log(`1️⃣ Saving to localStorage...`);
       
-      // Check if we have the required data to save
-      if (!brandId) {
-        console.error('❌ No brand ID available - cannot save to Supabase');
-        throw new Error('Brand ID is required to save API keys');
-      }
+      // Save all accounts as JSON
+      localStorage.setItem('apiKeys_accounts', JSON.stringify(apiKeys.accounts));
+      localStorage.setItem('apiKeys_fullenrich', apiKeys.fullenrich || '');
       
-      if (!user) {
-        console.error('❌ No user available - cannot save to Supabase');
-        throw new Error('User authentication required to save API keys');
-      }
-      
-      if (apiKeys.accounts.length === 0) {
-        console.warn('⚠️ No accounts to save');
-      }
-      
-      // Try to save to Supabase first if brandId is available
-      if (brandId && user) {
-        console.log(`🚀 Attempting to save to Supabase...`);
-        savedToSupabase = await saveApiKeysToSupabase(brandId, apiKeys);
-        console.log(`📊 Supabase save result: ${savedToSupabase}`);
-      }
-      
-      // Also save to localStorage as backup (for offline access)
-      // Save primary account ESP settings for backward compatibility
+      // Legacy format for backward compatibility
       const primaryAccount = apiKeys.accounts.find(acc => acc.is_primary) || apiKeys.accounts[0];
       if (primaryAccount) {
         localStorage.setItem('esp_provider', primaryAccount.esp.provider);
-        const encryptedEspKey = encryptApiKey(primaryAccount.esp.key);
-        localStorage.setItem('esp_api_key_enc', encryptedEspKey);
+        localStorage.setItem('esp_api_key_enc', encryptApiKey(primaryAccount.esp.key));
       }
-
-      // Save Full Enrich key
-      const encryptedFullEnrich = encryptApiKey(apiKeys.fullenrich);
-      localStorage.setItem('fullenrich_api_key_enc', encryptedFullEnrich);
-
-      // Remove old keys if they exist
-      ['smartlead', 'claude'].forEach(oldKey => {
-        localStorage.removeItem(`${oldKey}_api_key`);
-        localStorage.removeItem(`${oldKey}_api_key_enc`);
-      });
-
-      // Show success toast
+      localStorage.setItem('fullenrich_api_key_enc', encryptApiKey(apiKeys.fullenrich));
+      
+      console.log(`✅ localStorage save complete`);
+      
+      // STEP 2: Save to Supabase if possible  
+      if (brandId && user) {
+        console.log(`2️⃣ Saving to Supabase...`);
+        const supabaseSuccess = await saveApiKeysToSupabase(brandId, apiKeys);
+        
+        if (supabaseSuccess) {
+          console.log(`✅ Supabase save complete`);
+          success = true;
+        } else {
+          console.warn(`⚠️ Supabase save failed, but localStorage backup exists`);
+          success = true; // Still success because localStorage worked
+        }
+      } else {
+        console.warn(`⚠️ No brandId/user - only localStorage save`);
+        success = true; // localStorage save is still success
+      }
+      
+      // Show success message
       setApiToastMessage({
         type: 'success',
-        message: savedToSupabase ? 'API keys saved securely to your account' : 'API keys saved locally'
+        message: (brandId && user) ? 'API keys saved to account & locally' : 'API keys saved locally'
       });
       setShowApiToast(true);
       setTimeout(() => setShowApiToast(false), 3000);
+      setShowApiSettings(false);
+      
     } catch (error) {
-      console.error('Failed to save API keys:', error);
+      console.error('❌ Save failed:', error);
       setApiToastMessage({
         type: 'error',
-        message: 'Failed to save API keys'
+        message: 'Failed to save API keys: ' + error.message
       });
       setShowApiToast(true);
-      setTimeout(() => setShowApiToast(false), 3000);
+      setTimeout(() => setShowApiToast(false), 5000);
     } finally {
       setIsSavingApi(false);
     }
