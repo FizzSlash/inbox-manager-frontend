@@ -469,21 +469,36 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   // Fetch the user's brand_id from the profiles table after login
-  const [brandId, setBrandId] = useState(null);
+  const [brandId, setBrandId] = useState(() => {
+    // Try localStorage first for immediate availability
+    return localStorage.getItem('user_brand_id') || null;
+  });
 
   // Fetch the user's brand_id from the profiles table after login
   useEffect(() => {
     const fetchBrandId = async () => {
       if (!user) return;
+      
+      // Check if we already have it cached
+      const cachedBrandId = localStorage.getItem('user_brand_id');
+      if (cachedBrandId) {
+        setBrandId(cachedBrandId);
+        return;
+      }
+      
+      // Only fetch from database if not cached
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('brand_id')
         .eq('id', user.id)
         .single();
-      if (profile && profile.brand_id) {
+        
+      if (profile?.brand_id) {
         setBrandId(profile.brand_id);
+        localStorage.setItem('user_brand_id', profile.brand_id); // Cache it
       } else {
         setBrandId(null);
+        localStorage.removeItem('user_brand_id'); // Clear invalid cache
       }
     };
     fetchBrandId();
@@ -493,25 +508,40 @@ const InboxManager = ({ user, onSignOut }) => {
   useEffect(() => {
     const loadApiKeys = async () => {
       if (brandId && user) {
-        const loadedFromSupabase = await loadApiKeysFromSupabase(brandId);
-        if (!loadedFromSupabase) {
-          // If no data in Supabase, the localStorage values are already loaded in initial state
-          console.log('No API keys found in Supabase, keeping localStorage values');
-        } else {
-          console.log('API keys loaded from Supabase successfully');
+        try {
+          const loadedFromSupabase = await loadApiKeysFromSupabase(brandId);
+          if (!loadedFromSupabase) {
+            // If no data in Supabase, the localStorage values are already loaded in initial state
+            console.log('No API keys found in Supabase, keeping localStorage values');
+          } else {
+            console.log('API keys loaded from Supabase successfully');
+          }
+        } catch (error) {
+          console.error('Failed to load API keys from Supabase:', error);
+          // Continue with localStorage values
         }
       }
     };
     
-    loadApiKeys();
+    // Load immediately if brandId is available (from cache or database)
+    if (brandId) {
+      loadApiKeys();
+    }
   }, [brandId, user]);
 
   // Fetch leads when brandId or API keys are available
   useEffect(() => {
-    if (brandId || (apiKeys.accounts && apiKeys.accounts.length > 0)) {
-      fetchLeads();
+    const shouldFetchLeads = brandId || (apiKeys.accounts && apiKeys.accounts.length > 0);
+    
+    if (shouldFetchLeads) {
+      // Small delay to avoid rapid re-fetching during initialization
+      const timeoutId = setTimeout(() => {
+        fetchLeads();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [brandId, apiKeys]);
+  }, [brandId, apiKeys.accounts?.length]); // Only depend on accounts length, not entire apiKeys object
 
   const fetchLeads = async () => {
     try {
