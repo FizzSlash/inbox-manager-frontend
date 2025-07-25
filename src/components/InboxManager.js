@@ -744,12 +744,14 @@ const InboxManager = ({ user, onSignOut }) => {
                 key={recent.id}
                 onClick={(e) => {
                   e.stopPropagation();
-                  const lead = leads.find(l => l.id === recent.id);
-                  if (lead) {
-                    setSelectedLead(lead);
-                    setShowRecentDropdown(false);
-                    setActiveTab('all'); // Switch to inbox to show the selected lead
-                  }
+                                     const lead = leads.find(l => l.id === recent.id);
+                   if (lead) {
+                     setSelectedLead(lead);
+                     setShowRecentDropdown(false);
+                     setActiveTab('all'); // Switch to inbox to show the selected lead
+                     // Clear attachments when switching leads
+                     setAttachedFiles([]);
+                   }
                   onClose();
                 }}
                 className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-300 hover:opacity-80"
@@ -3408,6 +3410,15 @@ const InboxManager = ({ user, onSignOut }) => {
         ::-webkit-scrollbar-thumb:hover {
           background: ${themeStyles.accent}CC;
         }
+
+        /* Placeholder text for contenteditable */
+        div[contenteditable]:empty:before {
+          content: attr(data-placeholder);
+          color: ${themeStyles.textMuted};
+          font-style: italic;
+          pointer-events: none;
+          white-space: pre-line;
+        }
       `}</style>
 
       {/* Add margin-top to main content to account for nav bar */}
@@ -4349,7 +4360,11 @@ const InboxManager = ({ user, onSignOut }) => {
             return (
               <div
                 key={lead.id}
-                onClick={() => setSelectedLead(lead)}
+                onClick={() => {
+                  setSelectedLead(lead);
+                  // Clear attachments when switching leads
+                  setAttachedFiles([]);
+                }}
                 className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
                   backgroundColor: selectedLead?.id === lead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
@@ -5053,6 +5068,37 @@ const InboxManager = ({ user, onSignOut }) => {
                         >
                           • List
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Force exit list mode by inserting a paragraph
+                            const editor = document.querySelector('[contenteditable]');
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              const newPara = document.createElement('div');
+                              newPara.innerHTML = '<br>';
+                              
+                              // Insert paragraph at current position
+                              range.insertNode(newPara);
+                              
+                              // Move cursor to new paragraph
+                              const newRange = document.createRange();
+                              newRange.setStart(newPara, 0);
+                              newRange.collapse(true);
+                              selection.removeAllRanges();
+                              selection.addRange(newRange);
+                              
+                              // Update content
+                              handleTextareaChange({ target: editor });
+                            }
+                          }}
+                          className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300"
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                          title="Exit List Mode"
+                        >
+                          Exit List
+                        </button>
                         <div className="mx-2" style={{borderLeft: `1px solid ${themeStyles.border}`}}></div>
                         <input
                           type="file"
@@ -5143,7 +5189,7 @@ const InboxManager = ({ user, onSignOut }) => {
                                 break;
                             }
                           } else if (e.key === 'Enter') {
-                            // Handle Enter key in lists more simply
+                            // Handle Enter key in lists - exit list on empty item or Shift+Enter
                             const selection = window.getSelection();
                             if (selection.rangeCount > 0) {
                               const range = selection.getRangeAt(0);
@@ -5157,27 +5203,29 @@ const InboxManager = ({ user, onSignOut }) => {
                               // Check if we're in a list item
                               if (currentElement && currentElement.tagName === 'LI') {
                                 const listItem = currentElement;
-                                const isEmpty = listItem.textContent.trim() === '';
+                                // More robust empty detection
+                                const textContent = listItem.textContent || listItem.innerText || '';
+                                const isEmpty = textContent.trim() === '' || textContent.trim() === '\n';
                                 
-                                if (isEmpty) {
-                                  // Exit list by creating a new paragraph after the list
+                                // Exit list if: empty item OR Shift+Enter pressed
+                                if (isEmpty || e.shiftKey) {
                                   e.preventDefault();
+                                  
                                   const ul = listItem.parentNode;
                                   const newPara = document.createElement('div');
                                   newPara.innerHTML = '<br>';
                                   
-                                  // Remove empty list item
-                                  listItem.remove();
-                                  
-                                  // If list is now empty, replace it with the paragraph
-                                  if (ul.children.length === 0) {
+                                  // Always insert paragraph after the list (don't remove the list if it has other items)
+                                  if (ul.children.length === 1) {
+                                    // Only one item (the empty one), replace entire list
                                     ul.parentNode.replaceChild(newPara, ul);
                                   } else {
-                                    // Insert paragraph after the list
+                                    // Multiple items, just remove empty one and add paragraph after list
+                                    listItem.remove();
                                     ul.parentNode.insertBefore(newPara, ul.nextSibling);
                                   }
                                   
-                                  // Move cursor to new paragraph
+                                  // Focus the new paragraph
                                   const newRange = document.createRange();
                                   newRange.setStart(newPara, 0);
                                   newRange.collapse(true);
@@ -5187,7 +5235,7 @@ const InboxManager = ({ user, onSignOut }) => {
                                   // Update content
                                   handleTextareaChange({ target: e.target });
                                 }
-                                // If not empty, let default behavior create new list item
+                                // If not empty and not Shift+Enter, let default behavior create new list item
                               }
                             }
                           }
@@ -5200,7 +5248,12 @@ const InboxManager = ({ user, onSignOut }) => {
                           '--tw-ring-color': themeStyles.accent,
                           minHeight: '160px'
                         }}
-                        data-placeholder="Generated draft will appear here, or write your own response..."
+                        data-placeholder="Generated draft will appear here, or write your own response... 
+
+💡 Tips: 
+• Press Enter on empty bullet to exit list
+• Press Shift+Enter to exit list anytime
+• Use toolbar buttons for formatting"
                       />
                       
                       {/* Show HTML preview for debugging */}
