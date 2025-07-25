@@ -48,7 +48,7 @@ const STAGE_OPTIONS = [
 const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   const [crmLeads, setCrmLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toasts, setToasts] = useState([]);
+  const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
@@ -57,6 +57,16 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState({ field: 'created_at', dir: 'desc' });
   
+  // Auto-dismiss toast after 4 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+  
   // Theme management (matching InboxManager pattern)
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('inbox_manager_theme');
@@ -64,23 +74,6 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   });
   
   const themeStyles = getThemeStyles(isDarkMode);
-
-  // Toast management functions
-  const showToast = (message, type = 'success') => {
-    const id = Date.now();
-    const newToast = { id, message, type };
-    
-    setToasts(currentToasts => [...currentToasts, newToast]);
-    
-    // Auto-remove toast after 4 seconds
-    setTimeout(() => {
-      setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
-    }, 4000);
-  };
-
-  const removeToast = (id) => {
-    setToasts(currentToasts => currentToasts.filter(toast => toast.id !== id));
-  };
 
   // Listen for theme changes from localStorage
   useEffect(() => {
@@ -118,7 +111,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .eq('status', 'CRM')
         .order(sort.field, { ascending: sort.dir === 'asc' });
       if (error) {
-        showToast('Error fetching CRM leads: ' + error.message, 'error');
+        setToast({ type: 'error', message: 'Error fetching CRM leads: ' + error.message });
       } else {
         setCrmLeads(data);
       }
@@ -208,10 +201,10 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .eq('id', selectedLead.id);
       if (error) throw error;
       setCrmLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, ...editFields } : l));
-      showToast('Lead updated!', 'success');
+      setToast({ type: 'success', message: 'Lead updated!' });
       setEditing(false);
     } catch (err) {
-      showToast('Error saving lead: ' + err.message, 'error');
+      setToast({ type: 'error', message: 'Error saving lead: ' + err.message });
     } finally {
       setSavingId(null);
     }
@@ -231,11 +224,11 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
         .update({ status: 'INBOX' })
         .eq('id', selectedLead.id);
       if (error) throw error;
-      showToast('Lead removed from CRM!', 'success');
+      setToast({ type: 'success', message: 'Lead removed from CRM!' });
     } catch (err) {
       // Revert optimistic update on error
       setCrmLeads(prev => [...prev, selectedLead]);
-      showToast('Error removing lead from CRM: ' + err.message, 'error');
+      setToast({ type: 'error', message: 'Error removing lead from CRM: ' + err.message });
     }
   };
 
@@ -456,12 +449,11 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
           </div>
         </div>
       )}
-
-      {/* Toast Notifications Container */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
-        {toasts.map(toast => (
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50">
           <div 
-            key={toast.id}
             className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
             style={{
               backgroundColor: toast.type === 'success' 
@@ -471,18 +463,20 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
               backdropFilter: 'blur(8px)',
               animation: 'slideIn 0.2s ease-out'
             }}
-            onClick={() => removeToast(toast.id)}
+            onClick={() => setToast(null)}
           >
             {toast.type === 'success' ? (
               <CheckCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.success}} />
             ) : (
               <AlertCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.error}} />
             )}
-            <span className="text-sm font-medium flex-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>{toast.message}</span>
+            <span className="text-sm font-medium flex-1 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+              {toast.message}
+            </span>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
-                removeToast(toast.id);
+                setToast(null);
               }}
               className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300"
               style={{color: themeStyles.textMuted}}
@@ -490,9 +484,9 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
               <X className="w-4 h-4" />
             </button>
           </div>
-        ))}
-      </div>
-
+        </div>
+      )}
+      
       <style jsx global>{`
         @keyframes slideIn {
           from {
