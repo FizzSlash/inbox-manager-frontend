@@ -506,26 +506,46 @@ const InboxManager = ({ user, onSignOut }) => {
     loadApiKeys();
   }, [brandId, user]);
 
-  // Fetch leads when brandId is available
+  // Fetch leads when brandId or API keys are available
   useEffect(() => {
-    if (brandId) {
+    if (brandId || (apiKeys.accounts && apiKeys.accounts.length > 0)) {
       fetchLeads();
     }
-  }, [brandId]);
+  }, [brandId, apiKeys]);
 
   const fetchLeads = async () => {
     try {
       setLoading(true);
       setError(null);
-      if (!brandId) return;
-      // Fetch only INBOX leads for the brand
+      
+      // Don't fetch if no API keys are configured yet
+      if (!apiKeys.accounts || apiKeys.accounts.length === 0) {
+        setLeads([]);
+        return;
+      }
+      
+      // Fetch all leads first
       const { data, error } = await supabase
         .from('retention_harbor')
-        .select('*')
-        .eq('brand_id', brandId);
+        .select('*');
       if (error) throw error;
-      // Transform the data to match the expected format (reuse your transformation logic)
-      const transformedLeads = (data || []).map(lead => {
+
+      // Get current user's API keys for filtering
+      const userApiKeys = apiKeys.accounts.map(account => 
+        decryptApiKey(account.esp.key) || account.esp.key
+      ).filter(key => key && key.trim() !== '');
+
+      // Filter leads to only those matching user's API keys
+      const filteredData = (data || []).filter(lead => {
+        // For backward compatibility: if no source_api_key, fall back to brand_id matching
+        if (!lead.source_api_key && brandId) {
+          return lead.brand_id === brandId;
+        }
+        // New approach: match by API key
+        return lead.source_api_key && userApiKeys.includes(lead.source_api_key);
+             });
+      // Transform the filtered data to match the expected format
+      const transformedLeads = filteredData.map(lead => {
         // ... your existing transformation code ...
         // (keep your conversation parsing, metrics, etc. as before)
         let conversation = [];
