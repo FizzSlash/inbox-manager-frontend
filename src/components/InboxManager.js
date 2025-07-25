@@ -22,27 +22,34 @@ const encryptApiKey = (key) => {
 };
 
 const decryptApiKey = (encryptedKey) => {
-  if (!encryptedKey) return '';
-  
-  // Check if it looks like base64 (contains only valid base64 characters)
-  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-  if (!base64Regex.test(encryptedKey)) {
-    // Not base64, return as plain text
-    return encryptedKey;
-  }
-  
   try {
-    const decoded = atob(encryptedKey);
-    // Check if the decoded value contains our salt (indicating it was encrypted by us)
-    if (decoded.includes(ENCRYPTION_SALT)) {
-      return decoded.replace(ENCRYPTION_SALT, '');
-    } else {
-      // Decoded successfully but no salt found, likely just base64 encoded plain text
-      return decoded;
+    if (!encryptedKey) return '';
+    
+    // Check if it looks like base64 (contains only valid base64 characters)
+    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+    if (!base64Regex.test(encryptedKey)) {
+      // Not base64, return as plain text
+      return encryptedKey;
+    }
+    
+    try {
+      const decoded = atob(encryptedKey);
+      // Check if the decoded value contains our salt (indicating it was encrypted by us)
+      if (decoded.includes(ENCRYPTION_SALT)) {
+        return decoded.replace(ENCRYPTION_SALT, '');
+      } else {
+        // Decoded successfully but no salt found, likely just base64 encoded plain text
+        return decoded;
+      }
+    } catch (error) {
+      // atob failed, treat as plain text
+      console.warn('atob decoding failed for key:', error);
+      return encryptedKey;
     }
   } catch (error) {
-    // atob failed, treat as plain text
-    return encryptedKey;
+    // Catch any unexpected errors (like the "jn" initialization error)
+    console.error('Unexpected error in decryptApiKey:', error);
+    return encryptedKey || '';
   }
 };
 
@@ -2947,21 +2954,62 @@ const InboxManager = ({ user, onSignOut }) => {
 
       if (data && data.length > 0) {
         console.log(`📊 Found ${data.length} API settings records`);
+        console.log(`📋 Raw records:`, data.map(record => ({
+          id: record.id,
+          account_name: record.account_name,
+          key_type: record.key_type,
+          esp_provider: record.esp_provider,
+          has_encrypted_key: !!record.encrypted_key,
+          brand_id: record.brand_id
+        })));
 
         // Separate ESP accounts from FullEnrich using key_type
-        const espAccounts = data.filter(record => record.key_type === 'esp_api_key');
-        const fullenrichRecord = data.find(record => record.key_type === 'fullenrich_api_key');
+        const espAccounts = data.filter(record => {
+          // Primary check: key_type === 'esp_api_key'
+          if (record.key_type === 'esp_api_key') return true;
+          
+          // Fallback: if key_type is missing but account name suggests it's not FullEnrich
+          if (!record.key_type && record.account_name !== 'FullEnrich Global') {
+            console.log(`🔄 Found record without key_type, treating as ESP account: ${record.account_name}`);
+            return true;
+          }
+          
+          return false;
+        });
+        
+        const fullenrichRecord = data.find(record => {
+          // Primary check: key_type === 'fullenrich_api_key'
+          if (record.key_type === 'fullenrich_api_key') return true;
+          
+          // Fallback: if key_type is missing but account name suggests FullEnrich
+          if (!record.key_type && record.account_name === 'FullEnrich Global') {
+            console.log(`🔄 Found FullEnrich record without key_type`);
+            return true;
+          }
+          
+          return false;
+        });
 
         console.log(`🔑 ESP accounts: ${espAccounts.length}, FullEnrich: ${fullenrichRecord ? 1 : 0}`);
 
         // Convert ESP account records to accounts structure
         const accounts = espAccounts.map(record => {
+          console.log(`🔄 Processing ESP account record:`, {
+            id: record.id,
+            name: record.account_name,
+            key_type: record.key_type,
+            provider: record.esp_provider,
+            has_key: !!record.encrypted_key
+          });
+
           let decryptedKey = '';
           try {
+            console.log(`🔓 Attempting to decrypt key for ${record.account_name}...`);
             decryptedKey = typeof decryptApiKey === 'function' ? 
               decryptApiKey(record.encrypted_key || '') : (record.encrypted_key || '');
+            console.log(`✅ Decryption successful for ${record.account_name}`);
           } catch (err) {
-            console.warn(`Failed to decrypt key for account ${record.account_name}:`, err);
+            console.error(`❌ Failed to decrypt key for account ${record.account_name}:`, err);
             decryptedKey = record.encrypted_key || '';
           }
           
@@ -2981,13 +3029,24 @@ const InboxManager = ({ user, onSignOut }) => {
         // Extract fullenrich from its dedicated record
         let fullenrichKey = '';
         if (fullenrichRecord) {
+          console.log(`🔄 Processing FullEnrich record:`, {
+            id: fullenrichRecord.id,
+            name: fullenrichRecord.account_name,
+            key_type: fullenrichRecord.key_type,
+            has_key: !!fullenrichRecord.encrypted_key
+          });
+          
           try {
+            console.log(`🔓 Attempting to decrypt FullEnrich key...`);
             fullenrichKey = typeof decryptApiKey === 'function' ? 
               decryptApiKey(fullenrichRecord.encrypted_key || '') : (fullenrichRecord.encrypted_key || '');
+            console.log(`✅ FullEnrich decryption successful`);
           } catch (err) {
-            console.warn('Failed to decrypt FullEnrich key:', err);
+            console.error('❌ Failed to decrypt FullEnrich key:', err);
             fullenrichKey = fullenrichRecord.encrypted_key || '';
           }
+        } else {
+          console.log(`📭 No FullEnrich record found`);
         }
 
         // Update API keys state with data from Supabase
