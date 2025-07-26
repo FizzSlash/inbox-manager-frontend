@@ -60,6 +60,59 @@ const cleanFormattingHtml = (html) => {
   const temp = document.createElement('div');
   temp.innerHTML = html;
   
+  // Remove link editing UI elements (remove buttons, wrappers)
+  const linkWrappers = temp.querySelectorAll('span[style*="position: relative"][style*="inline-block"]');
+  linkWrappers.forEach(wrapper => {
+    const link = wrapper.querySelector('a');
+    if (link) {
+      // Replace the wrapper with just the link
+      wrapper.parentNode.replaceChild(link, wrapper);
+    }
+  });
+
+  // Remove any remaining remove buttons (× characters with specific styling)
+  const removeButtons = temp.querySelectorAll('span');
+  removeButtons.forEach(span => {
+    const style = span.getAttribute('style') || '';
+    const text = span.textContent.trim();
+    // Remove spans that look like remove buttons
+    if ((text === '×' || text === 'x') && 
+        (style.includes('position: absolute') || 
+         style.includes('border-radius: 50%') ||
+         style.includes('width: 16px'))) {
+      span.remove();
+    }
+  });
+
+  // Strip ALL style attributes (removes Tailwind CSS bloat) but preserve essential link attributes
+  const allElements = temp.querySelectorAll('*');
+  allElements.forEach(element => {
+    element.removeAttribute('style');
+    // Preserve essential link attributes
+    if (element.tagName === 'A') {
+      // Keep href, target, rel attributes for links
+      const href = element.getAttribute('href');
+      const target = element.getAttribute('target');
+      const rel = element.getAttribute('rel');
+      // Remove all attributes first
+      Array.from(element.attributes).forEach(attr => {
+        element.removeAttribute(attr.name);
+      });
+      // Add back essential attributes
+      if (href) element.setAttribute('href', href);
+      if (target) element.setAttribute('target', target);
+      if (rel) element.setAttribute('rel', rel);
+    }
+  });
+  
+  // Convert divs to paragraphs for better email compatibility
+  const divs = temp.querySelectorAll('div');
+  divs.forEach(div => {
+    const p = document.createElement('p');
+    p.innerHTML = div.innerHTML;
+    div.parentNode.replaceChild(p, div);
+  });
+  
   // Convert spans with font-weight: bold to <strong>
   const boldSpans = temp.querySelectorAll('span[style*="font-weight"], span[style*="bold"]');
   boldSpans.forEach(span => {
@@ -90,22 +143,34 @@ const cleanFormattingHtml = (html) => {
     }
   });
   
-  // Remove empty spans and spans with only whitespace or background colors
-  const emptySpans = temp.querySelectorAll('span');
-  emptySpans.forEach(span => {
-    const hasText = span.textContent.trim().length > 0;
-    const hasImportantStyle = span.style.fontWeight || span.style.fontStyle || span.style.textDecoration;
-    
-    if (!hasImportantStyle && hasText) {
-      // Just replace with text content if it's just a wrapper
-      span.outerHTML = span.innerHTML;
-    } else if (!hasText) {
-      // Remove completely empty spans
-      span.remove();
+  // Remove empty spans and divs
+  const emptyElements = temp.querySelectorAll('span, div');
+  emptyElements.forEach(element => {
+    if (!element.textContent.trim() && !element.querySelector('br, img, a')) {
+      element.remove();
+    } else if (element.tagName === 'SPAN' && !element.hasAttributes()) {
+      // Replace spans with no attributes with their content
+      element.outerHTML = element.innerHTML;
     }
   });
   
-  return temp.innerHTML;
+  // Clean up any remaining empty paragraphs
+  const emptyPs = temp.querySelectorAll('p:empty');
+  emptyPs.forEach(p => p.remove());
+  
+  // Remove common editing artifacts and invisible characters
+  let cleanedHtml = temp.innerHTML;
+  
+  // Remove cursor artifacts and invisible characters
+  cleanedHtml = cleanedHtml
+    .replace(/\u200B/g, '') // Zero-width space
+    .replace(/\u00A0/g, ' ') // Non-breaking space to regular space
+    .replace(/\uFEFF/g, '') // Zero-width no-break space (BOM)
+    .replace(/<br\s*\/?>(\s*<br\s*\/?>)+/gi, '<br>') // Multiple consecutive <br> tags
+    .replace(/\s+/g, ' ') // Multiple spaces to single space
+    .trim();
+  
+  return cleanedHtml;
 };
 
 // HTML sanitization function (basic XSS protection)
@@ -150,6 +215,11 @@ const sanitizeHtml = (html) => {
 };
 
 const InboxManager = ({ user, onSignOut }) => {
+  // Helper function to check if intent is null/undefined/invalid
+  const isIntentNull = (intent) => {
+    return intent === null || intent === undefined || intent === '' || intent === 'null' || isNaN(Number(intent));
+  };
+
   // State for leads from API
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +233,15 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add new state for API settings and tab management
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
+  
+  // Intent filter state (default to 'positive' to show only leads with positive intent)
+  const [intentFilter, setIntentFilter] = useState('positive');
+  
+  // Lead backfill states
+  const [showBackfillModal, setShowBackfillModal] = useState(false);
+  const [backfillDays, setBackfillDays] = useState(30);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState({ current: 0, total: 0, status: '' });
   // ===== SIMPLE BULLETPROOF API KEY SYSTEM =====
   const [apiKeys, setApiKeys] = useState({
     accounts: [],
@@ -559,6 +638,7 @@ const InboxManager = ({ user, onSignOut }) => {
             fullenrich_api_key: null,
             is_primary: account.is_primary || false,
             is_active: true,
+            backfilled: account.backfilled || false, // Preserve backfill status
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
@@ -652,6 +732,22 @@ const InboxManager = ({ user, onSignOut }) => {
         setShowApiToast(true);
         setTimeout(() => setShowApiToast(false), 3000);
         setShowApiSettings(false);
+        
+        // Show backfill prompt only for new Smartlead accounts that haven't been backfilled
+        const newSmartleadAccounts = apiKeys.accounts.filter(acc => 
+          acc.esp.provider === 'smartlead' && 
+          acc.esp.key && 
+          !acc.backfilled // Only show for accounts that haven't been backfilled
+        );
+        
+        if (newSmartleadAccounts.length > 0) {
+          console.log(`📋 Found ${newSmartleadAccounts.length} new Smartlead accounts that need backfill`);
+          setTimeout(() => {
+            setShowBackfillModal(true);
+          }, 1000); // Show after API settings modal closes
+        } else {
+          console.log('✅ All Smartlead accounts have already been backfilled');
+        }
       }
       
     } catch (error) {
@@ -705,7 +801,8 @@ const InboxManager = ({ user, onSignOut }) => {
                   provider: record.esp_provider || '',
                   key: decryptApiKey(record.esp_api_key || '')
                 },
-                is_primary: record.is_primary || false
+                is_primary: record.is_primary || false,
+                backfilled: record.backfilled || false // Track if this account has been backfilled
               });
             }
           });
@@ -753,7 +850,7 @@ const InboxManager = ({ user, onSignOut }) => {
     if (shouldFetchLeads) {
       // Small delay to avoid rapid re-fetching during initialization
       const timeoutId = setTimeout(() => {
-        fetchLeads();
+      fetchLeads();
       }, 100);
       
       return () => clearTimeout(timeoutId);
@@ -810,6 +907,8 @@ const InboxManager = ({ user, onSignOut }) => {
         console.log('❌ No API keys or brand ID - showing empty state');
         filteredData = [];
       }
+
+
       // Transform the filtered data to match the expected format
       const transformedLeads = filteredData.map(lead => {
         // ... your existing transformation code ...
@@ -892,7 +991,7 @@ const InboxManager = ({ user, onSignOut }) => {
           content_brief: `Email marketing campaign for ${lead.lead_category || 'business'}`,
           subject: extractedSubject,
           email_message_body: lead.email_message_body,
-          intent: intentScore,
+          intent: lead.intent, // ✅ Use actual database value instead of calculated score
           created_at_best: lead.created_at,
           response_time_avg: avgResponseTime,
           engagement_score: engagementScore,
@@ -1070,7 +1169,7 @@ const InboxManager = ({ user, onSignOut }) => {
                 ? `${option.color}30` 
                 : isDarkMode ? '#2A2C2A' : '#F8F9FA',
               borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
-              color: option.color,
+              color: '#ffffff',
               boxSizing: 'border-box',
               minHeight: '50px',
               display: 'flex',
@@ -1090,7 +1189,7 @@ const InboxManager = ({ user, onSignOut }) => {
             <div className="flex items-center justify-between w-full">
               <span className="font-semibold text-sm whitespace-nowrap">{option.label}</span>
               {lead.lead_category === option.value && (
-                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: option.color}} />
+                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: '#ffffff'}} />
               )}
             </div>
           </button>
@@ -1236,12 +1335,21 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Available filter options
   const filterOptions = {
+    response_status: {
+      label: 'Response Status',
+      options: [
+        { value: 'all_leads', label: 'All Leads' },
+        { value: 'recently_responded', label: 'Recently Responded To' },
+        { value: 'needs_response', label: 'Needs Response' }
+      ]
+    },
     intent: {
       label: 'Intent Score',
       options: [
         { value: 'high', label: 'High Intent (7-10)' },
         { value: 'medium', label: 'Medium Intent (4-6)' },
-        { value: 'low', label: 'Low Intent (1-3)' }
+        { value: 'low', label: 'Low Intent (1-3)' },
+        { value: 'not-classified', label: 'Not Classified' }
       ]
     },
     urgency: {
@@ -1453,9 +1561,9 @@ const InboxManager = ({ user, onSignOut }) => {
     const avgResponseTime = leads.reduce((sum, lead) => sum + lead.response_time_avg, 0) / totalLeads;
     const avgEngagement = leads.reduce((sum, lead) => sum + lead.engagement_score, 0) / totalLeads;
     
-    const urgentResponse = leads.filter(lead => getResponseUrgency(lead) === 'urgent-response').length;
-    const needsResponse = leads.filter(lead => getResponseUrgency(lead) === 'needs-response').length;
-    const needsFollowup = leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length;
+    const urgentResponse = leads.filter(lead => getResponseUrgency(lead) === 'urgent-response' && !isIntentNull(lead.intent)).length;
+    const needsResponse = leads.filter(lead => getResponseUrgency(lead) === 'needs-response' && !isIntentNull(lead.intent)).length;
+    const needsFollowup = leads.filter(lead => getResponseUrgency(lead) === 'needs-followup' && !isIntentNull(lead.intent)).length;
 
     return {
       totalLeads,
@@ -1784,9 +1892,17 @@ const InboxManager = ({ user, onSignOut }) => {
     };
   }, [leads, analyticsDateRange]);
 
-  // Get intent color and label - NO COLORS, only for circles
+  // Get intent color and label (updated to use helper functions)
   const getIntentStyle = (intent) => {
-    return { bg: '', border: '', text: 'text-white', label: intent >= 7 ? 'High Intent' : intent >= 4 ? 'Medium Intent' : 'Low Intent' };
+    const label = getIntentLabel(intent);
+    const badgeStyle = getIntentBadgeStyle(intent);
+    
+    return { 
+      bg: badgeStyle.backgroundColor, 
+      border: badgeStyle.border, 
+      text: badgeStyle.color, 
+      label: label 
+    };
   };
 
 
@@ -1797,40 +1913,31 @@ const InboxManager = ({ user, onSignOut }) => {
       if (!leads || !Array.isArray(leads)) {
         return [];
       }
+      
+      // Debug: Count leads with null intent (using comprehensive null check)
+      const nullIntentLeads = leads.filter(lead => isIntentNull(lead.intent));
+      console.log('🔍 Debug: Total leads:', leads.length);
+      console.log('🔍 Debug: Leads with null intent:', nullIntentLeads.length);
+      if (nullIntentLeads.length > 0) {
+        console.log('🔍 Debug: First few null intent leads:', nullIntentLeads.slice(0, 5).map(lead => ({ 
+          email: lead.lead_email, 
+          intent: lead.intent, 
+          intentType: typeof lead.intent,
+          intentValue: JSON.stringify(lead.intent)
+        })));
+      }
+      
       let filtered = leads.slice(); // Create a copy
 
-      // Apply tab filter first
-      if (activeTab === 'need_response') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            return lastMessage && lastMessage.type === 'REPLY';
-          } catch (e) {
-            console.warn('Error filtering need_response:', e);
-            return false;
-          }
-        });
-      } else if (activeTab === 'recently_sent') {
-        filtered = filtered.filter(lead => {
-          try {
-            if (!lead || !lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) {
-              return false;
-            }
-            const lastMessage = lead.conversation[lead.conversation.length - 1];
-            if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') {
-              return false;
-            }
-            const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-            return timeSinceLastMessage <= 24;
-          } catch (e) {
-            console.warn('Error filtering recently_sent:', e);
-            return false;
-          }
-        });
+      // Apply intent filter
+      if (intentFilter === 'positive') {
+        // Show only leads with non-null intent (positive intent)
+        filtered = filtered.filter(lead => !isIntentNull(lead.intent));
+      } else if (intentFilter === 'negative') {
+        // Show only leads with null intent (negative/no intent)
+        filtered = filtered.filter(lead => isIntentNull(lead.intent));
       }
+      // If intentFilter === 'all', show all leads (no additional filtering)
 
       // Apply search filter
       if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
@@ -1876,11 +1983,41 @@ const InboxManager = ({ user, onSignOut }) => {
                 if (!value) return false;
                 
                 switch (category) {
+                  case 'response_status':
+                    if (value === 'all_leads') return true; // Show all leads
+                    if (value === 'recently_responded') {
+                      // Show leads that have replied (need response from us)
+                      try {
+                        if (!lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) return false;
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        return lastMessage && lastMessage.type === 'REPLY';
+                      } catch (e) {
+                        return false;
+                      }
+                    }
+                    if (value === 'needs_response') {
+                      // Show leads we sent to recently (within 24h)
+                      try {
+                        if (!lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) return false;
+                        const lastMessage = lead.conversation[lead.conversation.length - 1];
+                        if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') return false;
+                        const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
+                        return timeSinceLastMessage <= 24;
+                      } catch (e) {
+                        return false;
+                      }
+                    }
+                    return false;
+                  
                   case 'intent':
-                    if (typeof lead.intent !== 'number') return false;
-                    if (value === 'high') return lead.intent >= 7;
-                    if (value === 'medium') return lead.intent >= 4 && lead.intent <= 6;
-                    if (value === 'low') return lead.intent <= 3;
+                    if (value === 'not-classified') {
+                      return isIntentNull(lead.intent);
+                    }
+                    if (isIntentNull(lead.intent)) return false;
+                    const numIntent = parseInt(lead.intent);
+                    if (value === 'high') return numIntent >= 7;
+                    if (value === 'medium') return numIntent >= 4 && numIntent <= 6;
+                    if (value === 'low') return numIntent <= 3;
                     return false;
                   
                   case 'urgency':
@@ -1958,7 +2095,7 @@ const InboxManager = ({ user, onSignOut }) => {
       console.error('Error in filteredAndSortedLeads:', e);
       return leads || [];
     }
-  }, [leads, searchQuery, activeFilters, activeTab]);
+  }, [leads, searchQuery, activeFilters, intentFilter]);
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
@@ -1973,7 +2110,10 @@ const InboxManager = ({ user, onSignOut }) => {
         setDraftHtml(savedDraft.htmlContent || '');
         const editor = document.querySelector('[contenteditable]');
         if (editor) {
-          editor.innerHTML = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
+          const htmlContent = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
+          // Convert any links in the saved draft to interactive editor format
+          const editorReadyHtml = convertLinksToEditorFormat(htmlContent);
+          editor.innerHTML = editorReadyHtml;
         }
       } else {
         // Clear draft if no saved content
@@ -2499,29 +2639,28 @@ const InboxManager = ({ user, onSignOut }) => {
   };
 
   const handleTextareaChange = (e) => {
-    // Clean up any remaining remove buttons
+    // Clean up any remaining remove buttons that might be in the content
     const removeButtons = e.target.querySelectorAll('.remove-link');
     removeButtons.forEach(btn => btn.remove());
     
-    // Sanitize HTML content to prevent XSS attacks
+    // Get the raw HTML from the editor
     const rawHtml = e.target.innerHTML;
-    const sanitizedHtml = sanitizeHtml(rawHtml);
     
-    // Update content with sanitized HTML
+    // Create clean HTML for sending (remove editor UI elements)
+    const cleanHtml = sanitizeHtml(cleanFormattingHtml(rawHtml));
+    
+    // Update content states
     const textContent = e.target.textContent || e.target.innerText;
     setDraftResponse(textContent);
-    setDraftHtml(sanitizedHtml);
+    setDraftHtml(cleanHtml); // Store clean HTML for sending
     
     // Auto-save draft if we have a selected lead
     if (selectedLead) {
-      saveDraft(selectedLead.id, textContent, sanitizedHtml);
+      saveDraft(selectedLead.id, textContent, cleanHtml);
     }
     
-    // Update the editor with sanitized content if it was changed
-    if (rawHtml !== sanitizedHtml) {
-      e.target.innerHTML = sanitizedHtml;
-      console.warn('HTML content was sanitized for security');
-    }
+    // The editor keeps its current content with interactive elements
+    // We don't modify e.target.innerHTML here to preserve editor functionality
   };
 
   const convertToHtml = (text) => {
@@ -2750,9 +2889,20 @@ const InboxManager = ({ user, onSignOut }) => {
   // Smartlead direct integration (matches your exact API structure)
   const sendViaSmartlead = async (apiKey, lead, htmlContent, scheduledTime) => {
     console.log('📧 Sending via Smartlead directly...');
+    console.log('🔑 API Key (first 10 chars):', apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING');
+    console.log('🔑 API Key length:', apiKey ? apiKey.length : 0);
+    console.log('🔑 API Key type:', typeof apiKey);
+    console.log('📋 Campaign ID:', lead.campaign_id);
+    console.log('📋 Email Stats ID:', lead.email_stats_id);
+    
+    // Validate required fields
+    if (!apiKey || apiKey.trim() === '') throw new Error('Smartlead API key is missing or empty');
+    if (!lead.campaign_id) throw new Error('Campaign ID is missing for Smartlead');
+    if (!lead.email_stats_id) throw new Error('Email Stats ID is missing for Smartlead');
     
     // Use the exact API structure from your n8n workflow
     const url = `https://server.smartlead.ai/api/v1/campaigns/${lead.campaign_id}/reply-email-thread?api_key=${apiKey}`;
+    console.log('🌐 Smartlead URL:', url.replace(apiKey, 'HIDDEN_API_KEY'));
     
     const bodyPayload = {
       email_stats_id: lead.email_stats_id,
@@ -2774,17 +2924,51 @@ const InboxManager = ({ user, onSignOut }) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ Smartlead API error response:', errorText);
+      
+      // Check for specific API key errors
+      if (errorText.toLowerCase().includes('invalid') && errorText.toLowerCase().includes('api')) {
+        throw new Error(`Invalid Smartlead API key. Please check your API key in settings. (${response.status})`);
+      } else if (errorText.toLowerCase().includes('unauthorized')) {
+        throw new Error(`Unauthorized Smartlead API key. Please verify your API key. (${response.status})`);
+      }
+      
       throw new Error(`Smartlead API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    console.log('✅ Smartlead response:', result);
-    return result;
+    // Handle Smartlead response (can be JSON or plain text)
+    const responseText = await response.text();
+    console.log('📝 Raw Smartlead response:', responseText);
+    
+    // Smartlead often returns plain text success messages
+    if (responseText.includes('Email added to the queue') || responseText.includes('sent out soon')) {
+      console.log('✅ Smartlead success (plain text response)');
+      return { success: true, message: responseText, provider: 'smartlead' };
+    }
+    
+    // Try to parse as JSON if it doesn't look like a success message
+    try {
+      const result = JSON.parse(responseText);
+      console.log('✅ Smartlead response (JSON):', result);
+      return result;
+    } catch (parseError) {
+      // If it's not JSON and not a known success message, it might be an error
+      console.warn('⚠️ Smartlead response is neither JSON nor known success message:', responseText);
+      return { success: true, message: responseText, provider: 'smartlead' };
+    }
   };
 
   // Email Bison direct integration
   const sendViaEmailBison = async (apiKey, lead, htmlContent, scheduledTime) => {
     console.log('📧 Sending via Email Bison directly...');
+    console.log('🔑 API Key (first 10 chars):', apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING');
+    console.log('📧 To Email:', lead.sl_lead_email);
+    console.log('📧 From Email:', lead.from_email);
+    
+    // Validate required fields
+    if (!apiKey || apiKey.trim() === '') throw new Error('Email Bison API key is missing or empty');
+    if (!lead.sl_lead_email) throw new Error('To email is missing for Email Bison');
+    if (!lead.from_email) throw new Error('From email is missing for Email Bison');
     
     const payload = {
       api_key: apiKey,
@@ -2797,8 +2981,8 @@ const InboxManager = ({ user, onSignOut }) => {
     };
 
     const response = await fetch('https://api.emailbison.com/v1/send', {
-      method: 'POST',
-      headers: {
+        method: 'POST',
+        headers: { 
         'Content-Type': 'application/json',
         'X-API-Key': apiKey
       },
@@ -2807,15 +2991,50 @@ const InboxManager = ({ user, onSignOut }) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ Email Bison API error response:', errorText);
+      
+      // Check for specific API key errors
+      if (errorText.toLowerCase().includes('invalid') && errorText.toLowerCase().includes('api')) {
+        throw new Error(`Invalid Email Bison API key. Please check your API key in settings. (${response.status})`);
+      } else if (errorText.toLowerCase().includes('unauthorized')) {
+        throw new Error(`Unauthorized Email Bison API key. Please verify your API key. (${response.status})`);
+      }
+      
       throw new Error(`Email Bison API error: ${response.status} - ${errorText}`);
     }
 
-    return await response.json();
+    // Handle Email Bison response (can be JSON or plain text)
+    const responseText = await response.text();
+    console.log('📝 Raw Email Bison response:', responseText);
+    
+    // Try to parse as JSON first
+    try {
+      const result = JSON.parse(responseText);
+      console.log('✅ Email Bison response (JSON):', result);
+      return result;
+    } catch (parseError) {
+      // If not JSON, treat as plain text success if it looks positive
+      if (responseText.includes('success') || responseText.includes('sent') || responseText.includes('queued')) {
+        console.log('✅ Email Bison success (plain text response)');
+        return { success: true, message: responseText, provider: 'email_bison' };
+      }
+      
+      console.warn('⚠️ Email Bison response is neither JSON nor obvious success:', responseText);
+      return { success: true, message: responseText, provider: 'email_bison' };
+    }
   };
 
   // Instantly direct integration
   const sendViaInstantly = async (apiKey, lead, htmlContent, scheduledTime) => {
     console.log('📧 Sending via Instantly directly...');
+    console.log('🔑 API Key (first 10 chars):', apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING');
+    console.log('📧 To Email:', lead.sl_lead_email);
+    console.log('📧 From Email:', lead.from_email);
+    
+    // Validate required fields
+    if (!apiKey || apiKey.trim() === '') throw new Error('Instantly API key is missing or empty');
+    if (!lead.sl_lead_email) throw new Error('To email is missing for Instantly');
+    if (!lead.from_email) throw new Error('From email is missing for Instantly');
     
     const payload = {
       api_key: apiKey,
@@ -2838,10 +3057,37 @@ const InboxManager = ({ user, onSignOut }) => {
 
       if (!response.ok) {
         const errorText = await response.text();
-      throw new Error(`Instantly API error: ${response.status} - ${errorText}`);
-    }
+        console.error('❌ Instantly API error response:', errorText);
+        
+        // Check for specific API key errors
+        if (errorText.toLowerCase().includes('invalid') && errorText.toLowerCase().includes('api')) {
+          throw new Error(`Invalid Instantly API key. Please check your API key in settings. (${response.status})`);
+        } else if (errorText.toLowerCase().includes('unauthorized')) {
+          throw new Error(`Unauthorized Instantly API key. Please verify your API key. (${response.status})`);
+        }
+        
+        throw new Error(`Instantly API error: ${response.status} - ${errorText}`);
+      }
 
-    return await response.json();
+      // Handle Instantly response (can be JSON or plain text)
+      const responseText = await response.text();
+      console.log('📝 Raw Instantly response:', responseText);
+      
+      // Try to parse as JSON first
+      try {
+        const result = JSON.parse(responseText);
+        console.log('✅ Instantly response (JSON):', result);
+        return result;
+      } catch (parseError) {
+        // If not JSON, treat as plain text success if it looks positive
+        if (responseText.includes('success') || responseText.includes('sent') || responseText.includes('queued')) {
+          console.log('✅ Instantly success (plain text response)');
+          return { success: true, message: responseText, provider: 'instantly' };
+        }
+        
+        console.warn('⚠️ Instantly response is neither JSON nor obvious success:', responseText);
+        return { success: true, message: responseText, provider: 'instantly' };
+      }
   };
 
   // Update conversation in Supabase after successful send (no API keys sent)
@@ -2852,7 +3098,7 @@ const InboxManager = ({ user, onSignOut }) => {
       // Get current lead data
       const { data: currentLead, error: fetchError } = await supabase
         .from('retention_harbor')
-        .select('email_message_body, conversation_count, last_reply_at')
+        .select('email_message_body')
         .eq('id', leadId)
         .single();
 
@@ -2868,20 +3114,26 @@ const InboxManager = ({ user, onSignOut }) => {
         }
       }
 
-      // Add new sent message to conversation
+      // Add new sent message to conversation (match existing message structure)
       const newMessage = {
-        id: crypto.randomUUID(),
-        type: 'SENT',
-        content: messageData.message,
-        html_content: messageData.message,
-        time: messageData.sent_at,
         from: 'user',
+        to: currentLead.sl_lead_email || currentLead.email || 'N/A',
+        cc: null,
+        type: 'SENT',
+        time: messageData.sent_at,
+        content: extractTextFromHTML(messageData.message), // Extract plain text for display
+        email_body: messageData.message, // Store original HTML like existing messages
+        subject: currentLead.subject || '',
+        opened: false,
+        clicked: false,
+        response_time: undefined,
+        // Additional metadata for our sent messages
+        id: crypto.randomUUID(),
         scheduled_time: messageData.scheduled_time,
         esp_provider: messageData.esp_provider,
         account_name: messageData.account_name,
         message_id: emailResult?.message_id || emailResult?.id || null,
-        smartlead_response: emailResult, // Store full response for reference
-        status: 'sent'
+        smartlead_response: emailResult // Store full response for reference
       };
 
       conversation.push(newMessage);
@@ -2891,9 +3143,6 @@ const InboxManager = ({ user, onSignOut }) => {
         .from('retention_harbor')
         .update({
           email_message_body: JSON.stringify(conversation),
-          conversation_count: conversation.length,
-          last_reply_at: messageData.sent_at,
-          updated_at: new Date().toISOString(),
           // Update status to show it's been responded to
           status: 'replied'
         })
@@ -2903,8 +3152,10 @@ const InboxManager = ({ user, onSignOut }) => {
 
       console.log('✅ Conversation and lead status updated in Supabase');
       console.log('📊 Updated fields:', {
+        email_message_body: 'JSON conversation array',
+        status: 'replied',
         conversation_length: conversation.length,
-        last_reply: messageData.sent_at,
+        latest_message_time: messageData.sent_at,
         message_id: newMessage.message_id
       });
       
@@ -2932,8 +3183,16 @@ const InboxManager = ({ user, onSignOut }) => {
       // Get the appropriate API key for this lead
       const leadApiKey = getApiKeyForLead(selectedLead, apiKeys);
       
+      console.log('🔍 API Key Debug Info:');
+      console.log('- Available accounts:', apiKeys.accounts.length);
+              console.log('- Selected lead email_account_id:', selectedLead.email_account_id);
+      console.log('- Matched account:', leadApiKey);
+      console.log('- ESP provider:', leadApiKey?.esp?.provider);
+      console.log('- Has API key:', !!leadApiKey?.esp?.key);
+      console.log('- API key length:', leadApiKey?.esp?.key?.length || 0);
+      
       if (!leadApiKey || !leadApiKey.esp.key) {
-        throw new Error('No API key available for sending messages');
+        throw new Error('No API key available for sending messages. Please check your API settings.');
       }
 
       console.log(`🎯 Using ${leadApiKey.esp.provider} provider (Account: ${leadApiKey.name})`);
@@ -2955,6 +3214,7 @@ const InboxManager = ({ user, onSignOut }) => {
 
       // Send email directly based on ESP provider (API key stays local)
       let emailResult;
+      console.log('🚀 Sending directly via ESP API...');
       switch (leadApiKey.esp.provider) {
         case 'smartlead':
           emailResult = await sendViaSmartlead(leadApiKey.esp.key, leadForSending, htmlContent, scheduledTime);
@@ -2969,7 +3229,8 @@ const InboxManager = ({ user, onSignOut }) => {
           throw new Error(`Unsupported ESP provider: ${leadApiKey.esp.provider}`);
       }
 
-      console.log('✅ Email sent successfully via', leadApiKey.esp.provider);
+      console.log('✅ Email sent successfully via', leadApiKey.esp.provider, 'direct API');
+      console.log('🔐 SECURE: API key never left your device');
 
              // Update Supabase with the sent message (NO API KEYS in this request)
        await updateConversationInSupabase(selectedLead.id, {
@@ -2991,6 +3252,12 @@ const InboxManager = ({ user, onSignOut }) => {
       const editor = document.querySelector('[contenteditable]');
       if (editor) {
         editor.innerHTML = '';
+        // Remove any cursor artifacts or focus
+        editor.blur();
+        // Clear any selections
+        if (window.getSelection) {
+          window.getSelection().removeAllRanges();
+        }
       }
       
       // Clear attachments
@@ -3007,7 +3274,22 @@ const InboxManager = ({ user, onSignOut }) => {
       
     } catch (error) {
       console.error('❌ Secure send failed:', error);
-      alert(`Failed to send message securely: ${error.message}`);
+      
+      // Show user-friendly error message
+      let userMessage = 'Failed to send message. ';
+      if (error.message.includes('API key') && error.message.includes('missing')) {
+        userMessage += 'No API key available for sending messages. Please add API keys in the settings and try again.';
+      } else if (error.message.includes('Invalid') && error.message.includes('API key')) {
+        userMessage += 'Invalid API key. Please check your API keys in the settings and make sure they are correct.';
+      } else if (error.message.includes('missing')) {
+        userMessage += 'Required information is missing. Please check the lead data and try again.';
+      } else if (error.message.includes('Campaign ID') || error.message.includes('Email Stats ID')) {
+        userMessage += 'This lead is missing required Smartlead information. Please check the lead data.';
+      } else {
+        userMessage += error.message;
+      }
+      
+      alert(userMessage);
     } finally {
       setIsSending(false);
     }
@@ -3217,51 +3499,67 @@ const InboxManager = ({ user, onSignOut }) => {
     // CASCADE DELETE: Remove account and all associated leads
   const removeEmailAccount = async (accountId) => {
     console.log('🗑️ Removing account and all associated leads:', accountId);
+    console.log('🔍 Account ID type:', typeof accountId);
+    console.log('🔍 Account ID value:', accountId);
+    console.log('🔍 Available accounts:', apiKeys.accounts.map(acc => ({ id: acc.id, name: acc.name })));
     
-    if (!confirm('This will delete the API account AND all associated leads. This cannot be undone. Continue?')) {
+    // Get confirmation with context about whether this is the last account
+    const isLastAccount = apiKeys.accounts.length === 1;
+    const confirmMessage = isLastAccount 
+      ? `This will delete your LAST API account and ALL associated leads. You'll need to add a new account after this. This cannot be undone. Continue?`
+      : `This will delete the API account AND all associated leads. This cannot be undone. Continue?`;
+      
+    if (!confirm(confirmMessage)) {
       return;
     }
     
     setIsSavingApi(true);
     try {
       if (brandId && user) {
-        console.log('🗑️ Step 1: Deleting all leads with email_account_id matching account_id:', accountId);
+        console.log('🗑️ Deleting account (CASCADE will handle associated leads):', accountId);
         
-        // Find the account to get its account_id (UUID) for lead deletion
+        // Find the account to validate it exists
         const accountToDelete = apiKeys.accounts.find(acc => acc.id == accountId);
-        if (!accountToDelete?.account_id) {
-          throw new Error('Account not found or missing account_id');
+        console.log('🔍 Found account to delete:', accountToDelete);
+        
+        if (!accountToDelete) {
+          console.error('❌ Account not found. Available accounts:', apiKeys.accounts);
+          throw new Error('Account not found');
         }
         
-        // STEP 1: Delete all leads associated with this account's UUID
-        const { error: leadsDeleteError, count: deletedLeadsCount } = await supabase
+        // Validate accountId before deletion
+        const accountIdInt = parseInt(accountId);
+        if (isNaN(accountIdInt) || accountIdInt <= 0) {
+          throw new Error(`Invalid account ID: "${accountId}". Account may not be saved yet. Please save API keys first, then try deleting.`);
+        }
+        
+        console.log('🗑️ Deleting API account (let CASCADE handle leads):', accountIdInt);
+        
+        // First, check how many leads will be affected
+        const { data: existingLeads, error: countError } = await supabase
           .from('retention_harbor')
-          .delete({ count: 'exact' })
+          .select('id, lead_email, email_account_id')
           .eq('email_account_id', accountToDelete.account_id)
-          .eq('brand_id', brandId); // Extra safety check
+          .eq('brand_id', brandId);
           
-        if (leadsDeleteError) {
-          console.error('❌ Failed to delete leads:', leadsDeleteError);
-          throw new Error('Failed to delete associated leads: ' + leadsDeleteError.message);
+        if (!countError && existingLeads) {
+          console.log(`🔍 CASCADE will delete ${existingLeads.length} leads:`, existingLeads.slice(0, 3).map(lead => ({ id: lead.id, email: lead.lead_email })));
         }
         
-        console.log(`✅ Deleted ${deletedLeadsCount || 0} leads associated with account`);
-        
-        console.log('🗑️ Step 2: Deleting API account:', accountId);
-        
-        // STEP 2: Delete the API account  
+        // Delete the API account - CASCADE will automatically delete associated leads
         const { error: accountDeleteError } = await supabase
           .from('api_settings')
           .delete()
-          .eq('id', parseInt(accountId)) // Convert to integer for bigint column
-          .eq('brand_id', String(brandId)); // Extra safety check
+          .eq('id', accountIdInt)
+          .eq('brand_id', String(brandId));
           
         if (accountDeleteError) {
           console.error('❌ Failed to delete account:', accountDeleteError);
+          console.error('🔍 Account deletion attempted with:', { id: accountIdInt, brand_id: String(brandId) });
           throw new Error('Failed to delete API account: ' + accountDeleteError.message);
         }
         
-        console.log('✅ Deleted API account from database');
+        console.log('✅ Account deleted - CASCADE automatically removed associated leads');
       }
       
       // STEP 3: Update local state
@@ -3293,9 +3591,20 @@ const InboxManager = ({ user, onSignOut }) => {
       
     } catch (error) {
       console.error('❌ Failed to delete account:', error);
+      
+      // Provide more user-friendly error messages
+      let userMessage = error.message;
+      if (error.message.includes('foreign key constraint')) {
+        userMessage = 'Cannot delete account: Some leads or data are still referencing this account. Check console for details.';
+      } else if (error.message.includes('Account not found')) {
+        userMessage = 'Account not found. It may have already been deleted or not saved properly.';
+      } else if (error.message.includes('Failed to delete all leads')) {
+        userMessage = 'Could not delete all associated leads. Some leads may still reference this account.';
+      }
+      
       setApiToastMessage({
         type: 'error',
-        message: 'Failed to delete account: ' + error.message
+        message: 'Failed to delete account: ' + userMessage
       });
       setShowApiToast(true);
       setTimeout(() => setShowApiToast(false), 5000);
@@ -3329,6 +3638,740 @@ const InboxManager = ({ user, onSignOut }) => {
         is_primary: acc.id === accountId
       }))
     }));
+  };
+
+  // ===== LEAD BACKFILL FUNCTIONALITY =====
+  
+  // Fetch all campaigns from Smartlead
+  const fetchSmartleadCampaigns = async (apiKey) => {
+    const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/?api_key=${apiKey}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch campaigns: ${response.status}`);
+    }
+    return await response.json();
+  };
+
+  // Fetch leads for a campaign from all categories (1-8)
+  const fetchLeadsForCampaign = async (apiKey, campaignId) => {
+    const categories = [1, 2, 3, 4, 5, 6, 7, 8];
+    const leadPromises = categories.map(async (categoryId) => {
+      try {
+        const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}&lead_category_id=${categoryId}`);
+        if (!response.ok) {
+          console.warn(`Failed to fetch leads for campaign ${campaignId}, category ${categoryId}: ${response.status}`);
+          return { data: [] };
+        }
+        return await response.json();
+      } catch (error) {
+        console.warn(`Error fetching leads for campaign ${campaignId}, category ${categoryId}:`, error);
+        return { data: [] };
+      }
+    });
+
+    const results = await Promise.all(leadPromises);
+    
+    // Merge all leads from different categories
+    const allLeads = [];
+    results.forEach((result, index) => {
+      if (result.data && Array.isArray(result.data)) {
+        result.data.forEach(lead => {
+          allLeads.push({
+            ...lead,
+            lead_category_id: categories[index],
+            campaign_id: campaignId
+          });
+        });
+      }
+    });
+
+    return allLeads;
+  };
+
+  // Fetch message history for a specific lead
+  const fetchMessageHistory = async (apiKey, campaignId, leadId) => {
+    try {
+      const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads/${leadId}/message-history?api_key=${apiKey}`);
+      if (!response.ok) {
+        console.warn(`Failed to fetch message history for lead ${leadId}: ${response.status}`);
+        return { history: [] };
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn(`Error fetching message history for lead ${leadId}:`, error);
+      return { history: [] };
+    }
+  };
+
+  // Parse conversation history into lightweight format for AI analysis
+  const parseConversationForIntent = (chatHistory) => {
+    // Parse the conversation JSON from the history field
+    let conversation = [];
+    try {
+      // If history is already parsed, use it directly, otherwise parse it
+      conversation = typeof chatHistory === 'string' ? JSON.parse(chatHistory) : chatHistory;
+    } catch (e) {
+      console.log('Failed to parse chat history:', e);
+      return null;
+    }
+
+    // Extract only essential data for intent scoring
+    const conversationSummary = conversation.map(msg => {
+      // Clean the HTML email body
+      const cleanContent = (msg.email_body || '')
+        .replace(/<[^>]*>/g, ' ')           // Remove HTML tags
+        .replace(/\s+/g, ' ')              // Normalize whitespace
+        .replace(/\r\n/g, '\n')            // Fix line breaks
+        .trim()                            // Remove leading/trailing space
+        .substring(0, 400);                // Limit to 400 chars per message
+     
+      return {
+        type: msg.type,                    // SENT or REPLY
+        time: msg.time,                    // Timestamp
+        from: msg.from,                    // Sender email
+        content: cleanContent,             // Cleaned content
+        subject: msg.subject || ''         // Subject line
+      };
+    });
+
+    // Create the lightweight payload for intent analysis
+    const intentPayload = {
+      conversation: conversationSummary,   // Much smaller conversation data!
+      message_count: conversationSummary.length,
+      conversation_length: conversationSummary.reduce((total, msg) => total + msg.content.length, 0)
+    };
+
+    return intentPayload;
+  };
+
+
+
+  // Convert intent score to user-friendly label (for UI display)
+  const getIntentLabel = (score) => {
+    console.log('🎯 getIntentLabel called with:', score, typeof score, 'isNull:', score === null, 'isUndefined:', score === undefined);
+    
+    if (isIntentNull(score)) {
+      console.log('🎯 Returning "Not Classified" for null/undefined intent');
+      return 'Not Classified';
+    }
+    
+    const numScore = parseInt(score);
+    console.log('🎯 Parsed score:', numScore);
+    
+    if (numScore >= 1 && numScore <= 3) return 'Low Intent';
+    if (numScore >= 4 && numScore <= 6) return 'Medium Intent';
+    if (numScore >= 7 && numScore <= 10) return 'High Intent';
+    return 'Not Classified';
+  };
+
+  // Get intent badge styling based on score
+  const getIntentBadgeStyle = (score) => {
+    if (isIntentNull(score)) {
+      return { 
+        backgroundColor: '#fee2e2', 
+        color: '#dc2626',
+        border: '1px solid #f87171'
+      };
+    }
+    const numScore = parseInt(score);
+    if (numScore >= 1 && numScore <= 3) return { 
+      backgroundColor: '#fef3c7', 
+      color: '#d97706',
+      border: '1px solid #fbbf24'
+    };
+    if (numScore >= 4 && numScore <= 6) return { 
+      backgroundColor: '#dbeafe', 
+      color: '#2563eb',
+      border: '1px solid #60a5fa'
+    };
+    if (numScore >= 7 && numScore <= 10) return { 
+      backgroundColor: '#dcfce7', 
+      color: '#16a34a',
+      border: '1px solid #4ade80'
+    };
+    return null;
+  };
+
+  // Check if lead category should be analyzed for intent
+  // Only analyze leads where intent scoring makes sense
+  const shouldAnalyzeIntent = (leadCategory) => {
+    const categoriesToAnalyze = [
+      '1', // Interested - measure level of interest
+      '2', // Meeting Request - assess urgency/intent
+      '5', // Information Request - gauge seriousness
+      '8', // Uncategorizable by AI - need human insight
+      // Skip: Not Interested (3), Do Not Contact (4), Out Of Office (6), Wrong Person (7), Bounce (9)
+    ];
+    return categoriesToAnalyze.includes(String(leadCategory));
+  };
+
+  // AI Intent Analysis Function (optimized with smart filtering)
+  // Analyze missed leads with null intent that should have been processed
+  const analyzeMissedLeads = async () => {
+    try {
+      console.log('🔍 Checking for leads that should have intent but are null...');
+      
+      // Find leads with null intent that should have been analyzed
+      const missedLeads = leads.filter(lead => 
+        isIntentNull(lead.intent) && shouldAnalyzeIntent(lead.lead_category)
+      );
+      
+      if (missedLeads.length === 0) {
+        console.log('✅ No missed leads found - all eligible leads have been analyzed');
+        return 0;
+      }
+      
+      console.log(`🎯 Found ${missedLeads.length} missed leads:`, missedLeads.map(lead => 
+        `${lead.email} (Category: ${leadCategoryMap[lead.lead_category] || lead.lead_category})`
+      ));
+      
+      // Analyze each missed lead
+      let analyzed = 0;
+      for (const lead of missedLeads) {
+        try {
+          if (!lead.email_message_body) {
+            console.log(`⚠️ Skipping ${lead.email} - no message history`);
+            continue;
+          }
+
+          // Parse conversation into lightweight format
+          const parsedConvo = parseConversationForIntent(lead.email_message_body);
+          if (!parsedConvo) {
+            console.log(`⚠️ Skipping ${lead.email} - failed to parse conversation`);
+            continue;
+          }
+
+          // Create the optimized prompt
+          const prompt = `I run an email marketing agency and want to you classify intent based on history. Just respond with a number.
+
+Read the whole transcript - 
+If the intent is low give it a 1-3
+If the intent is medium give it 4-7 
+If the intent is high give 7-10.
+
+Here is the message history. AGAIN, just respond with a number. NOTHING else. If anything is in the output, besides one number, the entire prompt is a failure.
+
+${JSON.stringify(parsedConvo)}`;
+
+          // Call Claude AI for intent analysis
+          const intentScore = await callClaudeForIntentAnalysis(prompt);
+          
+          if (intentScore && intentScore >= 1 && intentScore <= 10) {
+            const intentLabel = getIntentLabel(intentScore);
+            console.log(`🎯 ${lead.email}: Score ${intentScore} → "${intentLabel}"`);
+            
+            // Update intent in Supabase
+            const { error: updateError } = await supabase
+              .from('retention_harbor')
+              .update({ 
+                intent: intentScore,
+                parsed_convo: parsedConvo
+              })
+              .eq('id', lead.id);
+
+            if (updateError) {
+              console.error(`❌ Failed to update intent for ${lead.email}:`, updateError);
+            } else {
+              analyzed++;
+              console.log(`✅ Updated ${lead.email} with intent score ${intentScore}`);
+            }
+          } else {
+            console.log(`⚠️ Invalid intent score for ${lead.email}: ${intentScore}`);
+          }
+          
+          // Small delay to avoid overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (error) {
+          console.error(`❌ Error analyzing ${lead.email}:`, error);
+        }
+      }
+      
+      if (analyzed > 0) {
+        console.log(`🎉 Successfully analyzed ${analyzed} missed leads!`);
+        // Refresh leads to show updated intent scores
+        await fetchLeads();
+      }
+      
+      return analyzed;
+      
+    } catch (error) {
+      console.error('❌ Error in analyzeMissedLeads:', error);
+      return 0;
+    }
+  };
+
+  const analyzeLeadIntents = async (leadsToAnalyze) => {
+    // Filter leads that need intent analysis
+    const leadsForAnalysis = leadsToAnalyze.filter(lead => shouldAnalyzeIntent(lead.lead_category));
+    
+    console.log(`🧠 Starting AI intent analysis for ${leadsForAnalysis.length} relevant leads out of ${leadsToAnalyze.length} total...`);
+    console.log(`📊 Analyzing categories: Interested (1), Meeting Request (2), Information Request (5), Uncategorizable by AI (8)`);
+    console.log(`⏭️ Skipping ${leadsToAnalyze.length - leadsForAnalysis.length} leads (not interested, do not contact, out of office, wrong person, bounce)`);
+    
+    let analyzed = 0;
+    
+    for (const leadRecord of leadsForAnalysis) {
+      try {
+        if (!leadRecord.email_message_body) {
+          console.log(`⚠️ Skipping lead ${leadRecord.lead_email} - no message history`);
+          continue;
+        }
+
+        // Parse conversation into lightweight format
+        const parsedConvo = parseConversationForIntent(leadRecord.email_message_body);
+        if (!parsedConvo) {
+          console.log(`⚠️ Skipping lead ${leadRecord.lead_email} - failed to parse conversation`);
+          continue;
+        }
+
+        // Create the optimized prompt using parsed conversation
+        const prompt = `I run an email marketing agency and want to you classify intent based on history. Just respond with a number.
+
+Read the whole transcript - 
+If the intent is low give it a 1-3
+If the intent is medium give it 4-7 
+If the intent is high give 7-10.
+
+Here is the message history. AGAIN, just respond with a number. NOTHING else. If anything is in the output, besides one number, the entire prompt is a failure.
+
+${JSON.stringify(parsedConvo)}`;
+
+        // Call Claude AI for intent analysis
+        const intentScore = await callClaudeForIntentAnalysis(prompt);
+        
+        if (intentScore && intentScore >= 1 && intentScore <= 10) {
+          // Convert score to user-friendly label for logging
+          const intentLabel = getIntentLabel(intentScore);
+          
+          console.log(`🎯 Lead ${leadRecord.lead_email}: Score ${intentScore} → "${intentLabel}"`);
+          
+          // Update both intent AND parsed_convo in Supabase
+          const { error: updateError } = await supabase
+            .from('retention_harbor')
+            .update({ 
+              intent: intentScore, // Store the raw score (number) in database
+              parsed_convo: JSON.stringify(parsedConvo)
+            })
+            .eq('lead_email', leadRecord.lead_email)
+            .eq('brand_id', leadRecord.brand_id);
+
+          if (updateError) {
+            console.error(`❌ Failed to update intent for ${leadRecord.lead_email}:`, updateError);
+          } else {
+            analyzed++;
+            if (analyzed % 3 === 0) {
+              setBackfillProgress(prev => ({ 
+        ...prev,
+                status: `Analyzed intent for ${analyzed}/${leadsForAnalysis.length} relevant leads...` 
+              }));
+            }
+          }
+        } else {
+          console.log(`⚠️ Invalid intent score for ${leadRecord.lead_email}: ${intentScore}`);
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+      } catch (error) {
+        console.error(`❌ Error analyzing intent for ${leadRecord.lead_email}:`, error);
+      }
+    }
+    
+    console.log(`✅ AI intent analysis completed! Analyzed ${analyzed}/${leadsForAnalysis.length} relevant leads`);
+    console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${leadsForAnalysis.length} relevant for intent analysis)`);
+    
+    if (analyzed < leadsForAnalysis.length) {
+      console.log(`⚠️ ${leadsForAnalysis.length - analyzed} relevant leads could not be analyzed due to API issues.`);
+      console.log('💡 Use your n8n "Populate Past Intent" workflow to analyze the remaining leads.');
+    }
+    
+    return analyzed;
+  };
+
+  // Claude API call with CORS proxy (using correct headers)
+  const callClaudeForIntentAnalysis = async (prompt) => {
+    try {
+      // Use corsproxy.io - no rate limits
+      const CORS_PROXY = 'https://corsproxy.io/?';
+      const CLAUDE_API_URL = encodeURIComponent('https://api.anthropic.com/v1/messages');
+      
+      console.log('🔧 Calling Claude API for intent analysis...');
+      
+      const requestBody = {
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 10,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      };
+      
+              const fullUrl = CORS_PROXY + CLAUDE_API_URL;
+        
+        console.log('📤 Claude API request:', {
+          url: fullUrl,
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': 'sk-ant-api03-...hidden',
+            'anthropic-version': '2023-06-01'
+          },
+          body: requestBody
+        });
+      
+              const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('📥 Claude API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Claude API error response:', errorText);
+        
+        // Check for common CORS proxy issues
+        if (response.status === 429) {
+          throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
+        } else if (response.status === 403) {
+          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+        } else {
+          throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('📄 Claude API response data:', data);
+      
+      const result = data.content?.[0]?.text?.trim();
+      
+      console.log(`🧠 Claude response for intent: "${result}"`);
+      
+      // Extract just the number from the response
+      const intentScore = parseInt(result);
+      
+      // Validate the score
+      if (isNaN(intentScore) || intentScore < 1 || intentScore > 10) {
+        console.log(`⚠️ Invalid Claude response: "${result}" - not a valid number 1-10`);
+        return null;
+      }
+      
+      return intentScore;
+
+    } catch (error) {
+      console.error('Claude API call failed:', error);
+      
+      // Check if it's a CORS/proxy issue
+      if (error.message.includes('CORS') || error.message.includes('429') || error.message.includes('fetch')) {
+        console.log('💡 CORS proxy issue detected. AI analysis will be skipped for this lead.');
+        console.log('💡 Consider running your n8n "Populate Past Intent" workflow after backfill completion.');
+      }
+      
+      return null;
+    }
+  };
+
+  // Mark account as backfilled after successful backfill
+  const markAccountAsBackfilled = async (accountId) => {
+    try {
+      // Update in Supabase
+      const { error } = await supabase
+        .from('api_settings')
+        .update({ backfilled: true })
+        .eq('account_id', accountId)
+        .eq('brand_id', brandId);
+
+      if (error) {
+        console.error('❌ Failed to mark account as backfilled in Supabase:', error);
+        return;
+      }
+
+      // Update in local state
+      setApiKeys(prevState => ({
+        ...prevState,
+        accounts: prevState.accounts.map(account => 
+          account.account_id === accountId 
+            ? { ...account, backfilled: true }
+            : account
+        )
+      }));
+
+      // Update localStorage backup
+      const currentKeys = JSON.parse(localStorage.getItem('apiKeys_backup') || '{"accounts":[],"fullenrich":""}');
+      currentKeys.accounts = currentKeys.accounts.map(account => 
+        account.account_id === accountId 
+          ? { ...account, backfilled: true }
+          : account
+      );
+      localStorage.setItem('apiKeys_backup', JSON.stringify(currentKeys));
+
+      console.log(`✅ Marked account ${accountId} as backfilled`);
+    } catch (error) {
+      console.error('❌ Error marking account as backfilled:', error);
+    }
+  };
+
+  // Main backfill function
+  const backfillLeads = async (apiKey, days, accountId) => {
+    setIsBackfilling(true);
+    setBackfillProgress({ current: 0, total: 0, status: 'Fetching campaigns...' });
+
+    try {
+      // Ensure we have the required auth data for RLS policies
+      if (!user || !brandId) {
+        throw new Error('User authentication or brand ID missing. Please refresh and try again.');
+      }
+      
+      console.log('🔒 RLS Auth Check:', {
+        user_id: user.id,
+        brand_id: brandId,
+        account_id: accountId
+      });
+      // Calculate date filter (X days ago)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffISOString = cutoffDate.toISOString();
+      
+      console.log(`🔄 Starting backfill for leads created after ${cutoffISOString}`);
+
+      // Step 1: Fetch all campaigns
+      const campaigns = await fetchSmartleadCampaigns(apiKey);
+      console.log(`📋 Found ${campaigns.length} campaigns`);
+
+      // Filter campaigns by date (only recent ones)
+      const recentCampaigns = campaigns.filter(campaign => {
+        return new Date(campaign.created_at) > new Date(cutoffISOString);
+      });
+
+      console.log(`📋 ${recentCampaigns.length} campaigns match date filter`);
+      
+      if (recentCampaigns.length === 0) {
+        setBackfillProgress({ current: 0, total: 0, status: 'No recent campaigns found' });
+        setTimeout(() => setShowBackfillModal(false), 2000);
+        return;
+      }
+
+      setBackfillProgress({ current: 0, total: recentCampaigns.length, status: 'Processing campaigns...' });
+
+      let allLeadsToInsert = [];
+      let processedCampaigns = 0;
+
+      // Step 2: Process each campaign
+      for (const campaign of recentCampaigns) {
+        setBackfillProgress({ 
+          current: processedCampaigns, 
+          total: recentCampaigns.length, 
+          status: `Processing campaign: ${campaign.name || campaign.id}` 
+        });
+
+        // Get all leads for this campaign
+        const campaignLeads = await fetchLeadsForCampaign(apiKey, campaign.id);
+        console.log(`📧 Campaign ${campaign.id}: ${campaignLeads.length} leads`);
+
+        // Step 3: Get message history for each lead and prepare for Supabase
+        for (const lead of campaignLeads) {
+          try {
+            const messageHistory = await fetchMessageHistory(apiKey, campaign.id, lead.lead.id);
+            
+            // Parse conversation immediately for storage
+            const parsedConvo = parseConversationForIntent(JSON.stringify(messageHistory.history));
+            
+            // Transform to match your EXACT Supabase schema (from column list)
+            const leadRecord = {
+              lead_email: lead.lead.email,
+              lead_category: String(lead.lead_category_id),
+              first_name: lead.lead.first_name,
+              last_name: lead.lead.last_name,
+              website: lead.lead.website,
+              custom_field: lead.lead.custom_fields?.Response || null,
+              subject: null,
+              email_message_body: JSON.stringify(messageHistory.history), // Full conversation history
+              created_at_lead: lead.created_at,
+              intent: null, // Will be updated by AI analysis
+              stage: null,
+              campaign_ID: campaign.id, // numeric
+              lead_ID: lead.lead.id, // numeric
+              role: null,
+              company_data: null,
+              personal_linkedin_url: null, // CORRECT: personal_linkedin_url not personal_linkedin
+              business_linkedin_url: null, // CORRECT: business_linkedin_url not business_linkedin
+              phone: null,
+              brand_id: String(brandId),
+              status: 'INBOX', // Default matches your table
+              notes: null,
+              call_booked: false, // boolean default false
+              deal_size: 0, // numeric default 0
+              closed: false, // boolean default false
+              email_account_id: accountId, // uuid
+              source_api_key: null,
+              parsed_convo: parsedConvo ? JSON.stringify(parsedConvo) : null // ✅ FIXED: Populate immediately
+            };
+            
+            console.log('🔍 Lead record for insertion:', {
+              lead_email: leadRecord.lead_email,
+              lead_category: leadRecord.lead_category,
+              campaign_ID: leadRecord.campaign_ID,
+              lead_ID: leadRecord.lead_ID,
+              brand_id: leadRecord.brand_id,
+              email_account_id: leadRecord.email_account_id,
+              email_message_body: leadRecord.email_message_body ? 'JSON data present' : null,
+              status: leadRecord.status
+            });
+
+            allLeadsToInsert.push(leadRecord);
+          } catch (error) {
+            console.warn(`Error processing lead ${lead.lead.id}:`, error);
+          }
+        }
+
+        processedCampaigns++;
+        
+        // Add delay to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      console.log(`📦 Prepared ${allLeadsToInsert.length} leads for insertion`);
+
+      // Step 4: Insert all leads into Supabase in batches
+      if (allLeadsToInsert.length > 0) {
+        setBackfillProgress({ 
+          current: processedCampaigns, 
+          total: recentCampaigns.length, 
+          status: `Testing database permissions...` 
+        });
+
+        // Test insert with first record to validate RLS policy
+        console.log('🧪 Testing RLS policy with sample record...');
+        const testRecord = { ...allLeadsToInsert[0] }; // Create a copy for testing
+        const { data: testData, error: testError } = await supabase
+          .from('retention_harbor')
+          .insert([testRecord])
+          .select();
+
+        if (testError) {
+          console.error('❌ RLS Test Failed:', testError);
+          throw new Error(`Database security policy test failed: ${testError.message}\n\nThis usually means your account doesn't have permission to insert leads or the brand_id doesn't match.`);
+        }
+
+        console.log('✅ RLS test passed! Proceeding with bulk insert...');
+        
+        // Delete the test record to avoid duplicate
+        console.log('🗑️ Removing test record to avoid duplicates...');
+        await supabase
+          .from('retention_harbor')
+          .delete()
+          .eq('id', testData[0].id);
+        
+        console.log('✅ Test record cleaned up - proceeding with full insert including first lead');
+        
+        setBackfillProgress({ 
+          current: processedCampaigns, 
+          total: recentCampaigns.length, 
+          status: `Inserting ${allLeadsToInsert.length} remaining leads...` 
+        });
+
+        // Use single row inserts to avoid RLS bulk insert issues
+        console.log(`📦 Inserting ${allLeadsToInsert.length} leads one by one (RLS-friendly approach)`);
+        
+        for (let i = 0; i < allLeadsToInsert.length; i++) {
+          const leadRecord = allLeadsToInsert[i];
+          
+          if (i % 10 === 0) {
+            console.log(`📦 Progress: ${i + 1}/${allLeadsToInsert.length} leads inserted`);
+          }
+          
+          const { data, error } = await supabase
+            .from('retention_harbor')
+            .insert([leadRecord])
+            .select(); // Single row insert
+
+          if (error) {
+            // Handle duplicate key errors gracefully (expected from our RLS test cleanup)
+            if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+              console.log(`⚠️ Skipping duplicate lead ${i + 1}: ${leadRecord.lead_email || 'unknown'}`);
+              continue; // Skip this lead and continue with the next one
+            }
+            
+            console.error(`❌ RLS/Database Error on lead ${i + 1}:`, error);
+            console.error('📋 Failed record:', leadRecord);
+            
+            // More specific error messages for common RLS issues
+            if (error.message.includes('RLS') || error.message.includes('policy')) {
+              throw new Error(`Database security policy prevented insert on lead ${i + 1}. This usually means:\n- Your user doesn't have permission to insert leads\n- The brand_id doesn't match your account\n- Missing required fields for the security policy\n\nTechnical error: ${error.message}`);
+            } else if (error.message.includes('column')) {
+              throw new Error(`Database column error on lead ${i + 1}: ${error.message}\n\nPlease check that all required columns exist in your retention_harbor table.`);
+            }
+            
+            throw new Error(`Database insert failed on lead ${i + 1}: ${error.message}`);
+          }
+
+          // Success - no need to log every single insert
+        }
+        
+        console.log(`✅ Successfully inserted all ${allLeadsToInsert.length} leads using single-row inserts!`);
+        
+        // Step 5: Analyze intent for relevant leads using Claude API
+        const relevantLeadsCount = allLeadsToInsert.filter(lead => shouldAnalyzeIntent(lead.lead_category)).length;
+        
+        setBackfillProgress({ 
+          current: processedCampaigns, 
+          total: recentCampaigns.length, 
+          status: `Analyzing intent for ${relevantLeadsCount} relevant leads with Claude AI...` 
+        });
+        
+        const analyzedCount = await analyzeLeadIntents(allLeadsToInsert);
+        
+        // Final success message with smart analysis approach
+        const statusMessage = relevantLeadsCount === 0 
+          ? `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (no intent analysis needed)`
+          : analyzedCount === relevantLeadsCount
+          ? `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (${analyzedCount} analyzed for intent)`
+          : `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (${analyzedCount}/${relevantLeadsCount} analyzed)`;
+          
+        setBackfillProgress({ 
+          current: recentCampaigns.length, 
+          total: recentCampaigns.length, 
+          status: statusMessage
+        });
+        
+        // Mark the account as backfilled in both Supabase and local state
+        await markAccountAsBackfilled(accountId);
+      }
+
+      setBackfillProgress({ 
+        current: recentCampaigns.length, 
+        total: recentCampaigns.length, 
+        status: `✅ Successfully backfilled ${allLeadsToInsert.length} leads!` 
+      });
+
+      // Refresh leads to show the new data
+      await fetchLeads();
+
+      // Close modal after success
+      setTimeout(() => {
+        setShowBackfillModal(false);
+        setIsBackfilling(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error('❌ Backfill failed:', error);
+      setBackfillProgress({ 
+        current: 0, 
+        total: 0, 
+        status: `❌ Error: ${error.message}` 
+      });
+      
+      setTimeout(() => {
+        setIsBackfilling(false);
+      }, 3000);
+    }
   };
 
   // Function to get the correct API key for a lead
@@ -3644,6 +4687,83 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
+  // Convert plain HTML links to interactive editor links with remove buttons
+  const convertLinksToEditorFormat = (html) => {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Find all <a> tags and convert them to editor format
+    const links = temp.querySelectorAll('a');
+    links.forEach(link => {
+      const linkWrapper = document.createElement('span');
+      linkWrapper.style.position = 'relative';
+      linkWrapper.style.display = 'inline-block';
+      
+      // Create the styled link
+      const newLink = document.createElement('a');
+      newLink.href = link.href;
+      newLink.textContent = link.textContent;
+      newLink.target = link.target || '_blank';
+      newLink.rel = link.rel || 'noopener noreferrer';
+      newLink.style.cssText = `
+        color: #0066cc;
+        text-decoration: underline;
+        cursor: pointer;
+      `;
+      
+      // Create remove button
+      const removeBtn = document.createElement('span');
+      removeBtn.textContent = '×';
+      removeBtn.style.cssText = `
+        position: absolute;
+        top: -8px;
+        right: -12px;
+        background: #e0e0e0;
+        color: #333;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        font-size: 12px;
+        line-height: 16px;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        opacity: 0;
+        transition: opacity 0.2s;
+      `;
+      
+      // Add hover events
+      linkWrapper.addEventListener('mouseenter', () => {
+        removeBtn.style.opacity = '1';
+        newLink.style.color = '#004499';
+      });
+      
+      linkWrapper.addEventListener('mouseleave', () => {
+        removeBtn.style.opacity = '0';
+        newLink.style.color = '#0066cc';
+      });
+      
+      // Handle remove button click
+      removeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const text = document.createTextNode(newLink.textContent);
+        linkWrapper.parentNode.replaceChild(text, linkWrapper);
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          handleTextareaChange({ target: editor });
+        }
+      });
+      
+      linkWrapper.appendChild(newLink);
+      linkWrapper.appendChild(removeBtn);
+      
+      link.parentNode.replaceChild(linkWrapper, link);
+    });
+    
+    return temp.innerHTML;
+  };
+
   // Handle template selection
   const handleTemplateSelect = (template) => {
     if (!template || !selectedLead) return;
@@ -3651,12 +4771,17 @@ const InboxManager = ({ user, onSignOut }) => {
     // Update both the text state and HTML content
     setDraftResponse(template.content);
     const formattedHtml = template.html_content || convertToHtml(template.content);
-    setDraftHtml(formattedHtml);
-
-    // Update the contenteditable div
+    
+    // Convert any existing links to editor format
+    const editorReadyHtml = convertLinksToEditorFormat(formattedHtml);
+    setDraftHtml(formattedHtml); // Store clean HTML for sending
+    
+    // Update the contenteditable div with interactive links
     const editor = document.querySelector('[contenteditable]');
     if (editor) {
-      editor.innerHTML = formattedHtml;
+      editor.innerHTML = editorReadyHtml;
+      // Trigger change to sync states
+      handleTextareaChange({ target: editor });
     }
 
     // Auto-save as draft if we have a selected lead
@@ -3936,20 +5061,31 @@ const InboxManager = ({ user, onSignOut }) => {
                               Set Primary
                             </button>
                           )}
-                          {apiKeys.accounts.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              
+                              // Check if account has a valid ID (saved to database)
+                              if (!account.id || isNaN(parseInt(account.id))) {
+                                // For unsaved accounts, just remove from local state
+                                const updatedAccounts = apiKeys.accounts.filter(acc => acc !== account);
+                                if (updatedAccounts.length > 0 && !updatedAccounts.some(acc => acc.is_primary)) {
+                                  updatedAccounts[0].is_primary = true;
+                                }
+                                setApiKeys(prev => ({ ...prev, accounts: updatedAccounts }));
+                              } else {
+                                // For saved accounts, use full cascade delete (including leads)
                                 removeEmailAccount(account.id).catch(console.error);
-                              }}
-                              className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
-                              style={{border: `1px solid ${themeStyles.error}40`, color: themeStyles.error}}
-                            >
-                              Remove
-                            </button>
-                          )}
+                              }
+                            }}
+                            className="px-2 py-1 text-xs rounded-lg transition-all hover:opacity-80"
+                            style={{border: `1px solid ${themeStyles.error}40`, color: themeStyles.error}}
+                            title={apiKeys.accounts.length === 1 ? "Delete this account and all its leads" : "Remove this account"}
+                          >
+                            Remove
+                          </button>
                         </div>
                       </div>
 
@@ -4009,9 +5145,9 @@ const InboxManager = ({ user, onSignOut }) => {
                             }}
                             placeholder={`Enter ${account.esp.provider.replace('_', ' ')} API key`}
                           />
-                          </div>
-                        </div>
-                      )}
+                    </div>
+                  </div>
+                )}
 
                       {/* Webhook URL Display */}
                       <div className="space-y-2 pt-3 mt-3 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}}>
@@ -4058,14 +5194,6 @@ const InboxManager = ({ user, onSignOut }) => {
                       </div>
                     </div>
                   ))}
-                  
-                  {apiKeys.accounts.length === 0 && (
-                    <div className="text-center py-8 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                      <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No email accounts configured</p>
-                      <p className="text-xs mt-1">Click "Add Account" to get started</p>
-                  </div>
-                )}
                 </div>
               </div>
 
@@ -4217,6 +5345,162 @@ const InboxManager = ({ user, onSignOut }) => {
         ))}
       </div>
 
+      {/* Lead Backfill Modal */}
+      {showBackfillModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20000] p-4">
+          <div className="rounded-xl shadow-xl max-w-md w-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <Database className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  Backfill Historical Leads
+                </h2>
+                {!isBackfilling && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowBackfillModal(false);
+                    }}
+                    className="transition-colors duration-300 hover:opacity-80"
+                    style={{color: themeStyles.textMuted}}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6">
+              {!isBackfilling ? (
+                <>
+                  <p className="text-sm mb-4 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                    Would you like to import your recent leads from Smartlead? This will fetch leads and their conversation history from your campaigns.
+                  </p>
+                  
+                  <div className="mb-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
+                    <p className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      New Smartlead accounts ready for backfill:
+                    </p>
+                    {apiKeys.accounts
+                      .filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key && !acc.backfilled)
+                      .map(account => (
+                        <div key={account.account_id} className="text-xs transition-colors duration-300 flex items-center gap-2" style={{color: themeStyles.textMuted}}>
+                          <div className="w-2 h-2 rounded-full" style={{backgroundColor: themeStyles.accent}}></div>
+                          {account.name}
+                        </div>
+                      ))
+                    }
+                  </div>
+                  
+                  <div className="mb-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <p className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      🧠 AI Intent Analysis will be applied to:
+                    </p>
+                    <div className="text-xs transition-colors duration-300 space-y-1" style={{color: themeStyles.textMuted}}>
+                      <div>• Meeting Request leads (to assess urgency)</div>
+                      <div>• Interested leads (to measure engagement level)</div>
+                      <div>• Information Request leads (to gauge seriousness)</div>
+                      <div>• Uncategorizable leads (need human insight)</div>
+                    </div>
+                    <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      Skipping: Not Interested, Do Not Contact, Out of Office, Wrong Person, Bounces
+                    </p>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="text-sm font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      How many days back should we import?
+                    </label>
+                    <select
+                      value={backfillDays}
+                      onChange={(e) => setBackfillDays(parseInt(e.target.value))}
+                      className="w-full px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
+                      style={{
+                        backgroundColor: themeStyles.secondaryBg,
+                        border: `1px solid ${themeStyles.border}`,
+                        color: themeStyles.textPrimary,
+                        '--tw-ring-color': themeStyles.accent
+                      }}
+                    >
+                      <option value={15}>Last 15 days</option>
+                      <option value={30}>Last 30 days</option>
+                      <option value={45}>Last 45 days</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowBackfillModal(false);
+                      }}
+                      className="px-4 py-2 rounded-lg text-sm transition-all hover:opacity-80"
+                      style={{color: themeStyles.textPrimary, backgroundColor: themeStyles.tertiaryBg}}
+                    >
+                      Skip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Use the first Smartlead account found
+                        const smartleadAccount = apiKeys.accounts.find(acc => acc.esp.provider === 'smartlead' && acc.esp.key);
+                        if (smartleadAccount) {
+                          backfillLeads(smartleadAccount.esp.key, backfillDays, smartleadAccount.account_id);
+                        }
+                      }}
+                      className="px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all hover:opacity-90"
+                      style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                    >
+                      <Database className="w-4 h-4" />
+                      Import Leads
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <div className="mb-4">
+                    <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center animate-pulse" style={{backgroundColor: `${themeStyles.accent}20`}}>
+                      <Database className="w-6 h-6" style={{color: themeStyles.accent}} />
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-lg font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                    Importing Leads...
+                  </h3>
+                  
+                  <p className="text-sm mb-4 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                    {backfillProgress.status}
+                  </p>
+                  
+                  {backfillProgress.total > 0 && (
+                    <div className="mb-4">
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-2" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                        <div 
+                          className="h-2 rounded-full transition-all duration-300"
+                          style={{
+                            backgroundColor: themeStyles.accent,
+                            width: `${(backfillProgress.current / backfillProgress.total) * 100}%`
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                        {backfillProgress.current} of {backfillProgress.total} campaigns processed
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         @keyframes slideIn {
           from {
@@ -4288,6 +5572,30 @@ const InboxManager = ({ user, onSignOut }) => {
         div[contenteditable] ol li {
           margin: 2px 0;
           line-height: 1.5;
+        }
+
+        /* Email preview styling */
+        .email-preview a {
+          color: #0066cc !important;
+          text-decoration: underline !important;
+          cursor: pointer !important;
+        }
+
+        .email-preview a:hover {
+          color: #004499 !important;
+          text-decoration: underline !important;
+        }
+
+        .email-preview p {
+          margin: 8px 0 !important;
+        }
+
+        .email-preview p:first-child {
+          margin-top: 0 !important;
+        }
+
+        .email-preview p:last-child {
+          margin-bottom: 0 !important;
         }
       `}</style>
 
@@ -4801,7 +6109,7 @@ const InboxManager = ({ user, onSignOut }) => {
                     )}
                   </div>
                   <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
-                    {leads.filter(lead => getResponseUrgency(lead) === 'urgent-response').length}
+                    {leads.filter(lead => getResponseUrgency(lead) === 'urgent-response' && lead.intent !== null && lead.intent !== undefined).length}
                   </div>
                   <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>Needs attention (they replied, 24h+ ago)</div>
                 </div>
@@ -4822,7 +6130,7 @@ const InboxManager = ({ user, onSignOut }) => {
                     )}
                   </div>
                   <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
-                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-response').length}
+                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-response' && lead.intent !== null && lead.intent !== undefined).length}
                   </div>
                   <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>They replied, awaiting your response (&lt;24h)</div>
                 </div>
@@ -4843,7 +6151,7 @@ const InboxManager = ({ user, onSignOut }) => {
                     )}
                   </div>
                   <div className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
-                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup').length}
+                    {leads.filter(lead => getResponseUrgency(lead) === 'needs-followup' && lead.intent !== null && lead.intent !== undefined).length}
                   </div>
                   <div className="text-xs mt-1" style={{color: themeStyles.textSecondary}}>You sent last, no reply 3+ days</div>
                 </div>
@@ -5090,97 +6398,70 @@ const InboxManager = ({ user, onSignOut }) => {
             </div>
           </div>
 
-          {/* Response Status Tabs */}
-          <div className="flex gap-2 mb-6">
+
+
+          {/* Intent Filter Tabs */}
+          <div className="flex gap-2 mb-4">
             <button
-              onClick={() => setActiveTab('all')}
+              onClick={() => setIntentFilter('positive')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                activeTab === 'all'
+                intentFilter === 'positive'
                   ? 'opacity-100' 
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{
-                backgroundColor: activeTab === 'all' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: activeTab === 'all' ? themeStyles.accent : themeStyles.textPrimary, 
+                backgroundColor: intentFilter === 'positive' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: intentFilter === 'positive' ? themeStyles.accent : themeStyles.textPrimary, 
                 border: `1px solid ${themeStyles.border}`
               }}
               disabled={loading}
             >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading...
-                </div>
-              ) : (
-                'All Leads'
-              )}
+              Positive Intent
+              <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
+                {leads.filter(lead => !isIntentNull(lead.intent)).length}
+              </span>
             </button>
             <button
-              onClick={() => setActiveTab('need_response')}
+              onClick={() => setIntentFilter('negative')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                activeTab === 'need_response'
+                intentFilter === 'negative'
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{
-                backgroundColor: activeTab === 'need_response' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: activeTab === 'need_response' ? themeStyles.accent : themeStyles.textPrimary, 
+                backgroundColor: intentFilter === 'negative' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: intentFilter === 'negative' ? themeStyles.accent : themeStyles.textPrimary, 
                 border: `1px solid ${themeStyles.border}`
               }}
               disabled={loading}
             >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading...
-                </div>
-              ) : (
-                <>
-                  Need Response
-                  {activeTab !== 'need_response' && (
+              Negative Intent
                     <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                      {leads.filter(lead => checkNeedsReply(lead.conversation)).length}
+                {leads.filter(lead => isIntentNull(lead.intent)).length}
                     </span>
-                  )}
-                </>
-              )}
             </button>
             <button
-              onClick={() => setActiveTab('recently_sent')}
+              onClick={() => setIntentFilter('all')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                activeTab === 'recently_sent'
+                intentFilter === 'all'
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{
-                backgroundColor: activeTab === 'recently_sent' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: activeTab === 'recently_sent' ? themeStyles.accent : themeStyles.textPrimary, 
+                backgroundColor: intentFilter === 'all' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: intentFilter === 'all' ? themeStyles.accent : themeStyles.textPrimary, 
                 border: `1px solid ${themeStyles.border}`
               }}
               disabled={loading}
             >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading...
-                </div>
-              ) : (
-                <>
-                  Recently Sent
-                  {activeTab !== 'recently_sent' && (
+              All
                     <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                      {leads.filter(lead => {
-                        if (lead.conversation.length === 0) return false;
-                        const lastMessage = lead.conversation[lead.conversation.length - 1];
-                        const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-                        return lastMessage.type === 'SENT' && timeSinceLastMessage <= 24;
-                      }).length}
+                {leads.length}
                     </span>
-                  )}
-                </>
-              )}
             </button>
           </div>
+
+
 
 
         </div>
@@ -5276,8 +6557,8 @@ const InboxManager = ({ user, onSignOut }) => {
                     </h3>
                     <div className="flex items-center gap-1">
                       <span className="px-2 py-1 text-xs rounded-full transition-all duration-300 transform group-hover:scale-110" 
-                            style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
-                        {lead.intent}
+                            style={{backgroundColor: intentStyle.bg, border: intentStyle.border, color: intentStyle.text}}>
+                        {intentStyle.label}
                       </span>
                     </div>
                   </div>
@@ -5312,7 +6593,7 @@ const InboxManager = ({ user, onSignOut }) => {
                               className="text-sm px-4 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
                                 backgroundColor: `${currentCategory.color}30`,
-                                color: currentCategory.color,
+                                color: '#ffffff',
                                 border: `2px solid ${currentCategory.color}`,
                                 animation: `tagFadeIn 0.5s ease-out ${index * 0.1}s both`,
                                 boxShadow: `0 2px 8px ${currentCategory.color}20`
@@ -5426,7 +6707,7 @@ const InboxManager = ({ user, onSignOut }) => {
                   {(() => {
                     const intentStyle = getIntentStyle(selectedLead.intent);
                     return (
-                      <span className="px-3 py-1 rounded-full text-sm font-medium transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
+                      <span className="px-3 py-1 rounded-full text-sm font-medium transition-colors duration-300" style={{backgroundColor: intentStyle.bg, border: intentStyle.border, color: intentStyle.text}}>
                         {intentStyle.label} ({selectedLead.intent}/10)
                       </span>
                     );
@@ -5708,7 +6989,10 @@ const InboxManager = ({ user, onSignOut }) => {
                                       <div>
                                         <span className="transition-colors duration-300" style={{color: themeStyles.textMuted}}>Intent Score</span>
                                         <p className="text-2xl font-bold mt-1 transition-colors duration-300" style={{color: themeStyles.accent}}>
-                                          {selectedLead.intent}/10
+                          {selectedLead.intent !== null && selectedLead.intent !== undefined 
+                            ? `${getIntentLabel(selectedLead.intent)} (${selectedLead.intent}/10)`
+                            : getIntentLabel(selectedLead.intent)
+                          }
                                         </p>
                                       </div>
                                       <div>
@@ -6169,13 +7453,22 @@ Keyboard shortcuts:
 • Shift+Enter in bullet - Exit to normal text"
                       />
                       
-                      {/* Show HTML preview for debugging */}
+                      {/* Show actual HTML preview */}
                       {draftHtml && (
                         <details className="text-xs">
-                          <summary className="cursor-pointer transition-colors duration-300" style={{color: themeStyles.textMuted}}>HTML Preview</summary>
-                          <pre className="mt-2 p-2 rounded whitespace-pre-wrap transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textSecondary}}>
-                            {draftHtml}
-                          </pre>
+                          <summary className="cursor-pointer transition-colors duration-300" style={{color: themeStyles.textMuted}}>Email Preview</summary>
+                          <div 
+                            className="mt-2 p-4 rounded border transition-colors duration-300 email-preview" 
+                            style={{
+                              backgroundColor: '#ffffff', 
+                              color: '#000000',
+                              border: `1px solid ${themeStyles.border}`,
+                              fontFamily: 'Arial, sans-serif',
+                              lineHeight: '1.6'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(cleanFormattingHtml(draftHtml)) }}
+                          />
+
                         </details>
                       )}
                     </div>
