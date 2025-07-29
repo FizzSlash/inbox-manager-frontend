@@ -70,16 +70,12 @@ const cleanFormattingHtml = (html) => {
     }
   });
 
-  // Remove any remaining remove buttons (× characters with specific styling)
+  // Remove any remaining remove buttons (× characters)
   const removeButtons = temp.querySelectorAll('span');
   removeButtons.forEach(span => {
-    const style = span.getAttribute('style') || '';
     const text = span.textContent.trim();
-    // Remove spans that look like remove buttons
-    if ((text === '×' || text === 'x') && 
-        (style.includes('position: absolute') || 
-         style.includes('border-radius: 50%') ||
-         style.includes('width: 16px'))) {
+    // Remove any span that contains just the × character (remove button)
+    if (text === '×' || text === 'x') {
       span.remove();
     }
   });
@@ -428,7 +424,7 @@ const InboxManager = ({ user, onSignOut }) => {
   // Migrate existing unencrypted API keys to encrypted storage (runs once on mount)
   useEffect(() => {
     const migrateApiKeys = () => {
-      const keysToMigrate = ['smartlead', 'claude', 'fullenrich'];
+      const keysToMigrate = ['smartlead', 'navvii', 'fullenrich'];
       let migrationNeeded = false;
 
       keysToMigrate.forEach(keyName => {
@@ -2649,8 +2645,9 @@ const InboxManager = ({ user, onSignOut }) => {
     // Create clean HTML for sending (remove editor UI elements)
     const cleanHtml = sanitizeHtml(cleanFormattingHtml(rawHtml));
     
-    // Update content states
-    const textContent = e.target.textContent || e.target.innerText;
+    // Extract text content with proper line breaks
+    // Convert each <div> to a line, handling <br> tags properly
+    const textContent = extractTextWithLineBreaks(e.target);
     setDraftResponse(textContent);
     setDraftHtml(cleanHtml); // Store clean HTML for sending
     
@@ -2663,9 +2660,58 @@ const InboxManager = ({ user, onSignOut }) => {
     // We don't modify e.target.innerHTML here to preserve editor functionality
   };
 
-  const convertToHtml = (text) => {
-    return text.replace(/\n/g, '<br>');
+  // Extract text content with proper line breaks from contenteditable div
+  const extractTextWithLineBreaks = (element) => {
+    const children = element.childNodes;
+    let text = '';
+    
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent;
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        if (child.tagName === 'DIV') {
+          // Add line break before div (except first one)
+          if (i > 0) text += '\n';
+          
+          // Get text content of the div, handling <br> tags
+          const divText = child.innerHTML === '<br>' || child.innerHTML === '' ? '' : child.textContent;
+          text += divText;
+        } else if (child.tagName === 'BR') {
+          text += '\n';
+        } else {
+          text += child.textContent;
+        }
+      }
+    }
+    
+    return text;
   };
+
+  // Convert text to email-safe HTML using divs with tight spacing
+  const convertToHtml = (text) => {
+    if (!text) return '';
+    
+    // Split text into lines and wrap each in a div with controlled margins
+    const lines = text.split(/\n/);
+    
+    const htmlLines = lines.map((line, index) => {
+      const trimmedLine = line.trim();
+      
+      // Empty lines become divs with minimal height for spacing
+      if (!trimmedLine) {
+        return '<div style="margin: 0; padding: 0; line-height: 0.5; font-size: 1px;">&nbsp;</div>';
+      }
+      
+      // Regular lines with tight margins
+      return `<div style="margin: 0; padding: 0; line-height: 1.2;">${trimmedLine}</div>`;
+    });
+    
+    return htmlLines.join('');
+  };
+
+
 
   // Handle file attachment selection
   const handleFileAttachment = (event) => {
@@ -2702,7 +2748,86 @@ const InboxManager = ({ user, onSignOut }) => {
     return `${(hours / 24).toFixed(1)}d`;
   };
 
-  // Handle draft generation
+  // Navvii AI API call for draft generation
+  const callNavviiAIForDraftGeneration = async (prompt) => {
+    try {
+      // Use corsproxy.io - no rate limits
+      const CORS_PROXY = 'https://corsproxy.io/?';
+      const NAVVII_API_URL = encodeURIComponent('https://api.anthropic.com/v1/messages');
+      
+      console.log('🤖 Calling Navvii AI for draft generation...');
+      
+      const requestBody = {
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      };
+      
+      const fullUrl = CORS_PROXY + NAVVII_API_URL;
+        
+      console.log('📤 Navvii AI draft request:', {
+        url: fullUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'sk-ant-api03-...hidden',
+          'anthropic-version': '2023-06-01'
+        },
+        body: requestBody
+      });
+      
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('📥 Navvii AI response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Navvii AI error response:', errorText);
+        
+        // Check for common CORS proxy issues
+        if (response.status === 429) {
+          throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
+        } else if (response.status === 403) {
+          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+        } else {
+          throw new Error(`Navvii AI error: ${response.status} - ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('📄 Navvii AI response data:', data);
+      
+      const result = data.content?.[0]?.text?.trim();
+      
+      console.log(`🤖 Navvii AI draft response: "${result}"`);
+      
+      return result;
+
+    } catch (error) {
+      console.error('Navvii AI draft call failed:', error);
+      
+      // Check if it's a CORS/proxy issue
+      if (error.message.includes('CORS') || error.message.includes('429') || error.message.includes('fetch')) {
+        console.log('💡 CORS proxy issue detected. Draft generation will be skipped.');
+      }
+      
+      return null;
+    }
+  };
+
+  // Handle draft generation using Navvii AI
   const generateDraft = async () => {
     if (!selectedLead) {
       console.error('No lead selected');
@@ -2710,129 +2835,43 @@ const InboxManager = ({ user, onSignOut }) => {
     }
 
     setIsGeneratingDraft(true);
-    console.log('Generating draft for lead:', selectedLead);
+    console.log('🤖 Generating draft with Navvii AI for lead:', selectedLead.email);
     
     try {
-      const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
-      const urgency = getResponseUrgency(selectedLead);
-      
-      // Clean function to remove problematic characters
-      const cleanString = (str) => {
-        if (!str) return '';
-        return str
-          .replace(/\r\n/g, ' ')  // Replace Windows line breaks
-          .replace(/\n/g, ' ')    // Replace Unix line breaks  
-          .replace(/\r/g, ' ')    // Replace Mac line breaks
-          .replace(/\t/g, ' ')    // Replace tabs
-          .replace(/[\x00-\x1F\x7F-\x9F]/g, '')  // Remove other control characters
-          .replace(/"/g, "'")     // Replace double quotes with single quotes
-          .replace(/\s+/g, ' ')   // Replace multiple spaces with single space
-          .trim();
-      };
-
-      // Debug: Log the full payload we're sending
-      const payload = {
-        id: selectedLead.id,
-        email: cleanString(selectedLead.email),
-        first_name: cleanString(selectedLead.first_name),
-        last_name: cleanString(selectedLead.last_name),
-        subject: cleanString(selectedLead.subject),
-        intent: selectedLead.intent,
-        engagement_score: selectedLead.engagement_score,
-        urgency: urgency,
-        last_message_type: lastMessage?.type || 'SENT',
-        last_message_content: cleanString((lastMessage?.content || '').substring(0, 300)),
-        reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
-        days_since_last_message: Math.floor((new Date() - new Date(lastMessage?.time || new Date())) / (1000 * 60 * 60 * 24)),
-        website: cleanString(selectedLead.website || ''),
-        content_brief: cleanString(selectedLead.content_brief || ''),
-        conversation: selectedLead.conversation.map(msg => ({
-          ...msg,
-          content: cleanString(msg.content),
-          from: cleanString(msg.from || ''),
-          to: cleanString(msg.to || '')
-        }))
-      };
-
-      // Debug: Log the full payload we're sending
-      const fullPayload = {
-        id: selectedLead.id,
-        email: cleanString(selectedLead.email),
-        first_name: cleanString(selectedLead.first_name),
-        last_name: cleanString(selectedLead.last_name),
-        subject: cleanString(selectedLead.subject),
-        intent: selectedLead.intent,
-        engagement_score: selectedLead.engagement_score,
-        urgency: urgency,
-        last_message_type: lastMessage?.type || 'SENT',
-        last_message_content: cleanString((lastMessage?.content || '').substring(0, 300)),
-        reply_count: selectedLead.conversation.filter(msg => msg.type === 'REPLY').length,
-        days_since_last_message: Math.floor((new Date() - new Date(lastMessage?.time || new Date())) / (1000 * 60 * 60 * 24)),
-        website: cleanString(selectedLead.website || ''),
-        content_brief: cleanString(selectedLead.content_brief || ''),
-        conversation: selectedLead.conversation.map(msg => ({
-          ...msg,
-          content: cleanString(msg.content),
-          from: cleanString(msg.from || ''),
-          to: cleanString(msg.to || '')
-        })),
-        email_message_body: selectedLead.email_message_body || ''
-      };
-
-      console.log('=== WEBHOOK DEBUG INFO ===');
-      console.log('Payload being sent:', JSON.stringify(fullPayload, null, 2));
-      console.log('Payload size (characters):', JSON.stringify(fullPayload).length);
-      console.log('URL:', 'https://reidsickels.app.n8n.cloud/webhook/8021dcee-ebfd-4cd0-a424-49d7eeb5b66b');
-      console.log('Request method: POST');
-      console.log('Content-Type: application/json');
-
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/draftmessage', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(fullPayload)
-      });
-      
-      console.log('=== RESPONSE DEBUG INFO ===');
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      // Get raw response text to see what we're actually getting
-      const responseText = await response.text();
-      console.log('Raw response text:', responseText);
-      console.log('Response text length:', responseText.length);
-      console.log('Response text type:', typeof responseText);
-      
-      if (!response.ok) {
-        console.error('=== ERROR DETAILS ===');
-        console.error('Status:', response.status);
-        console.error('Status Text:', response.statusText);
-        console.error('Response Body:', responseText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
+      // Check if we have conversation data
+      if (!selectedLead.email_message_body) {
+        console.error('⚠️ No conversation history available for this lead');
+        throw new Error('No conversation history available');
       }
-      
-      // Check if response is empty
-      if (!responseText || responseText.trim() === '') {
-        console.error('Empty response from webhook');
-        throw new Error('Empty response from webhook');
+
+      // Parse conversation into lightweight format (same as intent analysis)
+      const parsedConvo = parseConversationForIntent(selectedLead.email_message_body);
+      if (!parsedConvo) {
+        console.error('⚠️ Failed to parse conversation history');
+        throw new Error('Failed to parse conversation history');
       }
+
+      console.log('📧 Parsed conversation:', parsedConvo);
+
+      // Create the draft generation prompt (from your n8n workflow)
+      const prompt = `Take the last sent message & draft a reply. 
+
+If we sent the last one, make it a followup. If they sent the last one, make it a reply. We run an email marketing agency and these are leads interested from cold email.
+
+ONLY include the response in your output. If you include any thought processes or anything, the prompt can't be used and it's considered a failure.
+
+Here is the lead data and responses:
+
+${JSON.stringify(parsedConvo)}`;
+
+      console.log('📝 Draft generation prompt prepared');
+
+      // Call Navvii AI for draft generation
+      const draftText = await callNavviiAIForDraftGeneration(prompt);
       
-      // Try to parse JSON response
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        console.log('Parsed response data:', data);
-      } catch (e) {
-        console.error('JSON parsing failed. Raw response:', responseText);
-        console.error('JSON parse error:', e.message);
-        throw new Error(`Invalid JSON response from webhook. Raw response: ${responseText}`);
-      }
-      
-      // Handle both array and object response formats
-      if (data.text) {
-        // Clean the response text of any problematic characters
-        const cleanResponseText = data.text
+      if (draftText && draftText.trim()) {
+        // Clean the response text
+        const cleanResponseText = draftText
           .replace(/\\n/g, '\n')  // Convert literal \n to actual line breaks
           .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
           .trim();
@@ -2842,43 +2881,56 @@ const InboxManager = ({ user, onSignOut }) => {
         const formattedHtml = convertToHtml(cleanResponseText);
         setDraftHtml(formattedHtml);
 
-        // Update the contenteditable div
+        // Convert plain text response to HTML divs for proper editor display
+        const lines = cleanResponseText.split('\n');
+        const editorHtml = lines.map(line => `<div>${line || ''}</div>`).join('');
+        
+        // Update the contenteditable div with formatted HTML
         const editor = document.querySelector('[contenteditable]');
         if (editor) {
-          editor.innerHTML = formattedHtml;
+          editor.innerHTML = editorHtml;
+          // Trigger change to sync states
+          handleTextareaChange({ target: editor });
         }
 
-        console.log('Draft set successfully from object format');
-      } else if (data && data.length > 0 && data[0].text) {
-        const cleanResponseText = data[0].text
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .trim();
-
-        // Update both the text state and HTML content
-        setDraftResponse(cleanResponseText);
-        const formattedHtml = convertToHtml(cleanResponseText);
-        setDraftHtml(formattedHtml);
-
-        // Update the contenteditable div
-        const editor = document.querySelector('[contenteditable]');
-        if (editor) {
-          editor.innerHTML = formattedHtml;
+        // Auto-save as draft
+        if (selectedLead) {
+          saveDraft(selectedLead.id, cleanResponseText, formattedHtml);
         }
 
-        console.log('Draft set successfully from array format');
+        console.log('✅ Draft generated successfully with Navvii AI');
+        showToast('Smart draft generated successfully!', 'success');
       } else {
-        console.error('No text found in response:', data);
-        throw new Error('No text content in webhook response');
+        console.error('❌ No draft text returned from Navvii AI');
+        throw new Error('No draft content generated');
       }
     } catch (error) {
-      console.error('=== FULL ERROR DETAILS ===');
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-      console.error('Selected lead data:', selectedLead);
+      console.error('❌ Draft generation failed:', error);
       
-      // Simple fallback for debugging
-      setDraftResponse(`Hi ${selectedLead.first_name},\n\nThank you for your message.\n\nBest regards`);
+      // Provide helpful fallback based on conversation context
+      const lastMessage = selectedLead.conversation?.[selectedLead.conversation.length - 1];
+      const isFollowUp = lastMessage?.type === 'SENT';
+      
+      const fallbackDraft = isFollowUp 
+        ? `Hi ${selectedLead.first_name},\n\nJust wanted to follow up on my previous message. Are you still interested in discussing this further?\n\nBest regards`
+        : `Hi ${selectedLead.first_name},\n\nThank you for your message. I'd be happy to help you with this.\n\nBest regards`;
+      
+      setDraftResponse(fallbackDraft);
+      const formattedHtml = convertToHtml(fallbackDraft);
+      setDraftHtml(formattedHtml);
+
+      // Convert fallback text to HTML divs for proper editor display
+      const lines = fallbackDraft.split('\n');
+      const editorHtml = lines.map(line => `<div>${line || ''}</div>`).join('');
+      
+      // Update the contenteditable div with formatted HTML
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        editor.innerHTML = editorHtml;
+        handleTextareaChange({ target: editor });
+      }
+
+      showToast('Used fallback draft - please check your API key', 'warning');
     } finally {
       setIsGeneratingDraft(false);
     }
@@ -3295,36 +3347,216 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
+  // Navvii AI API call for lead enrichment with web search
+  const callNavviiAIForEnrichment = async (lead) => {
+    try {
+      // Use corsproxy.io - no rate limits
+      const CORS_PROXY = 'https://corsproxy.io/?';
+      const NAVVII_API_URL = encodeURIComponent('https://api.anthropic.com/v1/messages');
+      
+      console.log('🔍 Calling Navvii AI for lead enrichment...');
+      
+      const prompt = `You are a research assistant, solely made to find company information.
+
+here are the three fields you need to find for ${lead.first_name} and this is his email ${lead.email}. This is the website: ${lead.website}. Scrape the website.
+
+Here are the fields, return in with three different fields. only put a /n in between each of the fields. If you cant find the personal linkedIn or the business linkedIn, put NULL
+
+Role
+Company Summary
+Personal LinkedIn
+Business LinkedIn
+Last Name
+
+ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search tool once.`;
+      
+      const requestBody = {
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        tools: [
+          {
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: 1
+          }
+        ]
+      };
+      
+      const fullUrl = CORS_PROXY + NAVVII_API_URL;
+        
+      console.log('📤 Navvii AI enrichment request:', {
+        url: fullUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'sk-ant-api03-...hidden',
+          'anthropic-version': '2023-06-01'
+        },
+        body: requestBody
+      });
+      
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('📥 Navvii AI enrichment response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Navvii AI enrichment error response:', errorText);
+        
+        if (response.status === 429) {
+          throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
+        } else if (response.status === 403) {
+          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+        } else {
+          throw new Error(`Navvii AI enrichment error: ${response.status} - ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('📄 Navvii AI enrichment response data:', JSON.stringify(data, null, 2));
+      
+      // Check if there are tool use blocks in the response
+      if (data.content && Array.isArray(data.content)) {
+        console.log('📋 Content array length:', data.content.length);
+        data.content.forEach((item, index) => {
+          console.log(`📋 Content ${index}:`, JSON.stringify(item, null, 2));
+        });
+      }
+      
+      // For tool use responses, we might need to extract text from multiple content blocks
+      let result = '';
+      if (data.content && Array.isArray(data.content)) {
+        // Find all text content blocks and concatenate them
+        const textBlocks = data.content.filter(block => block.type === 'text');
+        result = textBlocks.map(block => block.text).join('\n').trim();
+        console.log('🔍 Extracted text from', textBlocks.length, 'text blocks');
+      } else {
+        result = data.content?.[0]?.text?.trim() || '';
+      }
+      
+      console.log(`🔍 Navvii AI enrichment raw response: "${result}"`);
+      console.log(`🔍 Response type: ${typeof result}, length: ${result?.length}`);
+      
+      return result;
+
+    } catch (error) {
+      console.error('Navvii AI enrichment call failed:', error);
+      
+      // Check if it's a CORS/proxy issue
+      if (error.message.includes('CORS') || error.message.includes('429') || error.message.includes('fetch')) {
+        console.log('💡 CORS proxy issue detected. Enrichment will be skipped.');
+      }
+      
+      return null;
+    }
+  };
+
+  // Parse enrichment response (from n8n Code node logic)
+  const parseEnrichmentResponse = (textContent) => {
+    console.log('🔍 parseEnrichmentResponse input:', JSON.stringify(textContent));
+    console.log('🔍 Input type:', typeof textContent, 'Length:', textContent?.length);
+    
+    // Check if textContent exists and is a string
+    if (!textContent || typeof textContent !== 'string') {
+      console.log('❌ No valid text content to parse');
+      return {
+        "Role": null,
+        "Company Summary": null,
+        "Personal LinkedIn": null,
+        "Business LinkedIn": null,
+        "Last Name": null
+      };
+    }
+
+    // Clean up the text by replacing \\n with actual newlines
+    const cleanedText = textContent.replace(/\\n/g, '\n');
+    console.log('🔍 Cleaned text:', JSON.stringify(cleanedText));
+
+    // Initialize the result object with null values
+    const result = {
+      "Role": null,
+      "Company Summary": null,
+      "Personal LinkedIn": null,
+      "Business LinkedIn": null,
+      "Last Name": null
+    };
+
+    // Split by \n\n to get each field section
+    const sections = cleanedText.split('\n\n');
+    console.log('🔍 Split sections:', sections.length, sections);
+
+    for (let section of sections) {
+      section = section.trim();
+      console.log('🔍 Processing section:', JSON.stringify(section));
+      
+      if (section.includes('Role:')) {
+        const content = section.split('Role:')[1]?.trim();
+        console.log('🔍 Found Role content:', JSON.stringify(content));
+        if (content && content !== 'NULL' && content !== '') {
+          result.Role = content;
+        }
+      } else if (section.includes('Company Summary:')) {
+        const content = section.split('Company Summary:')[1]?.trim();
+        console.log('🔍 Found Company Summary content:', JSON.stringify(content));
+        if (content && content !== 'NULL' && content !== '') {
+          result["Company Summary"] = content;
+        }
+      } else if (section.includes('Personal LinkedIn:')) {
+        const content = section.split('Personal LinkedIn:')[1]?.trim();
+        console.log('🔍 Found Personal LinkedIn content:', JSON.stringify(content));
+        if (content && content !== 'NULL' && content !== '') {
+          result["Personal LinkedIn"] = content;
+        }
+      } else if (section.includes('Business LinkedIn:')) {
+        const content = section.split('Business LinkedIn:')[1]?.trim();
+        console.log('🔍 Found Business LinkedIn content:', JSON.stringify(content));
+        if (content && content !== 'NULL' && content !== '') {
+          result["Business LinkedIn"] = content;
+        }
+      } else if (section.includes('Last Name:')) {
+        const content = section.split('Last Name:')[1]?.trim();
+        console.log('🔍 Found Last Name content:', JSON.stringify(content));
+        if (content && content !== 'NULL' && content !== '') {
+          result["Last Name"] = content;
+        }
+      }
+    }
+
+    console.log('🔍 Final parsed result:', JSON.stringify(result, null, 2));
+    return result;
+  };
+
   // Add enrichment function
   const enrichLeadData = async (lead) => {
     setEnrichingLeads(prev => new Set([...prev, lead.id]));
     try {
-      const response = await fetch('https://reidsickels.app.n8n.cloud/webhook/9894a38a-ac26-46b8-89a2-ef2e80e83504', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...lead,
-          ...((() => {
-            const leadApiKey = getApiKeyForLead(lead, apiKeys);
-            return {
-              esp_provider: leadApiKey?.esp.provider || '',
-              esp_api_key: leadApiKey?.esp.key || '',
-              account_name: leadApiKey?.name || '',
-              account_id: leadApiKey?.id || '',
-          fullenrich_api_key: apiKeys.fullenrich
-            };
-          })())
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to enrich lead data');
+      console.log('🤖 Enriching lead with Navvii AI for:', lead.first_name, lead.email);
+      
+      // Call Navvii AI for enrichment instead of webhook
+      const enrichmentText = await callNavviiAIForEnrichment(lead);
+      
+      console.log('🔍 Enrichment text returned:', JSON.stringify(enrichmentText));
+      
+      if (!enrichmentText || enrichmentText.trim() === '') {
+        throw new Error('No enrichment data returned from Navvii AI');
       }
 
-      const enrichedData = await response.json();
-      console.log('Raw webhook response:', enrichedData);
+      // Parse the enrichment response  
+      const enrichedData = parseEnrichmentResponse(enrichmentText);
+      console.log('✅ Parsed enrichment data:', JSON.stringify(enrichedData, null, 2));
 
       // Create a new lead object with the enriched data
       const updatedLead = {
@@ -3346,22 +3578,44 @@ const InboxManager = ({ user, onSignOut }) => {
         setSelectedLead(updatedLead);
       }
 
+      // Update Supabase with enriched data
+      try {
+        const { error: updateError } = await supabase
+          .from('retention_harbor')
+          .update({
+            role: enrichedData.Role || null,
+            company_data: enrichedData["Company Summary"] || null,
+            personal_linkedin_url: enrichedData["Personal LinkedIn"] || null,
+            business_linkedin_url: enrichedData["Business LinkedIn"] || null,
+            last_name: enrichedData["Last Name"] || lead.last_name || ''
+          })
+          .eq('lead_email', lead.email);
+
+        if (updateError) {
+          console.error('❌ Supabase update error:', updateError);
+        } else {
+          console.log('✅ Successfully updated Supabase with enriched data');
+        }
+      } catch (updateErr) {
+        console.error('❌ Error updating Supabase:', updateErr);
+      }
+
       // Show success/not found toast with lead name
       const leadName = `${lead.first_name} ${lead.last_name}`.trim();
       if (enrichedData.Role || enrichedData["Company Summary"] || enrichedData["Personal LinkedIn"] || enrichedData["Business LinkedIn"]) {
-        showToast(`Data enriched for ${leadName}`, 'success', lead.id);
+        showToast(`Lead enriched with Navvii AI for ${leadName}`, 'success', lead.id);
       } else {
         showToast(`No additional data found for ${leadName}`, 'error', lead.id);
       }
 
     } catch (error) {
-      console.error('Error enriching lead:', error);
+      console.error('❌ Navvii AI enrichment failed:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
       const leadName = `${lead.first_name} ${lead.last_name}`.trim();
-      showToast(`Error enriching data for ${leadName}`, 'error', lead.id);
+      showToast(`Error enriching ${leadName} with Navvii AI`, 'error', lead.id);
     } finally {
       setEnrichingLeads(prev => {
         const next = new Set(prev);
@@ -3852,8 +4106,8 @@ Here is the message history. AGAIN, just respond with a number. NOTHING else. If
 
 ${JSON.stringify(parsedConvo)}`;
 
-          // Call Claude AI for intent analysis
-          const intentScore = await callClaudeForIntentAnalysis(prompt);
+          // Call Navvii AI for intent analysis
+          const intentScore = await callNavviiAIForIntentAnalysis(prompt);
           
           if (intentScore && intentScore >= 1 && intentScore <= 10) {
             const intentLabel = getIntentLabel(intentScore);
@@ -3936,8 +4190,8 @@ Here is the message history. AGAIN, just respond with a number. NOTHING else. If
 
 ${JSON.stringify(parsedConvo)}`;
 
-        // Call Claude AI for intent analysis
-        const intentScore = await callClaudeForIntentAnalysis(prompt);
+        // Call Navvii AI for intent analysis
+        const intentScore = await callNavviiAIForIntentAnalysis(prompt);
         
         if (intentScore && intentScore >= 1 && intentScore <= 10) {
           // Convert score to user-friendly label for logging
@@ -3989,14 +4243,14 @@ ${JSON.stringify(parsedConvo)}`;
     return analyzed;
   };
 
-  // Claude API call with CORS proxy (using correct headers)
-  const callClaudeForIntentAnalysis = async (prompt) => {
+  // Navvii AI API call with CORS proxy (using correct headers)
+  const callNavviiAIForIntentAnalysis = async (prompt) => {
     try {
       // Use corsproxy.io - no rate limits
       const CORS_PROXY = 'https://corsproxy.io/?';
-      const CLAUDE_API_URL = encodeURIComponent('https://api.anthropic.com/v1/messages');
+      const NAVVII_API_URL = encodeURIComponent('https://api.anthropic.com/v1/messages');
       
-      console.log('🔧 Calling Claude API for intent analysis...');
+      console.log('🤖 Calling Navvii AI for intent analysis...');
       
       const requestBody = {
         model: 'claude-3-5-sonnet-20241022',
@@ -4009,9 +4263,9 @@ ${JSON.stringify(parsedConvo)}`;
         ]
       };
       
-              const fullUrl = CORS_PROXY + CLAUDE_API_URL;
+              const fullUrl = CORS_PROXY + NAVVII_API_URL;
         
-        console.log('📤 Claude API request:', {
+        console.log('📤 Navvii AI request:', {
           url: fullUrl,
           headers: {
             'content-type': 'application/json',
@@ -4031,11 +4285,11 @@ ${JSON.stringify(parsedConvo)}`;
         body: JSON.stringify(requestBody)
       });
 
-      console.log('📥 Claude API response status:', response.status);
+      console.log('📥 Navvii AI response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Claude API error response:', errorText);
+        console.error('❌ Navvii AI error response:', errorText);
         
         // Check for common CORS proxy issues
         if (response.status === 429) {
@@ -4043,30 +4297,30 @@ ${JSON.stringify(parsedConvo)}`;
         } else if (response.status === 403) {
           throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
         } else {
-          throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+          throw new Error(`Navvii AI error: ${response.status} - ${errorText}`);
         }
       }
 
       const data = await response.json();
-      console.log('📄 Claude API response data:', data);
+      console.log('📄 Navvii AI response data:', data);
       
       const result = data.content?.[0]?.text?.trim();
       
-      console.log(`🧠 Claude response for intent: "${result}"`);
+      console.log(`🤖 Navvii AI response for intent: "${result}"`);
       
       // Extract just the number from the response
       const intentScore = parseInt(result);
       
       // Validate the score
       if (isNaN(intentScore) || intentScore < 1 || intentScore > 10) {
-        console.log(`⚠️ Invalid Claude response: "${result}" - not a valid number 1-10`);
+        console.log(`⚠️ Invalid Navvii AI response: "${result}" - not a valid number 1-10`);
         return null;
       }
       
       return intentScore;
 
     } catch (error) {
-      console.error('Claude API call failed:', error);
+      console.error('Navvii AI call failed:', error);
       
       // Check if it's a CORS/proxy issue
       if (error.message.includes('CORS') || error.message.includes('429') || error.message.includes('fetch')) {
@@ -4317,13 +4571,13 @@ ${JSON.stringify(parsedConvo)}`;
         
         console.log(`✅ Successfully inserted all ${allLeadsToInsert.length} leads using single-row inserts!`);
         
-        // Step 5: Analyze intent for relevant leads using Claude API
+        // Step 5: Analyze intent for relevant leads using Navvii AI
         const relevantLeadsCount = allLeadsToInsert.filter(lead => shouldAnalyzeIntent(lead.lead_category)).length;
         
         setBackfillProgress({ 
           current: processedCampaigns, 
           total: recentCampaigns.length, 
-          status: `Analyzing intent for ${relevantLeadsCount} relevant leads with Claude AI...` 
+          status: `Analyzing intent for ${relevantLeadsCount} relevant leads with Navvii AI...` 
         });
         
         const analyzedCount = await analyzeLeadIntents(allLeadsToInsert);
@@ -4768,25 +5022,15 @@ ${JSON.stringify(parsedConvo)}`;
   const handleTemplateSelect = (template) => {
     if (!template || !selectedLead) return;
 
-    // Update both the text state and HTML content
-    setDraftResponse(template.content);
-    const formattedHtml = template.html_content || convertToHtml(template.content);
+    // Use the HTML content directly from template editor (both editors are HTML-based)
+    const templateHtml = template.html_content || template.content;
     
-    // Convert any existing links to editor format
-    const editorReadyHtml = convertLinksToEditorFormat(formattedHtml);
-    setDraftHtml(formattedHtml); // Store clean HTML for sending
-    
-    // Update the contenteditable div with interactive links
+    // Update the contenteditable div with the template HTML directly
     const editor = document.querySelector('[contenteditable]');
     if (editor) {
-      editor.innerHTML = editorReadyHtml;
-      // Trigger change to sync states
+      editor.innerHTML = templateHtml;
+      // Trigger change to sync states (this will extract text and clean HTML)
       handleTextareaChange({ target: editor });
-    }
-
-    // Auto-save as draft if we have a selected lead
-    if (selectedLead) {
-      saveDraft(selectedLead.id, template.content, formattedHtml);
     }
 
     // Close template selector
@@ -5551,6 +5795,20 @@ ${JSON.stringify(parsedConvo)}`;
           white-space: pre-line;
         }
 
+        /* Paragraph spacing for contenteditable divs */
+        div[contenteditable] > div {
+          margin: 14px 0;
+          line-height: 1.6;
+        }
+
+        div[contenteditable] > div:first-child {
+          margin-top: 0;
+        }
+
+        div[contenteditable] > div:last-child {
+          margin-bottom: 0;
+        }
+
         /* Simple list styling for contenteditable */
         div[contenteditable] ul {
           margin: 8px 0;
@@ -5586,16 +5844,10 @@ ${JSON.stringify(parsedConvo)}`;
           text-decoration: underline !important;
         }
 
-        .email-preview p {
-          margin: 8px 0 !important;
-        }
-
-        .email-preview p:first-child {
-          margin-top: 0 !important;
-        }
-
-        .email-preview p:last-child {
-          margin-bottom: 0 !important;
+        /* Simple line height for email preview */
+        .email-preview {
+          line-height: 1.6 !important;
+          white-space: pre-line !important;
         }
       `}</style>
 
@@ -7162,7 +7414,7 @@ ${JSON.stringify(parsedConvo)}`;
                         style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                       >
                         <Edit3 className="w-4 h-4" />
-                        {isGeneratingDraft ? 'Generating...' : 'Generate Smart Draft'}
+                        {isGeneratingDraft ? 'Generating...' : 'Generate with Navvii AI'}
                       </button>
                       
                       <button
@@ -7225,7 +7477,7 @@ ${JSON.stringify(parsedConvo)}`;
                           • List
                         </button>
 
-                        <div className="mx-2" style={{borderLeft: `1px solid ${themeStyles.border}`}}></div>
+                        <div className="mx-2" style={{borderLeft: `1px solid ${themeStyles.border}`, display: 'none'}}></div>
                         <input
                           type="file"
                           multiple
@@ -7233,11 +7485,12 @@ ${JSON.stringify(parsedConvo)}`;
                           className="hidden"
                           id="attachment-input"
                           onChange={handleFileAttachment}
+                          style={{display: 'none'}}
                         />
                         <label
                           htmlFor="attachment-input"
                           className="px-3 py-1 rounded text-xs hover:opacity-80 transition-all duration-300 cursor-pointer flex items-center gap-1"
-                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary}}
+                          style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textPrimary, display: 'none'}}
                           title="Attach File"
                         >
                           📎 Attach
@@ -7466,16 +7719,40 @@ Keyboard shortcuts:
                               fontFamily: 'Arial, sans-serif',
                               lineHeight: '1.6'
                             }}
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(cleanFormattingHtml(draftHtml)) }}
+                            dangerouslySetInnerHTML={{ __html: draftHtml }}
                           />
 
+                        </details>
+                      )}
+
+                      {/* Debug: Show raw HTML */}
+                      {draftHtml && (
+                        <details className="text-xs mt-2">
+                          <summary className="cursor-pointer transition-colors duration-300" style={{color: themeStyles.textMuted}}>Raw HTML (Debug)</summary>
+                          <div 
+                            className="mt-2 p-3 rounded border transition-colors duration-300" 
+                            style={{
+                              backgroundColor: themeStyles.tertiaryBg, 
+                              border: `1px solid ${themeStyles.border}`,
+                              fontFamily: 'Monaco, Consolas, monospace',
+                              fontSize: '11px',
+                              lineHeight: '1.4',
+                              color: themeStyles.textSecondary,
+                              maxHeight: '200px',
+                              overflowY: 'auto'
+                            }}
+                          >
+                            <pre style={{margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
+                              {draftHtml}
+                            </pre>
+                          </div>
                         </details>
                       )}
                     </div>
 
                     <div className="flex items-center justify-between">
                       {/* Schedule Button */}
-                      <div className="relative scheduler-container">
+                      <div className="relative scheduler-container" style={{display: 'none'}}>
                         <button
                           onClick={() => setShowScheduler(!showScheduler)}
                           className="px-4 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300"

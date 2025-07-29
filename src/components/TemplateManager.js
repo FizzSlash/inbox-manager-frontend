@@ -1233,11 +1233,20 @@ Keyboard shortcuts:
               {previewTemplate.html_content ? (
                 <div 
                   dangerouslySetInnerHTML={{ __html: previewTemplate.html_content }}
-                  className="prose max-w-none transition-colors duration-300"
-                  style={{color: themeStyles.textPrimary}}
+                  className="email-preview transition-colors duration-300"
+                  style={{
+                    color: themeStyles.textPrimary,
+                    lineHeight: '1.6'
+                  }}
                 />
               ) : (
-                <div className="whitespace-pre-wrap transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                <div 
+                  className="whitespace-pre-wrap email-preview transition-colors duration-300" 
+                  style={{
+                    color: themeStyles.textPrimary,
+                    lineHeight: '1.6'
+                  }}
+                >
                   {previewTemplate.content}
                 </div>
               )}
