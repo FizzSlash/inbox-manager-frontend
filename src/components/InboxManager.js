@@ -285,6 +285,27 @@ const InboxManager = ({ user, onSignOut }) => {
   // Replace single loading states with maps of lead IDs
   const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
+  
+  // Helper function to get brand-scoped localStorage key for API keys
+  const getApiKeysStorageKey = () => {
+    return brandId ? `apiKeys_backup_${brandId}` : 'apiKeys_backup_default';
+  };
+
+  // Migrate old non-scoped API keys to brand-scoped storage
+  useEffect(() => {
+    if (brandId) {
+      const oldKeys = localStorage.getItem('apiKeys_backup');
+      const newKey = getApiKeysStorageKey();
+      const existingKeys = localStorage.getItem(newKey);
+      
+      // If we have old keys but no brand-scoped keys, migrate them
+      if (oldKeys && !existingKeys) {
+        console.log(`🔄 Migrating API keys to brand-scoped storage for brand ${brandId}`);
+        localStorage.setItem(newKey, oldKeys);
+        // Don't remove old keys yet to avoid breaking other brands
+      }
+    }
+  }, [brandId]);
 
   // Replace single toast with array of toasts
   const [toasts, setToasts] = useState([]);
@@ -608,8 +629,8 @@ const InboxManager = ({ user, onSignOut }) => {
     setIsSavingApi(true);
     
     try {
-      // STEP 1: Always save to localStorage first
-      localStorage.setItem('apiKeys_backup', JSON.stringify(apiKeys));
+      // STEP 1: Always save to localStorage first (scoped to brand)
+      localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(apiKeys));
       console.log('✅ Saved to localStorage');
       
       // STEP 2: Save to Supabase if possible
@@ -807,7 +828,7 @@ const InboxManager = ({ user, onSignOut }) => {
           setApiKeys(newState);
           
           // Sync to localStorage as backup
-          localStorage.setItem('apiKeys_backup', JSON.stringify(newState));
+          localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(newState));
           console.log('✅ Loaded from Supabase');
           
 
@@ -818,7 +839,7 @@ const InboxManager = ({ user, onSignOut }) => {
       
       // STEP 2: Fallback to localStorage
       console.log('📱 Trying localStorage...');
-      const backup = localStorage.getItem('apiKeys_backup');
+      const backup = localStorage.getItem(getApiKeysStorageKey());
       if (backup) {
         const parsed = JSON.parse(backup);
         setApiKeys(parsed);
@@ -3828,7 +3849,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       setApiKeys(newApiKeys);
       
       // Update localStorage
-      localStorage.setItem('apiKeys_backup', JSON.stringify(newApiKeys));
+      localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(newApiKeys));
       
       // STEP 4: Refresh leads to show the deletions
       await fetchLeads();
@@ -4358,13 +4379,13 @@ ${JSON.stringify(parsedConvo)}`;
       }));
 
       // Update localStorage backup
-      const currentKeys = JSON.parse(localStorage.getItem('apiKeys_backup') || '{"accounts":[],"fullenrich":""}');
+      const currentKeys = JSON.parse(localStorage.getItem(getApiKeysStorageKey()) || '{"accounts":[],"fullenrich":""}');
       currentKeys.accounts = currentKeys.accounts.map(account => 
         account.account_id === accountId 
           ? { ...account, backfilled: true }
           : account
       );
-      localStorage.setItem('apiKeys_backup', JSON.stringify(currentKeys));
+              localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(currentKeys));
 
       console.log(`✅ Marked account ${accountId} as backfilled`);
     } catch (error) {
