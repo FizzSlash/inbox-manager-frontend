@@ -285,27 +285,6 @@ const InboxManager = ({ user, onSignOut }) => {
   // Replace single loading states with maps of lead IDs
   const [enrichingLeads, setEnrichingLeads] = useState(new Set());
   const [searchingPhoneLeads, setSearchingPhoneLeads] = useState(new Set());
-  
-  // Helper function to get brand-scoped localStorage key for API keys
-  const getApiKeysStorageKey = () => {
-    return brandId ? `apiKeys_backup_${brandId}` : 'apiKeys_backup_default';
-  };
-
-  // Migrate old non-scoped API keys to brand-scoped storage
-  useEffect(() => {
-    if (brandId) {
-      const oldKeys = localStorage.getItem('apiKeys_backup');
-      const newKey = getApiKeysStorageKey();
-      const existingKeys = localStorage.getItem(newKey);
-      
-      // If we have old keys but no brand-scoped keys, migrate them
-      if (oldKeys && !existingKeys) {
-        console.log(`🔄 Migrating API keys to brand-scoped storage for brand ${brandId}`);
-        localStorage.setItem(newKey, oldKeys);
-        // Don't remove old keys yet to avoid breaking other brands
-      }
-    }
-  }, [brandId]);
 
   // Replace single toast with array of toasts
   const [toasts, setToasts] = useState([]);
@@ -598,8 +577,8 @@ const InboxManager = ({ user, onSignOut }) => {
     const fetchBrandId = async () => {
       if (!user) return;
       
-      // Check if we already have it cached
-      const cachedBrandId = localStorage.getItem('user_brand_id');
+      // Check if we already have it cached in session
+      const cachedBrandId = sessionStorage.getItem('user_brand_id');
       if (cachedBrandId) {
         setBrandId(cachedBrandId);
         return;
@@ -614,10 +593,11 @@ const InboxManager = ({ user, onSignOut }) => {
         
       if (profile?.brand_id) {
         setBrandId(profile.brand_id);
-        localStorage.setItem('user_brand_id', profile.brand_id); // Cache it
+        sessionStorage.setItem('user_brand_id', profile.brand_id); // Cache it in session
+        console.log('✅ Loaded brand_id from profile:', profile.brand_id);
       } else {
+        console.log('❌ No profile found for user:', user.id);
         setBrandId(null);
-        localStorage.removeItem('user_brand_id'); // Clear invalid cache
       }
     };
     fetchBrandId();
@@ -629,9 +609,9 @@ const InboxManager = ({ user, onSignOut }) => {
     setIsSavingApi(true);
     
     try {
-      // STEP 1: Always save to localStorage first (scoped to brand)
-      localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(apiKeys));
-      console.log('✅ Saved to localStorage');
+      // STEP 1: Always save to sessionStorage first (brand-isolated)
+      sessionStorage.setItem('apiKeys_session', JSON.stringify(apiKeys));
+      console.log('✅ Saved to sessionStorage');
       
       // STEP 2: Save to Supabase if possible
       if (brandId && user) {
@@ -672,11 +652,20 @@ const InboxManager = ({ user, onSignOut }) => {
         
         // STEP 2A: Insert new accounts (no ID, let database auto-assign)
         if (newAccounts.length > 0) {
+          console.log('🔍 DEBUG: Attempting to insert with values:');
+          console.log('🔍 User ID (auth.uid()):', user.id);
+          console.log('🔍 Brand ID from state:', brandId);
+          console.log('🔍 New accounts data:', JSON.stringify(newAccounts, null, 2));
+          
           const { error: insertError } = await supabase
             .from('api_settings')
             .insert(newAccounts);
             
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error('❌ INSERT ERROR:', insertError);
+            console.error('❌ Error details:', JSON.stringify(insertError, null, 2));
+            throw insertError;
+          }
           console.log(`✅ Inserted ${newAccounts.length} new accounts`);
         }
         
@@ -827,8 +816,8 @@ const InboxManager = ({ user, onSignOut }) => {
           const newState = { accounts, fullenrich: fullenrichKey };
           setApiKeys(newState);
           
-          // Sync to localStorage as backup
-          localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(newState));
+          // Sync to sessionStorage as backup
+          sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
           console.log('✅ Loaded from Supabase');
           
 
@@ -837,13 +826,13 @@ const InboxManager = ({ user, onSignOut }) => {
         }
       }
       
-      // STEP 2: Fallback to localStorage
-      console.log('📱 Trying localStorage...');
-      const backup = localStorage.getItem(getApiKeysStorageKey());
+      // STEP 2: Fallback to sessionStorage
+      console.log('📱 Trying sessionStorage...');
+      const backup = sessionStorage.getItem('apiKeys_session');
       if (backup) {
         const parsed = JSON.parse(backup);
         setApiKeys(parsed);
-        console.log('✅ Loaded from localStorage backup');
+        console.log('✅ Loaded from sessionStorage backup');
       }
       
     } catch (error) {
@@ -852,6 +841,20 @@ const InboxManager = ({ user, onSignOut }) => {
       setIsLoadingApiKeys(false);
     }
   };
+
+  // Clear session storage when brandId changes (ensures fresh sessions per brand)
+  useEffect(() => {
+    sessionStorage.removeItem('apiKeys_session');
+    console.log('🧹 Cleared sessionStorage for fresh session');
+  }, [brandId]);
+
+  // Clear session storage on component unmount (extra security)
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem('apiKeys_session');
+      console.log('🧹 Cleared sessionStorage on unmount');
+    };
+  }, []);
 
   // Load API keys when brandId and user are available
   useEffect(() => {
@@ -3848,8 +3851,8 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       const newApiKeys = { ...apiKeys, accounts: updatedAccounts };
       setApiKeys(newApiKeys);
       
-      // Update localStorage
-      localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(newApiKeys));
+      // Update sessionStorage
+      sessionStorage.setItem('apiKeys_session', JSON.stringify(newApiKeys));
       
       // STEP 4: Refresh leads to show the deletions
       await fetchLeads();
@@ -4378,14 +4381,14 @@ ${JSON.stringify(parsedConvo)}`;
         )
       }));
 
-      // Update localStorage backup
-      const currentKeys = JSON.parse(localStorage.getItem(getApiKeysStorageKey()) || '{"accounts":[],"fullenrich":""}');
+      // Update sessionStorage backup
+      const currentKeys = JSON.parse(sessionStorage.getItem('apiKeys_session') || '{"accounts":[],"fullenrich":""}');
       currentKeys.accounts = currentKeys.accounts.map(account => 
         account.account_id === accountId 
           ? { ...account, backfilled: true }
           : account
       );
-              localStorage.setItem(getApiKeysStorageKey(), JSON.stringify(currentKeys));
+      sessionStorage.setItem('apiKeys_session', JSON.stringify(currentKeys));
 
       console.log(`✅ Marked account ${accountId} as backfilled`);
     } catch (error) {
