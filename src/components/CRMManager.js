@@ -45,7 +45,7 @@ const STAGE_OPTIONS = [
   { value: 'Nurture', label: 'Nurture', color: '#06B6D4' }
 ];
 
-const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
+const CRMManager = ({ brandId, onGoToInboxLead = () => {}, demoMode = false, demoData = null }) => {
   const [crmLeads, setCrmLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -117,6 +117,17 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
   useEffect(() => {
     const fetchCrmLeads = async () => {
       setLoading(true);
+      
+      // In demo mode, use provided demo data
+      if (demoMode && demoData) {
+        console.log('📺 CRM Demo mode: Using demo CRM leads');
+        setTimeout(() => {
+          setCrmLeads(demoData);
+          setLoading(false);
+        }, 1000); // Simulate loading time
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('retention_harbor')
         .select('*')
@@ -130,8 +141,8 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {} }) => {
       }
       setLoading(false);
     };
-    if (brandId) fetchCrmLeads();
-  }, [brandId, sort]);
+    if (brandId || (demoMode && demoData)) fetchCrmLeads();
+  }, [brandId, sort, demoMode, demoData]);
 
   // Stats calculations
   const stats = useMemo(() => {

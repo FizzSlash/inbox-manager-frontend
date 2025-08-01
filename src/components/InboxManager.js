@@ -353,6 +353,58 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   ];
 
+  // Demo data for CRM tab
+  const demoCRMLeads = [
+    {
+      id: 1,
+      email: "sarah.johnson@techstartup.com",
+      first_name: "Sarah",
+      last_name: "Johnson",
+      company: "TechStartup Inc",
+      status: "CRM",
+      deal_size: 5000,
+      stage: "Proposal Sent",
+      notes: "Interested in annual plan, decision by end of month",
+      created_at_lead: "2024-01-15T10:30:00Z",
+      call_booked: true,
+      closed: false
+    },
+    {
+      id: 3,
+      email: "jennifer.white@retailplus.com", 
+      first_name: "Jennifer",
+      last_name: "White",
+      company: "RetailPlus",
+      status: "CRM", 
+      deal_size: 8000,
+      stage: "Negotiation",
+      notes: "Meeting scheduled, discussing enterprise features",
+      created_at_lead: "2024-01-13T09:15:00Z",
+      call_booked: true,
+      closed: false
+    }
+  ];
+
+  // Demo data for Analytics
+  const demoAnalytics = {
+    totalLeads: 5,
+    responseRate: 85,
+    avgResponseTime: "2.5 hours",
+    conversionRate: 40,
+    totalDeals: 2,
+    totalRevenue: 13000,
+    monthlyStats: [
+      { month: "Dec", leads: 15, responses: 12, deals: 3 },
+      { month: "Jan", leads: 18, responses: 15, deals: 2 },
+      { month: "Feb", leads: 12, responses: 10, deals: 1 }
+    ],
+    campaignStats: [
+      { name: "Tech Outreach Q1", totalLeads: 8, avgEngagement: 78, avgRepliesPerLead: 2.3, avgResponseTime: "3.2 hours" },
+      { name: "Retail Campaign", totalLeads: 5, avgEngagement: 92, avgRepliesPerLead: 3.1, avgResponseTime: "1.8 hours" },
+      { name: "Healthcare Vertical", totalLeads: 4, avgEngagement: 65, avgRepliesPerLead: 1.8, avgResponseTime: "4.1 hours" }
+    ]
+  };
+
   // Helper function to check if intent is null/undefined/invalid
   const isIntentNull = (intent) => {
     return intent === null || intent === undefined || intent === '' || intent === 'null' || isNaN(Number(intent));
@@ -8538,7 +8590,12 @@ Keyboard shortcuts:
       {/* Main Content - CRM */}
       {activeTab === 'crm' && (
         <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-          <CRMManager brandId={brandId} onGoToInboxLead={handleGoToInboxLead} />
+          <CRMManager 
+            brandId={brandId} 
+            onGoToInboxLead={handleGoToInboxLead} 
+            demoMode={demoMode}
+            demoData={demoMode ? demoCRMLeads : null}
+          />
         </div>
         )}
 
