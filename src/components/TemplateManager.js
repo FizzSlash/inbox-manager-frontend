@@ -1080,7 +1080,7 @@ const TemplateManager = ({ user, brandId, selectionMode = false, onTemplateSelec
                           const list = currentElement.closest('ul, ol');
                           if (list) {
                             const newDiv = document.createElement('div');
-                            newDiv.innerHTML = '<br>';
+                            newDiv.innerHTML = '<br style="color: transparent;">';
                             list.parentNode.insertBefore(newDiv, list.nextSibling);
                             
                             const newRange = document.createRange();

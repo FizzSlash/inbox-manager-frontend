@@ -60,59 +60,56 @@ const cleanFormattingHtml = (html) => {
   const temp = document.createElement('div');
   temp.innerHTML = html;
   
-  // Remove link editing UI elements (remove buttons, wrappers)
-  const linkWrappers = temp.querySelectorAll('span[style*="position: relative"][style*="inline-block"]');
+  // Remove ALL editor UI elements with data-editor-element attribute
+  const editorElements = temp.querySelectorAll('[data-editor-element]');
+  editorElements.forEach(element => element.remove());
+  
+  // Replace link wrappers with just the links (much more robust)
+  const linkWrappers = temp.querySelectorAll('[data-link-wrapper]');
   linkWrappers.forEach(wrapper => {
     const link = wrapper.querySelector('a');
     if (link) {
-      // Replace the wrapper with just the link
       wrapper.parentNode.replaceChild(link, wrapper);
     }
   });
 
-  // Remove any remaining remove buttons (× characters)
+  // Clean up any remaining editor artifacts
   const removeButtons = temp.querySelectorAll('span');
   removeButtons.forEach(span => {
     const text = span.textContent.trim();
-    // Remove any span that contains just the × character (remove button)
-    if (text === '×' || text === 'x') {
+    if (text === '×' || text === 'x' || span.style.position === 'absolute') {
       span.remove();
     }
   });
 
-  // Strip ALL style attributes (removes Tailwind CSS bloat) but preserve essential link attributes
+  // Strip ALL style attributes but preserve essential link attributes
   const allElements = temp.querySelectorAll('*');
   allElements.forEach(element => {
-    element.removeAttribute('style');
-    // Preserve essential link attributes
+    // Preserve link attributes before removing styles
+    let linkAttrs = {};
     if (element.tagName === 'A') {
-      // Keep href, target, rel attributes for links
-      const href = element.getAttribute('href');
-      const target = element.getAttribute('target');
-      const rel = element.getAttribute('rel');
-      // Remove all attributes first
+      linkAttrs.href = element.getAttribute('href');
+      linkAttrs.target = element.getAttribute('target');
+      linkAttrs.rel = element.getAttribute('rel');
+    }
+    
+    // Remove all attributes
       Array.from(element.attributes).forEach(attr => {
         element.removeAttribute(attr.name);
       });
-      // Add back essential attributes
-      if (href) element.setAttribute('href', href);
-      if (target) element.setAttribute('target', target);
-      if (rel) element.setAttribute('rel', rel);
+    
+    // Restore essential link attributes
+    if (element.tagName === 'A') {
+      if (linkAttrs.href) element.setAttribute('href', linkAttrs.href);
+      if (linkAttrs.target) element.setAttribute('target', linkAttrs.target);
+      if (linkAttrs.rel) element.setAttribute('rel', linkAttrs.rel);
     }
   });
   
-  // Convert divs to paragraphs for better email compatibility
-  const divs = temp.querySelectorAll('div');
-  divs.forEach(div => {
-    const p = document.createElement('p');
-    p.innerHTML = div.innerHTML;
-    div.parentNode.replaceChild(p, div);
-  });
-  
-  // Convert spans with font-weight: bold to <strong>
-  const boldSpans = temp.querySelectorAll('span[style*="font-weight"], span[style*="bold"]');
+  // Convert bold spans to <strong>
+  const boldSpans = temp.querySelectorAll('span');
   boldSpans.forEach(span => {
-    if (span.style.fontWeight === 'bold' || span.style.fontWeight === '700' || span.style.fontWeight === 'bolder') {
+    if (span.style && (span.style.fontWeight === 'bold' || span.style.fontWeight === '700')) {
       const strong = document.createElement('strong');
       strong.innerHTML = span.innerHTML;
       span.parentNode.replaceChild(strong, span);
@@ -856,6 +853,8 @@ const InboxManager = ({ user, onSignOut }) => {
     };
   }, []);
 
+
+
   // Load API keys when brandId and user are available
   useEffect(() => {
     if (brandId && user) {
@@ -1189,7 +1188,7 @@ const InboxManager = ({ user, onSignOut }) => {
                 ? `${option.color}30` 
                 : isDarkMode ? '#2A2C2A' : '#F8F9FA',
               borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
-              color: '#ffffff',
+              color: isDarkMode ? '#ffffff' : '#000000',
               boxSizing: 'border-box',
               minHeight: '50px',
               display: 'flex',
@@ -1209,7 +1208,7 @@ const InboxManager = ({ user, onSignOut }) => {
             <div className="flex items-center justify-between w-full">
               <span className="font-semibold text-sm whitespace-nowrap">{option.label}</span>
               {lead.lead_category === option.value && (
-                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: '#ffffff'}} />
+                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: isDarkMode ? '#ffffff' : '#000000'}} />
               )}
             </div>
           </button>
@@ -2544,10 +2543,14 @@ const InboxManager = ({ user, onSignOut }) => {
       }
 
       if (range && editor) {
-        // Create link wrapper div to help with positioning the remove button
+        // Create simple link wrapper with data attribute for reliable cleanup
         const linkWrapper = document.createElement('span');
-        linkWrapper.style.position = 'relative';
-        linkWrapper.style.display = 'inline-block';
+        linkWrapper.setAttribute('data-link-wrapper', 'true');
+        linkWrapper.style.cssText = `
+          position: relative;
+          display: inline-block;
+          margin-right: 2px;
+        `;
         
         // Create the link
         const link = document.createElement('a');
@@ -2561,54 +2564,68 @@ const InboxManager = ({ user, onSignOut }) => {
           cursor: pointer;
         `;
         
-        // Create remove button (always visible)
+        // Create simple remove button
         const removeBtn = document.createElement('span');
-        removeBtn.textContent = '×';
+        removeBtn.innerHTML = '×';
+        removeBtn.setAttribute('data-editor-element', 'remove-button');
+        removeBtn.className = 'link-remove-btn';
         removeBtn.style.cssText = `
           position: absolute;
-          top: -8px;
-          right: -12px;
-          background: #e0e0e0;
-          color: #333;
+          top: -6px;
+          right: -6px;
+          background: #ff4444;
+          color: white;
           border-radius: 50%;
-          width: 16px;
-          height: 16px;
-          font-size: 12px;
-          line-height: 16px;
+          width: 12px;
+          height: 12px;
+          font-size: 9px;
+          line-height: 12px;
           text-align: center;
           cursor: pointer;
           user-select: none;
-          opacity: 0;
-          transition: opacity 0.2s;
+          display: none;
+          font-family: monospace;
+          z-index: 100;
         `;
         
-        // Show/hide remove button on hover
+        // Simple hover behavior
         linkWrapper.addEventListener('mouseenter', () => {
-          removeBtn.style.opacity = '1';
-          link.style.color = '#004499';
+          removeBtn.style.display = 'block';
         });
         
         linkWrapper.addEventListener('mouseleave', () => {
-          removeBtn.style.opacity = '0';
-          link.style.color = '#0066cc';
+          removeBtn.style.display = 'none';
         });
         
         // Handle remove button click
         removeBtn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const text = document.createTextNode(link.textContent);
-          linkWrapper.parentNode.replaceChild(text, linkWrapper);
+          // Replace with plain text
+          const textNode = document.createTextNode(link.textContent);
+          linkWrapper.parentNode.replaceChild(textNode, linkWrapper);
           handleTextareaChange({ target: editor });
         });
         
-        // Assemble the link component
+        // Assemble components
         linkWrapper.appendChild(link);
         linkWrapper.appendChild(removeBtn);
         
         // Insert into document
         range.deleteContents();
         range.insertNode(linkWrapper);
+        
+        // Add simple space for cursor positioning
+        const spaceNode = document.createTextNode(' ');
+        linkWrapper.parentNode.insertBefore(spaceNode, linkWrapper.nextSibling);
+        
+        // Position cursor after the space
+        const selection = window.getSelection();
+        const newRange = document.createRange();
+        newRange.setStart(spaceNode, 1);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
         
         // Update editor content
         handleTextareaChange({ target: editor });
@@ -2663,79 +2680,71 @@ const InboxManager = ({ user, onSignOut }) => {
     const removeButtons = e.target.querySelectorAll('.remove-link');
     removeButtons.forEach(btn => btn.remove());
     
-    // Get the raw HTML from the editor
+    // Get the raw HTML from the editor - NO MANIPULATION
     const rawHtml = e.target.innerHTML;
     
-    // Create clean HTML for sending (remove editor UI elements)
+    // Create clean HTML for sending (remove editor UI elements only)
     const cleanHtml = sanitizeHtml(cleanFormattingHtml(rawHtml));
     
-    // Extract text content with proper line breaks
-    // Convert each <div> to a line, handling <br> tags properly
-    const textContent = extractTextWithLineBreaks(e.target);
+    // Apply email styles for preview and sending
+    const styledHtml = addEmailStyles(cleanHtml);
+    
+    // Extract plain text for backup/storage
+    const textContent = e.target.textContent || e.target.innerText || '';
     setDraftResponse(textContent);
-    setDraftHtml(cleanHtml); // Store clean HTML for sending
+    setDraftHtml(styledHtml);
     
     // Auto-save draft if we have a selected lead
     if (selectedLead) {
-      saveDraft(selectedLead.id, textContent, cleanHtml);
+      saveDraft(selectedLead.id, textContent, styledHtml);
     }
-    
-    // The editor keeps its current content with interactive elements
-    // We don't modify e.target.innerHTML here to preserve editor functionality
   };
 
-  // Extract text content with proper line breaks from contenteditable div
-  const extractTextWithLineBreaks = (element) => {
-    const children = element.childNodes;
-    let text = '';
-    
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
-      
-      if (child.nodeType === Node.TEXT_NODE) {
-        text += child.textContent;
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        if (child.tagName === 'DIV') {
-          // Add line break before div (except first one)
-          if (i > 0) text += '\n';
-          
-          // Get text content of the div, handling <br> tags
-          const divText = child.innerHTML === '<br>' || child.innerHTML === '' ? '' : child.textContent;
-          text += divText;
-        } else if (child.tagName === 'BR') {
-          text += '\n';
-        } else {
-          text += child.textContent;
-        }
-      }
-    }
-    
-    return text;
-  };
 
-  // Convert text to email-safe HTML using divs with tight spacing
-  const convertToHtml = (text) => {
-    if (!text) return '';
+
+  // Add inline styles to HTML for email sending (simple and robust)
+  const addEmailStyles = (html) => {
+    if (!html) return '';
     
-    // Split text into lines and wrap each in a div with controlled margins
-    const lines = text.split(/\n/);
+    const emailStyle = 'margin: 0; padding: 0; line-height: 1.4;';
+    const listStyle = 'margin: 8px 0; padding-left: 20px;';
+    const listItemStyle = 'margin: 2px 0; line-height: 1.5;';
     
-    const htmlLines = lines.map((line, index) => {
-      const trimmedLine = line.trim();
-      
-      // Empty lines become divs with minimal height for spacing
-      if (!trimmedLine) {
-        return '<div style="margin: 0; padding: 0; line-height: 0.5; font-size: 1px;">&nbsp;</div>';
+    // Create a temporary DOM element for processing
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Apply styles to divs
+    const divs = temp.querySelectorAll('div');
+    divs.forEach(div => {
+      if (!div.getAttribute('style') || !div.getAttribute('style').includes('line-height: 1.4')) {
+        div.setAttribute('style', emailStyle);
       }
-      
-      // Regular lines with tight margins
-      return `<div style="margin: 0; padding: 0; line-height: 1.2;">${trimmedLine}</div>`;
     });
     
-    return htmlLines.join('');
+    // Apply styles to paragraphs and convert to divs
+    const paragraphs = temp.querySelectorAll('p');
+    paragraphs.forEach(p => {
+      const div = document.createElement('div');
+      div.setAttribute('style', emailStyle);
+      div.innerHTML = p.innerHTML;
+      p.parentNode.replaceChild(div, p);
+    });
+    
+    // Apply styles to lists
+    const lists = temp.querySelectorAll('ul, ol');
+    lists.forEach(list => {
+      const listType = list.tagName === 'UL' ? 'disc' : 'decimal';
+      list.setAttribute('style', `${listStyle} list-style-type: ${listType};`);
+      
+      const items = list.querySelectorAll('li');
+      items.forEach(item => {
+        item.setAttribute('style', listItemStyle);
+      });
+    });
+    
+    return temp.innerHTML;
   };
-
-
 
   // Handle file attachment selection
   const handleFileAttachment = (event) => {
@@ -2806,7 +2815,7 @@ const InboxManager = ({ user, onSignOut }) => {
       
       const response = await fetch(fullUrl, {
         method: 'POST',
-        headers: {
+        headers: { 
           'content-type': 'application/json',
           'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
           'anthropic-version': '2023-06-01'
@@ -2877,14 +2886,21 @@ const InboxManager = ({ user, onSignOut }) => {
 
       console.log('📧 Parsed conversation:', parsedConvo);
 
-      // Create the draft generation prompt (from your n8n workflow)
-      const prompt = `Take the last sent message & draft a reply. 
+      // Create the draft generation prompt with clear perspective instructions
+      const prompt = `You are writing an email FROM an email marketing agency TO a potential lead/client.
 
-If we sent the last one, make it a followup. If they sent the last one, make it a reply. We run an email marketing agency and these are leads interested from cold email.
+CRITICAL: Always write from the perspective of the email marketing agency (the sender). Never write from the lead's perspective.
 
-ONLY include the response in your output. If you include any thought processes or anything, the prompt can't be used and it's considered a failure.
+Instructions:
+- If WE (the agency) sent the last message, write a follow-up from our perspective
+- If THEY (the lead) sent the last message, write a reply from our perspective  
+- We are the email marketing agency reaching out to leads who responded to cold emails
+- Always use "I", "we", "our agency", etc. when referring to the sender
+- Never write as if you are the lead responding to us
 
-Here is the lead data and responses:
+ONLY include the email response in your output. No thought processes, explanations, or extra text.
+
+Here is the conversation history:
 
 ${JSON.stringify(parsedConvo)}`;
 
@@ -2900,15 +2916,29 @@ ${JSON.stringify(parsedConvo)}`;
           .replace(/\\r/g, '\r')  // Convert literal \r to actual line breaks
           .trim();
 
-        // Update both the text state and HTML content
-        setDraftResponse(cleanResponseText);
-        const formattedHtml = convertToHtml(cleanResponseText);
-        setDraftHtml(formattedHtml);
-
-        // Convert plain text response to HTML divs for proper editor display
+        // Convert plain text response to the specific HTML format requested
         const lines = cleanResponseText.split('\n');
-        const editorHtml = lines.map(line => `<div>${line || ''}</div>`).join('');
+        let editorHtml = '';
         
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          if (i === 0) {
+            // First line: plain text without wrapper
+            editorHtml += line;
+          } else if (line === '') {
+            // Empty line: div with br
+            editorHtml += '<div style="margin: 0; padding: 0; line-height: 1.4;"><br></div>';
+          } else {
+            // Regular line: wrapped in styled div
+            editorHtml += `<div style="margin: 0; padding: 0; line-height: 1.4;">${line}</div>`;
+          }
+        }
+        
+        // Update both states - the HTML is already properly formatted
+        setDraftResponse(cleanResponseText);
+        setDraftHtml(editorHtml);
+
         // Update the contenteditable div with formatted HTML
         const editor = document.querySelector('[contenteditable]');
         if (editor) {
@@ -2919,7 +2949,7 @@ ${JSON.stringify(parsedConvo)}`;
 
         // Auto-save as draft
         if (selectedLead) {
-          saveDraft(selectedLead.id, cleanResponseText, formattedHtml);
+          saveDraft(selectedLead.id, cleanResponseText, editorHtml);
         }
 
         console.log('✅ Draft generated successfully with Navvii AI');
@@ -2939,14 +2969,13 @@ ${JSON.stringify(parsedConvo)}`;
         ? `Hi ${selectedLead.first_name},\n\nJust wanted to follow up on my previous message. Are you still interested in discussing this further?\n\nBest regards`
         : `Hi ${selectedLead.first_name},\n\nThank you for your message. I'd be happy to help you with this.\n\nBest regards`;
       
-      setDraftResponse(fallbackDraft);
-      const formattedHtml = convertToHtml(fallbackDraft);
-      setDraftHtml(formattedHtml);
-
-      // Convert fallback text to HTML divs for proper editor display
-      const lines = fallbackDraft.split('\n');
-      const editorHtml = lines.map(line => `<div>${line || ''}</div>`).join('');
+      // Convert fallback text to simple HTML
+      const editorHtml = fallbackDraft.replace(/\n/g, '<br>');
       
+      // Update both states - apply email styles to HTML for sending/preview
+      setDraftResponse(fallbackDraft);
+      setDraftHtml(addEmailStyles(editorHtml));
+
       // Update the contenteditable div with formatted HTML
       const editor = document.querySelector('[contenteditable]');
       if (editor) {
@@ -3245,12 +3274,12 @@ ${JSON.stringify(parsedConvo)}`;
   // SECURE: Send message directly from frontend (API keys never leave device)
   const sendMessage = async () => {
     const textContent = document.querySelector('[contenteditable]')?.textContent || draftResponse;
-    const rawHtmlContent = document.querySelector('[contenteditable]')?.innerHTML || convertToHtml(draftResponse);
     
     console.log('🔐 SECURE SEND: API keys will never leave this device');
     console.log('📧 Processing message for secure direct send...');
     
-    const htmlContent = sanitizeHtml(cleanFormattingHtml(rawHtmlContent));
+    // Use the styled HTML from draftHtml (already has proper inline styles applied)
+    const htmlContent = draftHtml;
     
     if (!textContent.trim()) return;
     
@@ -3435,7 +3464,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       });
 
       console.log('📥 Navvii AI enrichment response status:', response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Navvii AI enrichment error response:', errorText);
@@ -4041,29 +4070,31 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return 'Not Classified';
   };
 
-  // Get intent badge styling based on score
+  // Get intent badge styling based on score (responsive to light/dark mode)
   const getIntentBadgeStyle = (score) => {
+    const textColor = isDarkMode ? null : '#000000'; // Black text in light mode, keep original colors in dark mode
+    
     if (isIntentNull(score)) {
       return { 
         backgroundColor: '#fee2e2', 
-        color: '#dc2626',
+        color: textColor || '#dc2626',
         border: '1px solid #f87171'
       };
     }
     const numScore = parseInt(score);
     if (numScore >= 1 && numScore <= 3) return { 
       backgroundColor: '#fef3c7', 
-      color: '#d97706',
+      color: textColor || '#d97706',
       border: '1px solid #fbbf24'
     };
     if (numScore >= 4 && numScore <= 6) return { 
       backgroundColor: '#dbeafe', 
-      color: '#2563eb',
+      color: textColor || '#2563eb',
       border: '1px solid #60a5fa'
     };
     if (numScore >= 7 && numScore <= 10) return { 
       backgroundColor: '#dcfce7', 
-      color: '#16a34a',
+      color: textColor || '#16a34a',
       border: '1px solid #4ade80'
     };
     return null;
@@ -5049,7 +5080,7 @@ ${JSON.stringify(parsedConvo)}`;
     // Use the HTML content directly from template editor (both editors are HTML-based)
     const templateHtml = template.html_content || template.content;
     
-    // Update the contenteditable div with the template HTML directly
+    // Update the contenteditable div with the template HTML
     const editor = document.querySelector('[contenteditable]');
     if (editor) {
       editor.innerHTML = templateHtml;
@@ -5819,18 +5850,36 @@ ${JSON.stringify(parsedConvo)}`;
           white-space: pre-line;
         }
 
-        /* Paragraph spacing for contenteditable divs */
-        div[contenteditable] > div {
-          margin: 14px 0;
-          line-height: 1.6;
+        /* Simple editor styling - let browser handle most behavior naturally */
+        div[contenteditable] {
+          line-height: 1.4;
+          min-height: 50px;
+          padding-right: 20px; /* Moderate padding for cursor positioning */
         }
 
-        div[contenteditable] > div:first-child {
-          margin-top: 0;
+        /* Link wrapper styling */
+        [data-link-wrapper] {
+          position: relative;
+          display: inline-block;
+          margin-right: 2px;
         }
 
-        div[contenteditable] > div:last-child {
-          margin-bottom: 0;
+        /* Hide remove buttons by default, show on hover */
+        .link-remove-btn {
+          display: none !important;
+          position: absolute !important;
+          pointer-events: auto !important;
+          z-index: 1000 !important;
+        }
+
+        [data-link-wrapper]:hover .link-remove-btn {
+          display: block !important;
+        }
+
+        /* Ensure links don't break layout */
+        [data-link-wrapper] a {
+          display: inline;
+          position: static;
         }
 
         /* Simple list styling for contenteditable */
@@ -5868,10 +5917,9 @@ ${JSON.stringify(parsedConvo)}`;
           text-decoration: underline !important;
         }
 
-        /* Simple line height for email preview */
+        /* Email preview styling (inline styles handle spacing) */
         .email-preview {
-          line-height: 1.6 !important;
-          white-space: pre-line !important;
+          line-height: 1.4 !important;
         }
       `}</style>
 
@@ -6869,7 +6917,7 @@ ${JSON.stringify(parsedConvo)}`;
                               className="text-sm px-4 py-2 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2 font-semibold"
                               style={{
                                 backgroundColor: `${currentCategory.color}30`,
-                                color: '#ffffff',
+                                color: isDarkMode ? '#ffffff' : '#000000',
                                 border: `2px solid ${currentCategory.color}`,
                                 animation: `tagFadeIn 0.5s ease-out ${index * 0.1}s both`,
                                 boxShadow: `0 2px 8px ${currentCategory.color}20`
@@ -7613,44 +7661,6 @@ ${JSON.stringify(parsedConvo)}`;
                               case 'x':
                                 // Let copy/paste/cut work naturally
                                 break;
-                            }
-                          } else if (e.key === 'Enter' && e.shiftKey) {
-                            // Handle Shift+Enter to exit lists and create new normal line (keeping current bullet)
-                                  const selection = window.getSelection();
-                                  if (selection.rangeCount > 0) {
-                                    const range = selection.getRangeAt(0);
-                              let currentElement = range.startContainer;
-                              
-                              // Find the list item we're in (if any)
-                              while (currentElement && currentElement.nodeType !== Node.ELEMENT_NODE) {
-                                currentElement = currentElement.parentNode;
-                              }
-                              
-                              // Check if we're in a list item
-                              if (currentElement && currentElement.tagName === 'LI') {
-                                      e.preventDefault();
-                                      
-                                // Find the parent list (ul or ol)
-                                const list = currentElement.closest('ul, ol');
-                                if (list) {
-                                  // Create a new div for normal text after the list
-                                  const newDiv = document.createElement('div');
-                                  newDiv.innerHTML = '<br>';
-                                  
-                                  // Insert the new div after the list
-                                  list.parentNode.insertBefore(newDiv, list.nextSibling);
-                                  
-                                  // Move cursor to the new div
-                                        const newRange = document.createRange();
-                                  newRange.setStart(newDiv, 0);
-                                        newRange.collapse(true);
-                                        selection.removeAllRanges();
-                                        selection.addRange(newRange);
-                                  
-                                  // Update content
-                                  handleTextareaChange({ target: e.target });
-                                }
-                              }
                             }
                           } else if (e.key === 'Tab') {
                             // Handle Tab for indent/outdent
