@@ -30,7 +30,7 @@ const Auth = ({ onAuthSuccess }) => {
         // Immediately create profile after signup, even before verification
         if (signupUser) {
           await supabase.from('profiles').insert([
-            { id: signupUser.id, email: signupUser.email, brand_id: '1' }
+            { id: signupUser.id, email: signupUser.email, brand_id: null }
           ]);
         }
         if (!signupUser?.email_confirmed_at) {
@@ -68,7 +68,7 @@ const Auth = ({ onAuthSuccess }) => {
       .single();
     if (!profile) {
       await supabase.from('profiles').insert([
-        { id: user.id, email: user.email, brand_id: '1' }
+        { id: user.id, email: user.email, brand_id: null }
       ]);
     }
   };

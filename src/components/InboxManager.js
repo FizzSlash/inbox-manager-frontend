@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
 import CRMManager from './CRMManager';
@@ -208,6 +208,8 @@ const sanitizeHtml = (html) => {
 };
 
 const InboxManager = ({ user, onSignOut }) => {
+  console.log('🔍 InboxManager component loaded with user:', !!user);
+  
   // Helper function to check if intent is null/undefined/invalid
   const isIntentNull = (intent) => {
     return intent === null || intent === undefined || intent === '' || intent === 'null' || isNaN(Number(intent));
@@ -226,6 +228,30 @@ const InboxManager = ({ user, onSignOut }) => {
   // Add new state for API settings and tab management
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
+  
+  // Navvii AI Settings state
+  const [navviiSettings, setNavviiSettings] = useState({
+    company_name: '',
+    industry: '',
+    services_offered: '',
+    value_proposition: '',
+    tone_of_voice: 'professional',
+    writing_style: '',
+    sender_name: '',
+    sender_title: '',
+    company_website: '',
+    phone_number: '',
+    custom_prompt_instructions: '',
+    draft_template: '',
+    common_objections: '',
+    key_selling_points: '',
+    target_audience: '',
+    pain_points: '',
+    success_stories: ''
+  });
+  const [isLoadingNavviiSettings, setIsLoadingNavviiSettings] = useState(false);
+  const [isSavingNavviiSettings, setIsSavingNavviiSettings] = useState(false);
+  const [currentAccountId, setCurrentAccountId] = useState(null);
   
   // Intent filter state (default to 'positive' to show only leads with positive intent)
   const [intentFilter, setIntentFilter] = useState('positive');
@@ -572,14 +598,22 @@ const InboxManager = ({ user, onSignOut }) => {
   // Fetch the user's brand_id from the profiles table after login
   useEffect(() => {
     const fetchBrandId = async () => {
-      if (!user) return;
+      console.log('🔍 fetchBrandId called with user:', !!user);
+      
+      if (!user) {
+        console.log('🔍 No user, skipping brandId fetch');
+        return;
+      }
       
       // Check if we already have it cached in session
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
       if (cachedBrandId) {
+        console.log('🔍 Found cached brandId:', cachedBrandId);
         setBrandId(cachedBrandId);
         return;
       }
+      
+      console.log('🔍 Fetching brandId from database for user:', user.id);
       
       // Only fetch from database if not cached
       const { data: profile, error } = await supabase
@@ -589,11 +623,12 @@ const InboxManager = ({ user, onSignOut }) => {
         .single();
         
       if (profile?.brand_id) {
+        console.log('🔍 Setting brandId to:', profile.brand_id);
         setBrandId(profile.brand_id);
         sessionStorage.setItem('user_brand_id', profile.brand_id); // Cache it in session
         console.log('✅ Loaded brand_id from profile:', profile.brand_id);
       } else {
-        console.log('❌ No profile found for user:', user.id);
+        console.log('❌ No profile found for user:', user.id, 'Error:', error);
         setBrandId(null);
       }
     };
@@ -861,6 +896,144 @@ const InboxManager = ({ user, onSignOut }) => {
       loadApiKeys();
     }
   }, [brandId, user]);
+
+  // ===== NAVVII AI SETTINGS FUNCTIONS =====
+  
+  // Save Navvii AI settings to Supabase
+  const saveNavviiSettings = async () => {
+    console.log('🔍 saveNavviiSettings called with:', { user: !!user, currentAccountId, brandId });
+    console.log('🔍 Current navviiSettings:', navviiSettings);
+    
+    if (!user || (!currentAccountId && !brandId)) {
+      showToast('Please ensure you have an account or brand selected', 'error');
+      return;
+    }
+
+    setIsSavingNavviiSettings(true);
+    try {
+      const saveData = {
+        brand_id: brandId,
+        ...navviiSettings,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add account_id if available
+      if (currentAccountId) {
+        saveData.account_id = currentAccountId;
+      }
+      
+      console.log('🔍 Saving data:', saveData);
+      
+      const { data, error } = await supabase
+        .from('navvii_ai_settings')
+        .upsert(saveData, {
+          onConflict: currentAccountId ? 'account_id,brand_id' : 'brand_id'
+        });
+
+      if (error) throw error;
+
+      showToast('Navvii AI settings saved successfully!', 'success');
+      console.log('✅ Navvii AI settings saved to Supabase');
+    } catch (error) {
+      console.error('❌ Failed to save Navvii AI settings:', error);
+      showToast('Failed to save Navvii AI settings: ' + error.message, 'error');
+    } finally {
+      setIsSavingNavviiSettings(false);
+    }
+  };
+
+  // Load Navvii AI settings from Supabase
+  const loadNavviiSettings = async () => {
+    console.log('🔍 loadNavviiSettings called with:', { user: !!user, currentAccountId, brandId });
+    
+    if (!user || (!currentAccountId && !brandId)) {
+      console.log('🔍 Skipping load - missing user or both currentAccountId and brandId');
+      return;
+    }
+
+    setIsLoadingNavviiSettings(true);
+    try {
+      // Try with currentAccountId first, fallback to brandId only
+      let query = supabase.from('navvii_ai_settings').select('*');
+      
+      if (currentAccountId) {
+        query = query.eq('account_id', currentAccountId).eq('brand_id', brandId);
+        console.log('🔍 Querying with account_id:', currentAccountId, 'and brand_id:', brandId);
+      } else {
+        query = query.eq('brand_id', brandId);
+        console.log('🔍 Querying with brand_id only:', brandId);
+      }
+      
+      const { data, error } = await query.single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw error;
+      }
+
+      if (data) {
+        console.log('🔍 Found Navvii AI data:', data);
+        const newSettings = {
+          company_name: data.company_name || '',
+          industry: data.industry || '',
+          services_offered: data.services_offered || '',
+          value_proposition: data.value_proposition || '',
+          tone_of_voice: data.tone_of_voice || 'professional',
+          writing_style: data.writing_style || '',
+          sender_name: data.sender_name || '',
+          sender_title: data.sender_title || '',
+          company_website: data.company_website || '',
+          phone_number: data.phone_number || '',
+          custom_prompt_instructions: data.custom_prompt_instructions || '',
+          draft_template: data.draft_template || '',
+          common_objections: data.common_objections || '',
+          key_selling_points: data.key_selling_points || '',
+          target_audience: data.target_audience || '',
+          pain_points: data.pain_points || '',
+          success_stories: data.success_stories || ''
+        };
+        
+        console.log('🔍 Setting navviiSettings to:', newSettings);
+        setNavviiSettings(newSettings);
+        console.log('✅ Loaded Navvii AI settings from Supabase');
+      } else {
+        console.log('ℹ️ No Navvii AI settings found, using defaults');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load Navvii AI settings:', error);
+      showToast('Failed to load Navvii AI settings: ' + error.message, 'error');
+    } finally {
+      setIsLoadingNavviiSettings(false);
+    }
+  };
+
+  // Load Navvii AI settings when account/brand changes
+  useEffect(() => {
+    console.log('🔍 useEffect for loadNavviiSettings triggered with:', { 
+      currentAccountId, 
+      brandId, 
+      user: !!user,
+      condition: (currentAccountId || brandId) && user 
+    });
+    
+    if ((currentAccountId || brandId) && user) {
+      console.log('🔍 Calling loadNavviiSettings...');
+      loadNavviiSettings();
+    } else {
+      console.log('🔍 Not calling loadNavviiSettings - condition not met');
+    }
+  }, [currentAccountId, brandId, user]);
+
+  // Set current account ID from API keys
+  useEffect(() => {
+    if (apiKeys.accounts && apiKeys.accounts.length > 0) {
+      const firstAccount = apiKeys.accounts[0];
+      console.log('🔍 Setting currentAccountId from first account:', firstAccount.account_id);
+      if (firstAccount.account_id && firstAccount.account_id !== currentAccountId) {
+        setCurrentAccountId(firstAccount.account_id);
+        console.log('🔍 Updated currentAccountId to:', firstAccount.account_id);
+      }
+    }
+  }, [apiKeys.accounts]);
 
   // Fetch leads when brandId or API keys are available
   useEffect(() => {
@@ -2886,30 +3059,103 @@ const InboxManager = ({ user, onSignOut }) => {
 
       console.log('📧 Parsed conversation:', parsedConvo);
 
-      // Create the draft generation prompt with clear perspective instructions
-      const prompt = `You are writing an email FROM an email marketing agency TO a potential lead/client.
+      // Get brand settings directly from Supabase (fresh and reliable)
+      console.log('🔍 Fetching brand settings from Supabase for brandId:', brandId);
+      let brandSettings = null;
+      
+      try {
+        const { data, error } = await supabase
+          .from('navvii_ai_settings')
+          .select('*')
+          .eq('brand_id', brandId)
+          .single();
+          
+        if (!error && data) {
+          brandSettings = data;
+          console.log('✅ Found brand settings:', brandSettings);
+          console.log('🔍 Company name from DB:', `"${brandSettings.company_name}"`);
+          console.log('🔍 Company name empty?', brandSettings.company_name === '');
+        } else {
+          console.log('ℹ️ No brand settings found for brandId:', brandId, 'Error:', error);
+        }
+      } catch (error) {
+        console.log('⚠️ Error fetching brand settings:', error);
+      }
 
-CRITICAL: Always write from the perspective of the email marketing agency (the sender). Never write from the lead's perspective.
+      // Build enhanced prompt with brand-specific information
+      console.log('🔍 Building brand context with settings:', brandSettings);
+      console.log('🔍 Company name check:', brandSettings?.company_name, 'Truthy?', !!brandSettings?.company_name);
+      
+      let brandContext = '';
+      let hasCompanyInfo = false;
+      
+      if (brandSettings) {
+        // Check if we have any useful brand information (not just company_name)
+        const hasAnyInfo = brandSettings.company_name || brandSettings.services_offered || 
+                          brandSettings.sender_name || brandSettings.custom_prompt_instructions ||
+                          brandSettings.key_selling_points || brandSettings.value_proposition;
+        
+        if (hasAnyInfo) {
+          hasCompanyInfo = true;
+          console.log('✅ Building brand context - found brand info!');
+          brandContext = `
+BRAND CONTEXT (MUST USE ONLY THIS INFORMATION - DO NOT INVENT ANYTHING):`;
 
-Instructions:
-- If WE (the agency) sent the last message, write a follow-up from our perspective
-- If THEY (the lead) sent the last message, write a reply from our perspective  
-- We are the email marketing agency reaching out to leads who responded to cold emails
-- Always use "I", "we", "our agency", etc. when referring to the sender
-- Never write as if you are the lead responding to us
+          if (brandSettings.company_name) brandContext += `\n- Company: ${brandSettings.company_name}`;
+          if (brandSettings.industry) brandContext += `\n- Industry: ${brandSettings.industry}`;  
+          if (brandSettings.services_offered) brandContext += `\n- Services: ${brandSettings.services_offered}`;
+          if (brandSettings.value_proposition) brandContext += `\n- Value Proposition: ${brandSettings.value_proposition}`;
+          if (brandSettings.sender_name) brandContext += `\n- Sender: ${brandSettings.sender_name}`;
+          if (brandSettings.sender_title) brandContext += ` (${brandSettings.sender_title})`;
+          if (brandSettings.target_audience) brandContext += `\n- Target Audience: ${brandSettings.target_audience}`;
+          if (brandSettings.key_selling_points) brandContext += `\n- Key Selling Points: ${brandSettings.key_selling_points}`;
+          if (brandSettings.pain_points) brandContext += `\n- Pain Points We Address: ${brandSettings.pain_points}`;
+          if (brandSettings.common_objections) brandContext += `\n- Common Objections & How to Handle: ${brandSettings.common_objections}`;
+          if (brandSettings.success_stories) brandContext += `\n- Success Stories/Examples: ${brandSettings.success_stories}`;
+          if (brandSettings.writing_style) brandContext += `\n- Writing Style: ${brandSettings.writing_style}`;
+          if (brandSettings.custom_prompt_instructions) brandContext += `\n- Additional Instructions: ${brandSettings.custom_prompt_instructions}`;
+        }
+      }
 
-ONLY include the email response in your output. No thought processes, explanations, or extra text.
+      // Create the enhanced draft generation prompt
+      const prompt = `You are writing an email FROM ${brandSettings?.company_name || 'the sender'} TO a potential lead/client.
 
-Here is the conversation history:
+${hasCompanyInfo ? `
+AVAILABLE BRAND CONTEXT (Use ONLY when relevant to the conversation):
+${brandContext}
 
+IMPORTANT: Only reference the brand context above if it's actually relevant to what the lead is discussing. Don't force it into every response.` : ''}
+
+CRITICAL RULES:
+- NEVER write from the lead's perspective - you are ALWAYS the sender replying
+- If WE sent the last message, write a follow-up from our perspective  
+- If THEY sent the last message, write a reply from our perspective
+- Use "I", "we", "our company", etc. when referring to yourself (the sender)
+- Only use brand context information when it's relevant to the conversation topic
+- If the conversation doesn't relate to your services/offerings, keep the response natural and conversational
+- NEVER invent or assume information not provided in the brand context
+- Match the tone of voice: ${brandSettings?.tone_of_voice || 'professional'}
+${brandSettings?.sender_name ? `- Sign the email as: ${brandSettings.sender_name}` : '- Do not add a signature unless specified'}
+${brandSettings?.custom_prompt_instructions ? `- Special instruction: ${brandSettings.custom_prompt_instructions}` : ''}
+
+RESPONSE FORMAT: Only include the email response. No explanations, thoughts, or extra text.
+
+Conversation History:
 ${JSON.stringify(parsedConvo)}`;
 
-      console.log('📝 Draft generation prompt prepared');
+      console.log('📝 Smart Draft Prompt Generated:');
+      console.log('═══════════════════════════════════════');
+      console.log(prompt);
+      console.log('═══════════════════════════════════════');
 
       // Call Navvii AI for draft generation
       const draftText = await callNavviiAIForDraftGeneration(prompt);
       
       if (draftText && draftText.trim()) {
+        console.log('🤖 Smart Draft Response:');
+        console.log('───────────────────────────────────────');
+        console.log(draftText);
+        console.log('───────────────────────────────────────');
         // Clean the response text
         const cleanResponseText = draftText
           .replace(/\\n/g, '\n')  // Convert literal \n to actual line breaks
@@ -3734,37 +3980,11 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     );
   }
 
-  // If brandId is '1', show subscribe overlay and blur the rest of the UI
-  if (brandId === '1') {
-    return (
-      <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-        {/* Blurred background */}
-        <div className="absolute inset-0 backdrop-blur-sm z-0" />
-        {/* Main content blurred */}
-        <div className="relative z-10 flex flex-col items-center justify-center h-full w-full">
-          <div className="bg-white/90 dark:bg-gray-900/90 p-10 rounded-2xl shadow-2xl border-2 border-blue-400 flex flex-col items-center max-w-lg mx-auto">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Subscribe to unlock the inbox</h2>
-            <p className="text-gray-700 dark:text-gray-300 mb-4">Your account is not yet associated with a brand. Please subscribe or contact Navvii support to unlock your inbox.</p>
-            <div className="text-gray-500 dark:text-gray-400 text-sm">No leads are currently associated with your account.</div>
-          </div>
-        </div>
-        {/* User info and sign out button */}
-        {user && (
-          <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-20">
-            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
-            {onSignOut && (
-              <button
-                onClick={onSignOut}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
-                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
-                Sign Out
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Show contact overlay for new accounts (brandId is null/falsy)
+  const showContactOverlay = !brandId;
+  
+  // Debug logging for brandId
+  console.log('🔍 Debug - brandId:', brandId, 'showContactOverlay:', showContactOverlay);
 
   // Function to handle API key updates (updated for multiple accounts)
   const handleApiKeyChange = (key, value) => {
@@ -4054,15 +4274,11 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
 
   // Convert intent score to user-friendly label (for UI display)
   const getIntentLabel = (score) => {
-    console.log('🎯 getIntentLabel called with:', score, typeof score, 'isNull:', score === null, 'isUndefined:', score === undefined);
-    
     if (isIntentNull(score)) {
-      console.log('🎯 Returning "Not Classified" for null/undefined intent');
       return 'Not Classified';
     }
     
     const numScore = parseInt(score);
-    console.log('🎯 Parsed score:', numScore);
     
     if (numScore >= 1 && numScore <= 3) return 'Low Intent';
     if (numScore >= 4 && numScore <= 6) return 'Medium Intent';
@@ -4129,9 +4345,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         return 0;
       }
       
-      console.log(`🎯 Found ${missedLeads.length} missed leads:`, missedLeads.map(lead => 
-        `${lead.email} (Category: ${leadCategoryMap[lead.lead_category] || lead.lead_category})`
-      ));
+      // Found ${missedLeads.length} missed leads for analysis
       
       // Analyze each missed lead
       let analyzed = 0;
@@ -4165,9 +4379,6 @@ ${JSON.stringify(parsedConvo)}`;
           const intentScore = await callNavviiAIForIntentAnalysis(prompt);
           
           if (intentScore && intentScore >= 1 && intentScore <= 10) {
-            const intentLabel = getIntentLabel(intentScore);
-            console.log(`🎯 ${lead.email}: Score ${intentScore} → "${intentLabel}"`);
-            
             // Update intent in Supabase
             const { error: updateError } = await supabase
               .from('retention_harbor')
@@ -4249,11 +4460,6 @@ ${JSON.stringify(parsedConvo)}`;
         const intentScore = await callNavviiAIForIntentAnalysis(prompt);
         
         if (intentScore && intentScore >= 1 && intentScore <= 10) {
-          // Convert score to user-friendly label for logging
-          const intentLabel = getIntentLabel(intentScore);
-          
-          console.log(`🎯 Lead ${leadRecord.lead_email}: Score ${intentScore} → "${intentLabel}"`);
-          
           // Update both intent AND parsed_convo in Supabase
           const { error: updateError } = await supabase
             .from('retention_harbor')
@@ -5096,7 +5302,9 @@ ${JSON.stringify(parsedConvo)}`;
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+    <div className="relative h-screen overflow-hidden">
+      {/* Main Content - blurred when overlay is shown */}
+      <div className={`flex h-screen relative overflow-hidden transition-colors duration-300 ${showContactOverlay ? 'blur-sm pointer-events-none' : ''}`} style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
@@ -5197,6 +5405,23 @@ ${JSON.stringify(parsedConvo)}`;
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 Analytics
+              </div>
+            </button>
+
+            {/* Navvii AI Tab */}
+            <button
+              onClick={() => setActiveTab('navvii-ai')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'navvii-ai' ? `text-white` : `hover:bg-white/5`
+              }`}
+              style={{
+                backgroundColor: activeTab === 'navvii-ai' ? `${themeStyles.accent}20` : 'transparent',
+                color: activeTab === 'navvii-ai' ? themeStyles.accent : themeStyles.textPrimary
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4" />
+                Navvii AI
               </div>
             </button>
                       </div>
@@ -7999,6 +8224,351 @@ Keyboard shortcuts:
             <TemplateManager user={user} brandId={brandId} />
           </div>
         )}
+
+        {/* Main Content - Navvii AI Settings */}
+        {activeTab === 'navvii-ai' && (
+          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
+                    Navvii AI Settings
+                  </h2>
+                  <p className="text-sm mt-1" style={{color: themeStyles.textSecondary}}>
+                    Configure your business information for personalized AI-generated drafts
+                  </p>
+                </div>
+                <button
+                  onClick={saveNavviiSettings}
+                  disabled={isSavingNavviiSettings}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:scale-105"
+                  style={{
+                    backgroundColor: themeStyles.accent,
+                    color: 'white'
+                  }}
+                >
+                  {isSavingNavviiSettings ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Settings
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Company Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
+                    Company Information
+                  </h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={navviiSettings.company_name}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, company_name: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="e.g., Your Company Name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Industry
+                    </label>
+                    <input
+                      type="text"
+                      value={navviiSettings.industry}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, industry: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="e.g., Technology, Healthcare, Real Estate, Consulting"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Services Offered
+                    </label>
+                    <textarea
+                      value={navviiSettings.services_offered}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, services_offered: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="Describe your main services and offerings..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Value Proposition
+                    </label>
+                    <textarea
+                      value={navviiSettings.value_proposition}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, value_proposition: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="What makes your company unique? Key benefits you provide..."
+                    />
+                  </div>
+                </div>
+
+                {/* Contact & Style */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
+                    Contact & Style
+                  </h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Sender Name
+                    </label>
+                    <input
+                      type="text"
+                      value={navviiSettings.sender_name}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, sender_name: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="e.g., Connor"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Sender Title
+                    </label>
+                    <input
+                      type="text"
+                      value={navviiSettings.sender_title}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, sender_title: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="e.g., CEO, Sales Manager, Account Executive, Founder"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Tone of Voice
+                    </label>
+                    <select
+                      value={navviiSettings.tone_of_voice}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, tone_of_voice: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                    >
+                      <option value="professional">Professional</option>
+                      <option value="friendly">Friendly</option>
+                      <option value="casual">Casual</option>
+                      <option value="authoritative">Authoritative</option>
+                      <option value="consultative">Consultative</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Writing Style Instructions
+                    </label>
+                    <textarea
+                      value={navviiSettings.writing_style}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, writing_style: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="Specific writing style preferences, sentence structure, etc..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Company Website
+                    </label>
+                    <input
+                      type="url"
+                      value={navviiSettings.company_website}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, company_website: e.target.value}))}
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="https://your-website.com"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Prompting Section */}
+              <div className="mt-8 space-y-4">
+                <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
+                  AI Prompting & Intelligence
+                </h3>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Custom Prompt Instructions
+                    </label>
+                    <textarea
+                      value={navviiSettings.custom_prompt_instructions}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, custom_prompt_instructions: e.target.value}))}
+                      rows="4"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="Additional instructions for AI to follow when generating drafts..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Key Selling Points
+                    </label>
+                    <textarea
+                      value={navviiSettings.key_selling_points}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, key_selling_points: e.target.value}))}
+                      rows="4"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="Main benefits, features, and selling points to emphasize..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Target Audience
+                    </label>
+                    <textarea
+                      value={navviiSettings.target_audience}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, target_audience: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: themeStyles.textPrimary
+                      }}
+                      placeholder="Description of your ideal customers and target market..."
+                    />
+                  </div>
+
+                                     <div>
+                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                       Common Pain Points
+                     </label>
+                     <textarea
+                       value={navviiSettings.pain_points}
+                       onChange={(e) => setNavviiSettings(prev => ({...prev, pain_points: e.target.value}))}
+                       rows="3"
+                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                       style={{
+                         backgroundColor: themeStyles.inputBg,
+                         borderColor: themeStyles.border,
+                         color: themeStyles.textPrimary
+                       }}
+                       placeholder="Customer problems and challenges you solve..."
+                     />
+                   </div>
+
+                   <div>
+                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                       Common Objections & Responses
+                     </label>
+                     <textarea
+                       value={navviiSettings.common_objections}
+                       onChange={(e) => setNavviiSettings(prev => ({...prev, common_objections: e.target.value}))}
+                       rows="3"
+                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                       style={{
+                         backgroundColor: themeStyles.inputBg,
+                         borderColor: themeStyles.border,
+                         color: themeStyles.textPrimary
+                       }}
+                       placeholder="Common objections from prospects and how you typically address them..."
+                     />
+                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                    Success Stories & Examples
+                  </label>
+                  <textarea
+                    value={navviiSettings.success_stories}
+                    onChange={(e) => setNavviiSettings(prev => ({...prev, success_stories: e.target.value}))}
+                    rows="4"
+                    className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    style={{
+                      backgroundColor: themeStyles.inputBg,
+                      borderColor: themeStyles.border,
+                      color: themeStyles.textPrimary
+                    }}
+                    placeholder="Brief success stories, case studies, or results you can reference..."
+                  />
+                </div>
+              </div>
+
+              {isLoadingNavviiSettings && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{color: themeStyles.accent}} />
+                  <span className="ml-2" style={{color: themeStyles.textSecondary}}>Loading settings...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Template Selector Modal */}
@@ -8042,6 +8612,50 @@ Keyboard shortcuts:
             setRecentDropdownPosition(null);
           }}
         />
+      )}
+      </div>
+
+      {/* Contact Navvii Overlay */}
+      {showContactOverlay && (
+        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black bg-opacity-30">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-md mx-4 border-2 border-blue-500">
+            <div className="text-center">
+              <div className="mb-4">
+                <Bot className="w-16 h-16 mx-auto text-blue-500" />
+              </div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+                Account Setup Required
+              </h2>
+              <p className="text-gray-700 dark:text-gray-300 mb-6">
+                Your account needs to be activated by the Navvii team. Please contact us to unlock your inbox and start managing your leads.
+              </p>
+              <div className="space-y-3">
+                <a
+                  href="mailto:support@navvii.com?subject=Account Activation Request&body=Hi, I need my account activated. My email: "
+                  className="block w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Contact Navvii Support
+                </a>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Logged in as: {user?.email}
+                </p>
+              </div>
+            </div>
+            
+            {/* Sign Out Button */}
+            {onSignOut && (
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={onSignOut}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
