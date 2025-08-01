@@ -220,14 +220,17 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX",
       created_at_lead: "2024-01-15T10:30:00Z",
       conversation: [
-        { type: "SENT", time: "2024-01-15T10:30:00Z", email_body: "Hi Sarah, saw your recent expansion. Our email marketing platform helped companies like yours increase lead conversion by 40%. Worth a quick chat?", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com" },
-        { type: "REPLY", time: "2024-01-15T11:45:00Z", email_body: "This sounds interesting! We're definitely looking to improve our email campaigns. Can you send me more details about pricing and features?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com" }
+        { type: "SENT", time: "2024-01-15T10:30:00Z", email_body: "Hi Sarah, saw your recent expansion announcement. Our email marketing platform helped companies like yours increase lead conversion by 40%. Worth a quick chat?", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Congrats on the expansion - quick question" },
+        { type: "REPLY", time: "2024-01-15T11:45:00Z", email_body: "This sounds interesting! We're definitely looking to improve our email campaigns. Can you send me more details about pricing and features?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com", subject: "Re: Congrats on the expansion - quick question" },
+        { type: "SENT", time: "2024-01-15T14:20:00Z", email_body: "Absolutely! I've attached our pricing sheet and feature comparison. Based on your team size (~50), our Growth plan would be perfect. It includes advanced automation, A/B testing, and detailed analytics. Would you like to see it in action? I can do a 15-minute demo this week.", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Re: Congrats on the expansion - quick question" },
+        { type: "REPLY", time: "2024-01-15T16:10:00Z", email_body: "The pricing looks reasonable. I'd love to see a demo! I'm free Thursday at 2 PM or Friday at 10 AM. Also, do you have any case studies from other tech startups?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com", subject: "Re: Congrats on the expansion - quick question" },
+        { type: "SENT", time: "2024-01-15T16:25:00Z", email_body: "Perfect! Let's do Thursday at 2 PM. I'll send a calendar invite shortly. And yes - I'll include a case study from CloudScale (similar stage startup) who saw 65% increase in email engagement after switching to us. See you Thursday!", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Demo confirmed - Thursday 2 PM + CloudScale case study" }
       ],
       website: "techstartup.com",
       phone: "+1-555-0123",
-      subject: "Email Marketing Platform - Quick Chat?",
-      tags: ["hot-lead", "tech", "expansion"],
-      notes: "Interested in improving email campaigns, expanding team",
+      subject: "Demo confirmed - Thursday 2 PM + CloudScale case study",
+      tags: [],
+      notes: "Demo scheduled Thu 2PM. Interested in Growth plan, wants case studies.",
       lead_category: "1",
       custom_field: "High Priority",
       role: "Marketing Director",
@@ -248,14 +251,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX", 
       created_at_lead: "2024-01-14T14:20:00Z",
       conversation: [
-        { type: "SENT", time: "2024-01-14T14:20:00Z", email_body: "Hi Marcus, noticed GrowthCo is scaling fast. Our email automation helped similar companies reduce manual work by 60%. Interested in a demo?", from: "demo@emaillink.com", to: "marcus.chen@growthco.io" },
-        { type: "REPLY", time: "2024-01-14T16:30:00Z", email_body: "We're always looking for ways to streamline our processes. What makes your platform different from others in the market?", from: "marcus.chen@growthco.io", to: "demo@emaillink.com" }
+        { type: "SENT", time: "2024-01-14T14:20:00Z", email_body: "Hi Marcus, noticed GrowthCo is scaling fast (congrats on the team expansion!). Our email automation helped similar companies reduce manual work by 60%. Interested in a demo?", from: "demo@emaillink.com", to: "marcus.chen@growthco.io", subject: "Scaling email operations at GrowthCo" },
+        { type: "REPLY", time: "2024-01-14T16:30:00Z", email_body: "We're always looking for ways to streamline our processes. What makes your platform different from others in the market? We've looked at a few options already.", from: "marcus.chen@growthco.io", to: "demo@emaillink.com", subject: "Re: Scaling email operations at GrowthCo" },
+        { type: "SENT", time: "2024-01-14T17:15:00Z", email_body: "Great question! Three things set us apart: 1) Our AI-powered send-time optimization (increases open rates by 23% on average), 2) Advanced behavioral triggers that activate based on user actions, and 3) Built-in deliverability monitoring. Which of those resonates most with your current challenges?", from: "demo@emaillink.com", to: "marcus.chen@growthco.io", subject: "Re: Scaling email operations at GrowthCo" },
+        { type: "REPLY", time: "2024-01-15T09:45:00Z", email_body: "The behavioral triggers sound compelling - that's exactly what we're missing right now. We're using basic email sequences but nothing sophisticated. Can you show me how that works in practice?", from: "marcus.chen@growthco.io", to: "demo@emaillink.com", subject: "Re: Scaling email operations at GrowthCo" }
       ],
       website: "growthco.io",
       phone: "+1-555-0456", 
-      subject: "Email Automation Demo",
-      tags: ["warm-lead", "saas", "automation"],
-      notes: "Looking for process optimization, open to demos",
+      subject: "Re: Scaling email operations at GrowthCo",
+      tags: [],
+      notes: "Interested in behavioral triggers. Using basic sequences currently.",
       lead_category: "2",
       custom_field: "Qualified Lead",
       role: "Head of Operations",
@@ -276,15 +281,17 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX",
       created_at_lead: "2024-01-13T09:15:00Z",
       conversation: [
-        { type: "SENT", time: "2024-01-13T09:15:00Z", email_body: "Hi Jennifer, saw RetailPlus's impressive Q4 results. Our email platform helped retailers increase customer engagement by 45%. Quick call this week?", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com" },
-        { type: "REPLY", time: "2024-01-13T11:20:00Z", email_body: "Thanks for reaching out! We're definitely interested in improving our email engagement. Can we schedule a call for Thursday afternoon?", from: "jennifer.white@retailplus.com", to: "demo@emaillink.com" },
-        { type: "SENT", time: "2024-01-13T11:45:00Z", email_body: "Perfect! Thursday at 2 PM works great. I'll send over a calendar invite with some prep materials.", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com" }
+        { type: "SENT", time: "2024-01-13T09:15:00Z", email_body: "Hi Jennifer, saw RetailPlus's impressive Q4 results (45% growth - wow!). Our email platform helped retailers increase customer engagement by 45%. Quick call this week?", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com", subject: "Congrats on Q4 results - email engagement" },
+        { type: "REPLY", time: "2024-01-13T11:20:00Z", email_body: "Thanks for reaching out! We're definitely interested in improving our email engagement. Our current open rates are okay but conversion could be better. Can we schedule a call for Thursday afternoon?", from: "jennifer.white@retailplus.com", to: "demo@emaillink.com", subject: "Re: Congrats on Q4 results - email engagement" },
+        { type: "SENT", time: "2024-01-13T11:45:00Z", email_body: "Perfect! Thursday at 2 PM works great. I'll send over a calendar invite with some prep materials. What's your current email platform, and what conversion rates are you seeing? This will help me tailor the demo.", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com", subject: "Call confirmed Thu 2PM - quick prep question" },
+        { type: "REPLY", time: "2024-01-13T12:30:00Z", email_body: "We're using Mailchimp currently. Open rates around 22%, but click-through is only 2.1% and conversion to purchase is about 0.8%. We know we can do better, especially with cart abandonment and post-purchase sequences.", from: "jennifer.white@retailplus.com", to: "demo@emaillink.com", subject: "Re: Call confirmed Thu 2PM - quick prep question" },
+        { type: "SENT", time: "2024-01-13T13:15:00Z", email_body: "Those are solid baseline numbers! I can definitely show you how to improve those conversions. Our retail clients typically see 3-4% CTR and 1.5-2% conversion rates. Cart abandonment sequences alone usually recover 15-20% of lost sales. Looking forward to Thursday!", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com", subject: "Re: Call confirmed Thu 2PM - excited to show improvements!" }
       ],
       website: "retailplus.com", 
       phone: "+1-555-0789",
-      subject: "Email Engagement - Call Thursday",
-      tags: ["hot-lead", "retail", "meeting-scheduled"],
-      notes: "Call scheduled for Thursday 2 PM, interested in engagement metrics",
+      subject: "Re: Call confirmed Thu 2PM - excited to show improvements!",
+      tags: [],
+      notes: "Call scheduled Thu 2PM. Using Mailchimp, wants to improve conversion rates.",
       lead_category: "1",
       custom_field: "Meeting Booked",
       role: "VP Marketing",
@@ -305,14 +312,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX",
       created_at_lead: "2024-01-12T16:45:00Z",
       conversation: [
-        { type: "SENT", time: "2024-01-12T16:45:00Z", email_body: "Hi David, FinancePlus caught our attention with your recent funding round. Our email platform helps fintech companies nurture leads more effectively. Worth exploring?", from: "demo@emaillink.com", to: "david.kim@financeplus.net" },
-        { type: "REPLY", time: "2024-01-13T08:30:00Z", email_body: "We're pretty happy with our current setup, but always open to seeing what's out there. What's your unique value prop?", from: "david.kim@financeplus.net", to: "demo@emaillink.com" }
+        { type: "SENT", time: "2024-01-12T16:45:00Z", email_body: "Hi David, FinancePlus caught our attention with your recent Series A funding round. Our email platform helps fintech companies nurture leads more effectively while staying compliant. Worth exploring?", from: "demo@emaillink.com", to: "david.kim@financeplus.net", subject: "Congrats on Series A - email nurturing for fintech" },
+        { type: "REPLY", time: "2024-01-13T08:30:00Z", email_body: "We're pretty happy with our current setup, but always open to seeing what's out there. What's your unique value prop? And do you have experience with financial services compliance?", from: "david.kim@financeplus.net", to: "demo@emaillink.com", subject: "Re: Congrats on Series A - email nurturing for fintech" },
+        { type: "SENT", time: "2024-01-13T10:15:00Z", email_body: "Absolutely! We're SOC 2 compliant and work with several fintech companies including PayFlow and InvestEasy. Our compliance features include audit trails, data encryption, and automated opt-out handling. What platform are you currently using?", from: "demo@emaillink.com", to: "david.kim@financeplus.net", subject: "Re: SOC 2 compliant + fintech experience" },
+        { type: "REPLY", time: "2024-01-13T14:20:00Z", email_body: "We're using SendGrid currently but the compliance features are basic. The audit trails sound useful. What kind of pricing are we looking at for a team of about 75 people?", from: "david.kim@financeplus.net", to: "demo@emaillink.com", subject: "Re: SOC 2 compliant + fintech experience" }
       ],
       website: "financeplus.net",
       phone: "+1-555-0321",
-      subject: "Email Platform for Fintech",
-      tags: ["cold-lead", "fintech", "comparison-shopping"],
-      notes: "Happy with current setup, but open to alternatives",
+      subject: "Re: SOC 2 compliant + fintech experience",
+      tags: [],
+      notes: "Using SendGrid, interested in compliance features. Team of 75.",
       lead_category: "3",
       custom_field: "Competitor Research",
       role: "Head of Growth",
@@ -333,14 +342,17 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX",
       created_at_lead: "2024-01-11T13:30:00Z", 
       conversation: [
-        { type: "SENT", time: "2024-01-11T13:30:00Z", email_body: "Hi Lisa, HealthTech Solutions is doing amazing work in patient engagement. Our email automation helped healthcare companies improve patient communication by 50%. Interested in learning more?", from: "demo@emaillink.com", to: "lisa.rodriguez@healthtech.org" },
-        { type: "REPLY", time: "2024-01-12T09:15:00Z", email_body: "Patient communication is definitely a priority for us. Do you have experience specifically with healthcare compliance requirements?", from: "lisa.rodriguez@healthtech.org", to: "demo@emaillink.com" }
+        { type: "SENT", time: "2024-01-11T13:30:00Z", email_body: "Hi Lisa, HealthTech Solutions is doing amazing work in patient engagement. Our email automation helped healthcare companies improve patient communication by 50% while maintaining HIPAA compliance. Interested in learning more?", from: "demo@emaillink.com", to: "lisa.rodriguez@healthtech.org", subject: "HIPAA-compliant email automation for patient engagement" },
+        { type: "REPLY", time: "2024-01-12T09:15:00Z", email_body: "Patient communication is definitely a priority for us. Do you have experience specifically with healthcare compliance requirements? We need to be very careful about patient data.", from: "lisa.rodriguez@healthtech.org", to: "demo@emaillink.com", subject: "Re: HIPAA-compliant email automation for patient engagement" },
+        { type: "SENT", time: "2024-01-12T11:30:00Z", email_body: "Absolutely understand the sensitivity! We're HIPAA-compliant and BAA-ready. We work with MedCare Systems and HealthFirst Clinics. All patient data is encrypted at rest and in transit, with detailed audit logs. Would you like to see our compliance documentation?", from: "demo@emaillink.com", to: "lisa.rodriguez@healthtech.org", subject: "Re: HIPAA-compliant + BAA ready" },
+        { type: "REPLY", time: "2024-01-12T15:45:00Z", email_body: "That sounds promising. Yes, I'd like to review the compliance docs. Also, what kind of patient communication workflows do you typically see in healthcare? We're looking to improve appointment reminders and follow-up care.", from: "lisa.rodriguez@healthtech.org", to: "demo@emaillink.com", subject: "Re: HIPAA-compliant + BAA ready" },
+        { type: "SENT", time: "2024-01-12T16:20:00Z", email_body: "Perfect use case! Our healthcare clients typically see 40% fewer no-shows with automated reminder sequences. I'll send over our compliance package and a healthcare workflow example. Are you free for a brief call next week to discuss your specific needs?", from: "demo@emaillink.com", to: "lisa.rodriguez@healthtech.org", subject: "Compliance docs + 40% fewer no-shows" }
       ],
       website: "healthtech.org",
       phone: "+1-555-0654", 
-      subject: "Healthcare Email Automation",
-      tags: ["warm-lead", "healthcare", "compliance-focused"],
-      notes: "Concerned about healthcare compliance, patient communication focus",
+      subject: "Compliance docs + 40% fewer no-shows",
+      tags: [],
+      notes: "HIPAA compliance priority. Wants to improve appointment reminders.",
       lead_category: "2",
       custom_field: "Compliance Question",
       role: "Director of Operations",
@@ -5651,10 +5663,10 @@ ${JSON.stringify(parsedConvo)}`;
   };
 
   return (
-    <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
-      {/* Demo Banner */}
+    <>
+      {/* Demo Banner - completely separate from main container */}
       {demoMode && (
-        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 text-center z-30">
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 text-center relative z-50">
           <div className="flex items-center justify-center gap-2">
             <span className="font-medium">🎯 Interactive Demo</span>
             <span className="hidden sm:inline">- Explore all features with sample data</span>
@@ -5668,8 +5680,10 @@ ${JSON.stringify(parsedConvo)}`;
         </div>
       )}
       
-      {/* Top Navigation Bar */}
-      <div className={`absolute ${demoMode ? 'top-10' : 'top-0'} left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300`} style={{backgroundColor: themeStyles.secondaryBg}}>
+      {/* Main Container - adjust height when demo mode is active */}
+      <div className={`flex ${demoMode ? 'h-[calc(100vh-44px)]' : 'h-screen'} relative overflow-hidden transition-colors duration-300`} style={{backgroundColor: themeStyles.primaryBg}}>
+        {/* Top Navigation Bar - always at top-0 now */}
+        <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
           <div className="flex space-x-4">
             {/* Inbox Tab */}
@@ -8002,7 +8016,7 @@ ${JSON.stringify(parsedConvo)}`;
                           </div>
 
                           <div className="text-sm whitespace-pre-wrap leading-relaxed transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                            {message.content}
+                            {message.content || message.email_body || 'No content available'}
                           </div>
                         </div>
                       ))}
@@ -9034,7 +9048,8 @@ Keyboard shortcuts:
           }}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
