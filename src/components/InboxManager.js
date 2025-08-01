@@ -208,8 +208,6 @@ const sanitizeHtml = (html) => {
 };
 
 const InboxManager = ({ user, onSignOut }) => {
-  console.log('🔍 InboxManager component loaded with user:', !!user);
-  
   // Helper function to check if intent is null/undefined/invalid
   const isIntentNull = (intent) => {
     return intent === null || intent === undefined || intent === '' || intent === 'null' || isNaN(Number(intent));
@@ -598,22 +596,14 @@ const InboxManager = ({ user, onSignOut }) => {
   // Fetch the user's brand_id from the profiles table after login
   useEffect(() => {
     const fetchBrandId = async () => {
-      console.log('🔍 fetchBrandId called with user:', !!user);
-      
-      if (!user) {
-        console.log('🔍 No user, skipping brandId fetch');
-        return;
-      }
+      if (!user) return;
       
       // Check if we already have it cached in session
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
       if (cachedBrandId) {
-        console.log('🔍 Found cached brandId:', cachedBrandId);
         setBrandId(cachedBrandId);
         return;
       }
-      
-      console.log('🔍 Fetching brandId from database for user:', user.id);
       
       // Only fetch from database if not cached
       const { data: profile, error } = await supabase
@@ -623,12 +613,11 @@ const InboxManager = ({ user, onSignOut }) => {
         .single();
         
       if (profile?.brand_id) {
-        console.log('🔍 Setting brandId to:', profile.brand_id);
         setBrandId(profile.brand_id);
         sessionStorage.setItem('user_brand_id', profile.brand_id); // Cache it in session
         console.log('✅ Loaded brand_id from profile:', profile.brand_id);
       } else {
-        console.log('❌ No profile found for user:', user.id, 'Error:', error);
+        console.log('❌ No profile found for user:', user.id);
         setBrandId(null);
       }
     };
@@ -803,7 +792,7 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // SIMPLE LOAD: Try Supabase first, fallback to localStorage
+  // BULLETPROOF LOAD: Multiple fallback strategies
   const loadApiKeys = async () => {
     if (isLoadingApiKeys) return; // Prevent double-loading
     
@@ -811,9 +800,9 @@ const InboxManager = ({ user, onSignOut }) => {
     console.log('📥 Loading API keys...');
     
     try {
-      // STEP 1: Try Supabase if we have brandId
+      // STEP 1: Try Supabase with brandId if available
       if (brandId && user) {
-        console.log('📊 Trying Supabase...');
+        console.log('📊 Trying Supabase with brandId...');
         
         const { data, error } = await supabase
           .from('api_settings')
@@ -830,17 +819,16 @@ const InboxManager = ({ user, onSignOut }) => {
             if (record.account_name === 'FullEnrich Global') {
               fullenrichKey = decryptApiKey(record.fullenrich_api_key || '');
             } else {
-              // Keep the original integer ID from the database
               accounts.push({
-                id: record.id, // Keep as integer (bigint from database)
-                account_id: record.account_id, // This is the UUID for webhook routing
+                id: record.id,
+                account_id: record.account_id,
                 name: record.account_name || 'Account',
                 esp: {
                   provider: record.esp_provider || '',
                   key: decryptApiKey(record.esp_api_key || '')
                 },
                 is_primary: record.is_primary || false,
-                backfilled: record.backfilled || false // Track if this account has been backfilled
+                backfilled: record.backfilled || false
               });
             }
           });
@@ -851,21 +839,73 @@ const InboxManager = ({ user, onSignOut }) => {
           // Sync to sessionStorage as backup
           sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
           console.log('✅ Loaded from Supabase');
-          
-
-          
           return;
         }
       }
       
-      // STEP 2: Fallback to sessionStorage
+      // STEP 2: Try Supabase by user (if brandId not available)
+      if (user && !brandId) {
+        console.log('📊 Trying Supabase by user (no brandId)...');
+        
+        // Get user's profile to find their brand_id
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('brand_id')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (profile?.brand_id) {
+          console.log('✅ Found brandId from profile:', profile.brand_id);
+          setBrandId(profile.brand_id); // Update brandId for future use
+          
+          // Now try loading with the found brandId
+          const { data, error } = await supabase
+            .from('api_settings')
+            .select('*')
+            .eq('brand_id', profile.brand_id);
+            
+          if (!error && data && data.length > 0) {
+            const accounts = [];
+            let fullenrichKey = '';
+            
+            data.forEach(record => {
+              if (record.account_name === 'FullEnrich Global') {
+                fullenrichKey = decryptApiKey(record.fullenrich_api_key || '');
+              } else {
+                accounts.push({
+                  id: record.id,
+                  account_id: record.account_id,
+                  name: record.account_name || 'Account',
+                  esp: {
+                    provider: record.esp_provider || '',
+                    key: decryptApiKey(record.esp_api_key || '')
+                  },
+                  is_primary: record.is_primary || false,
+                  backfilled: record.backfilled || false
+                });
+              }
+            });
+            
+            const newState = { accounts, fullenrich: fullenrichKey };
+            setApiKeys(newState);
+            sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
+            console.log('✅ Loaded from Supabase via user profile');
+            return;
+          }
+        }
+      }
+      
+      // STEP 3: Fallback to sessionStorage
       console.log('📱 Trying sessionStorage...');
       const backup = sessionStorage.getItem('apiKeys_session');
       if (backup) {
         const parsed = JSON.parse(backup);
         setApiKeys(parsed);
         console.log('✅ Loaded from sessionStorage backup');
+        return;
       }
+      
+      console.log('ℹ️ No API keys found anywhere - will show empty state');
       
     } catch (error) {
       console.error('❌ Load failed:', error);
@@ -897,15 +937,25 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   }, [brandId, user]);
 
+  // Also load API keys when API settings modal opens (ensuring always available)
+  useEffect(() => {
+    if (showApiSettings && user && !isLoadingApiKeys) {
+      // If no API keys loaded or brandId just became available, try loading
+      if (apiKeys.accounts.length === 0 || brandId) {
+        console.log('🔄 Reloading API keys for modal...');
+        loadApiKeys();
+      }
+    }
+  }, [showApiSettings, brandId, user]);
+
   // ===== NAVVII AI SETTINGS FUNCTIONS =====
   
   // Save Navvii AI settings to Supabase
   const saveNavviiSettings = async () => {
-    console.log('🔍 saveNavviiSettings called with:', { user: !!user, currentAccountId, brandId });
-    console.log('🔍 Current navviiSettings:', navviiSettings);
+
     
-    if (!user || (!currentAccountId && !brandId)) {
-      showToast('Please ensure you have an account or brand selected', 'error');
+    if (!user || !brandId) {
+      showToast('Please ensure you have a brand selected', 'error');
       return;
     }
 
@@ -917,23 +967,40 @@ const InboxManager = ({ user, onSignOut }) => {
         updated_at: new Date().toISOString()
       };
       
-      // Add account_id if available
-      if (currentAccountId) {
-        saveData.account_id = currentAccountId;
-      }
+      // Use brand_id as account_id since they should be the same for this use case
+      saveData.account_id = brandId;
       
-      console.log('🔍 Saving data:', saveData);
+
       
-      const { data, error } = await supabase
+      // First check if a record exists for this brand_id
+      const { data: existingData } = await supabase
         .from('navvii_ai_settings')
-        .upsert(saveData, {
-          onConflict: currentAccountId ? 'account_id,brand_id' : 'brand_id'
-        });
+        .select('id')
+        .eq('brand_id', brandId)
+        .single();
+      
+      let data, error;
+      
+      if (existingData) {
+        // Update existing record
+        const result = await supabase
+          .from('navvii_ai_settings')
+          .update(saveData)
+          .eq('brand_id', brandId);
+        data = result.data;
+        error = result.error;
+      } else {
+        // Insert new record
+        const result = await supabase
+          .from('navvii_ai_settings')
+          .insert(saveData);
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) throw error;
 
       showToast('Navvii AI settings saved successfully!', 'success');
-      console.log('✅ Navvii AI settings saved to Supabase');
     } catch (error) {
       console.error('❌ Failed to save Navvii AI settings:', error);
       showToast('Failed to save Navvii AI settings: ' + error.message, 'error');
@@ -944,34 +1011,24 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Load Navvii AI settings from Supabase
   const loadNavviiSettings = async () => {
-    console.log('🔍 loadNavviiSettings called with:', { user: !!user, currentAccountId, brandId });
-    
-    if (!user || (!currentAccountId && !brandId)) {
-      console.log('🔍 Skipping load - missing user or both currentAccountId and brandId');
+    if (!user || !brandId) {
       return;
     }
 
     setIsLoadingNavviiSettings(true);
     try {
-      // Try with currentAccountId first, fallback to brandId only
-      let query = supabase.from('navvii_ai_settings').select('*');
-      
-      if (currentAccountId) {
-        query = query.eq('account_id', currentAccountId).eq('brand_id', brandId);
-        console.log('🔍 Querying with account_id:', currentAccountId, 'and brand_id:', brandId);
-      } else {
-        query = query.eq('brand_id', brandId);
-        console.log('🔍 Querying with brand_id only:', brandId);
-      }
-      
-      const { data, error } = await query.single();
+      // Query by brand_id only since that's the unique constraint
+      const { data, error } = await supabase
+        .from('navvii_ai_settings')
+        .select('*')
+        .eq('brand_id', brandId)
+        .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         throw error;
       }
 
       if (data) {
-        console.log('🔍 Found Navvii AI data:', data);
         const newSettings = {
           company_name: data.company_name || '',
           industry: data.industry || '',
@@ -992,11 +1049,7 @@ const InboxManager = ({ user, onSignOut }) => {
           success_stories: data.success_stories || ''
         };
         
-        console.log('🔍 Setting navviiSettings to:', newSettings);
         setNavviiSettings(newSettings);
-        console.log('✅ Loaded Navvii AI settings from Supabase');
-      } else {
-        console.log('ℹ️ No Navvii AI settings found, using defaults');
       }
     } catch (error) {
       console.error('❌ Failed to load Navvii AI settings:', error);
@@ -1006,31 +1059,19 @@ const InboxManager = ({ user, onSignOut }) => {
     }
   };
 
-  // Load Navvii AI settings when account/brand changes
+  // Load Navvii AI settings when brand changes
   useEffect(() => {
-    console.log('🔍 useEffect for loadNavviiSettings triggered with:', { 
-      currentAccountId, 
-      brandId, 
-      user: !!user,
-      condition: (currentAccountId || brandId) && user 
-    });
-    
-    if ((currentAccountId || brandId) && user) {
-      console.log('🔍 Calling loadNavviiSettings...');
+    if (brandId && user) {
       loadNavviiSettings();
-    } else {
-      console.log('🔍 Not calling loadNavviiSettings - condition not met');
     }
-  }, [currentAccountId, brandId, user]);
+  }, [brandId, user]);
 
   // Set current account ID from API keys
   useEffect(() => {
     if (apiKeys.accounts && apiKeys.accounts.length > 0) {
       const firstAccount = apiKeys.accounts[0];
-      console.log('🔍 Setting currentAccountId from first account:', firstAccount.account_id);
       if (firstAccount.account_id && firstAccount.account_id !== currentAccountId) {
         setCurrentAccountId(firstAccount.account_id);
-        console.log('🔍 Updated currentAccountId to:', firstAccount.account_id);
       }
     }
   }, [apiKeys.accounts]);
@@ -1617,6 +1658,8 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Handle adding filter with validation
   const handleAddFilter = (category, value) => {
+    console.log('🔍 Adding filter:', { category, value });
+    
     if (!category || !value || !filterOptions[category]) {
       console.warn('Invalid filter:', { category, value });
       return;
@@ -1629,10 +1672,14 @@ const InboxManager = ({ user, onSignOut }) => {
       return;
     }
 
-    setActiveFilters(prev => ({
-      ...prev,
-      [category]: [...new Set([...(prev[category] || []), value])]
-    }));
+    setActiveFilters(prev => {
+      const newFilters = {
+        ...prev,
+        [category]: [...new Set([...(prev[category] || []), value])]
+      };
+      console.log('🔍 New activeFilters:', newFilters);
+      return newFilters;
+    });
   };
 
   // Handle removing filter with validation
@@ -2164,8 +2211,12 @@ const InboxManager = ({ user, onSignOut }) => {
 
       // Apply advanced filters
       if (activeFilters && typeof activeFilters === 'object') {
+        console.log('🔍 Applying filters:', activeFilters);
+        console.log('🔍 Leads before filtering:', filtered.length);
+        
         for (const [category, values] of Object.entries(activeFilters)) {
           if (!values || !Array.isArray(values) || values.length === 0) continue;
+          console.log('🔍 Filtering by:', category, values);
           
           filtered = filtered.filter(lead => {
             try {
@@ -2178,23 +2229,25 @@ const InboxManager = ({ user, onSignOut }) => {
                   case 'response_status':
                     if (value === 'all_leads') return true; // Show all leads
                     if (value === 'recently_responded') {
-                      // Show leads that have replied (need response from us)
+                      // Show leads that WE recently responded to (last message is SENT from us)
                       try {
                         if (!lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) return false;
                         const lastMessage = lead.conversation[lead.conversation.length - 1];
-                        return lastMessage && lastMessage.type === 'REPLY';
+                        const result = lastMessage && lastMessage.type === 'SENT';
+                        console.log('🔍 Recently responded check for', lead.lead_email, ':', result, 'Last message type:', lastMessage?.type);
+                        return result;
                       } catch (e) {
                         return false;
                       }
                     }
                     if (value === 'needs_response') {
-                      // Show leads we sent to recently (within 24h)
+                      // Show leads that replied to us (need response from us)
                       try {
                         if (!lead.conversation || !Array.isArray(lead.conversation) || lead.conversation.length === 0) return false;
                         const lastMessage = lead.conversation[lead.conversation.length - 1];
-                        if (!lastMessage || !lastMessage.time || lastMessage.type !== 'SENT') return false;
-                        const timeSinceLastMessage = Math.floor((new Date() - new Date(lastMessage.time)) / (1000 * 60 * 60));
-                        return timeSinceLastMessage <= 24;
+                        const result = lastMessage && lastMessage.type === 'REPLY';
+                        console.log('🔍 Needs response check for', lead.lead_email, ':', result, 'Last message type:', lastMessage?.type);
+                        return result;
                       } catch (e) {
                         return false;
                       }
@@ -2282,6 +2335,7 @@ const InboxManager = ({ user, onSignOut }) => {
         }
       }
 
+      console.log('🔍 Leads after filtering:', filtered.length);
       return filtered;
     } catch (e) {
       console.error('Error in filteredAndSortedLeads:', e);
@@ -3060,7 +3114,6 @@ const InboxManager = ({ user, onSignOut }) => {
       console.log('📧 Parsed conversation:', parsedConvo);
 
       // Get brand settings directly from Supabase (fresh and reliable)
-      console.log('🔍 Fetching brand settings from Supabase for brandId:', brandId);
       let brandSettings = null;
       
       try {
@@ -3072,32 +3125,23 @@ const InboxManager = ({ user, onSignOut }) => {
           
         if (!error && data) {
           brandSettings = data;
-          console.log('✅ Found brand settings:', brandSettings);
-          console.log('🔍 Company name from DB:', `"${brandSettings.company_name}"`);
-          console.log('🔍 Company name empty?', brandSettings.company_name === '');
-        } else {
-          console.log('ℹ️ No brand settings found for brandId:', brandId, 'Error:', error);
         }
       } catch (error) {
-        console.log('⚠️ Error fetching brand settings:', error);
+        // Silently handle error - brand settings are optional
       }
 
       // Build enhanced prompt with brand-specific information
-      console.log('🔍 Building brand context with settings:', brandSettings);
-      console.log('🔍 Company name check:', brandSettings?.company_name, 'Truthy?', !!brandSettings?.company_name);
-      
       let brandContext = '';
       let hasCompanyInfo = false;
       
       if (brandSettings) {
-        // Check if we have any useful brand information (not just company_name)
+        // Check if we have any useful brand information
         const hasAnyInfo = brandSettings.company_name || brandSettings.services_offered || 
                           brandSettings.sender_name || brandSettings.custom_prompt_instructions ||
                           brandSettings.key_selling_points || brandSettings.value_proposition;
         
         if (hasAnyInfo) {
           hasCompanyInfo = true;
-          console.log('✅ Building brand context - found brand info!');
           brandContext = `
 BRAND CONTEXT (MUST USE ONLY THIS INFORMATION - DO NOT INVENT ANYTHING):`;
 
@@ -3143,19 +3187,15 @@ RESPONSE FORMAT: Only include the email response. No explanations, thoughts, or 
 Conversation History:
 ${JSON.stringify(parsedConvo)}`;
 
-      console.log('📝 Smart Draft Prompt Generated:');
-      console.log('═══════════════════════════════════════');
-      console.log(prompt);
-      console.log('═══════════════════════════════════════');
+       console.log('📝 SMART DRAFT PROMPT:');
+       console.log('═══════════════════════════════════════');
+       console.log(prompt);
+       console.log('═══════════════════════════════════════');
 
-      // Call Navvii AI for draft generation
+       // Call Navvii AI for draft generation
       const draftText = await callNavviiAIForDraftGeneration(prompt);
       
       if (draftText && draftText.trim()) {
-        console.log('🤖 Smart Draft Response:');
-        console.log('───────────────────────────────────────');
-        console.log(draftText);
-        console.log('───────────────────────────────────────');
         // Clean the response text
         const cleanResponseText = draftText
           .replace(/\\n/g, '\n')  // Convert literal \n to actual line breaks
@@ -3980,11 +4020,37 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     );
   }
 
-  // Show contact overlay for new accounts (brandId is null/falsy)
-  const showContactOverlay = !brandId;
-  
-  // Debug logging for brandId
-  console.log('🔍 Debug - brandId:', brandId, 'showContactOverlay:', showContactOverlay);
+  // If brandId is '1', show subscribe overlay and blur the rest of the UI
+  if (brandId === '1') {
+    return (
+      <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
+        {/* Blurred background */}
+        <div className="absolute inset-0 backdrop-blur-sm z-0" />
+        {/* Main content blurred */}
+        <div className="relative z-10 flex flex-col items-center justify-center h-full w-full">
+          <div className="bg-white/90 dark:bg-gray-900/90 p-10 rounded-2xl shadow-2xl border-2 border-blue-400 flex flex-col items-center max-w-lg mx-auto">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Subscribe to unlock the inbox</h2>
+            <p className="text-gray-700 dark:text-gray-300 mb-4">Your account is not yet associated with a brand. Please subscribe or contact Navvii support to unlock your inbox.</p>
+            <div className="text-gray-500 dark:text-gray-400 text-sm">No leads are currently associated with your account.</div>
+          </div>
+        </div>
+        {/* User info and sign out button */}
+        {user && (
+          <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-20">
+            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
+                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
+                Sign Out
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Function to handle API key updates (updated for multiple accounts)
   const handleApiKeyChange = (key, value) => {
@@ -4273,12 +4339,12 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
 
 
   // Convert intent score to user-friendly label (for UI display)
-  const getIntentLabel = (score) => {
-    if (isIntentNull(score)) {
-      return 'Not Classified';
-    }
-    
-    const numScore = parseInt(score);
+      const getIntentLabel = (score) => {
+     if (isIntentNull(score)) {
+       return 'Not Classified';
+     }
+     
+     const numScore = parseInt(score);
     
     if (numScore >= 1 && numScore <= 3) return 'Low Intent';
     if (numScore >= 4 && numScore <= 6) return 'Medium Intent';
@@ -4345,7 +4411,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         return 0;
       }
       
-      // Found ${missedLeads.length} missed leads for analysis
+      
       
       // Analyze each missed lead
       let analyzed = 0;
@@ -4378,8 +4444,8 @@ ${JSON.stringify(parsedConvo)}`;
           // Call Navvii AI for intent analysis
           const intentScore = await callNavviiAIForIntentAnalysis(prompt);
           
-          if (intentScore && intentScore >= 1 && intentScore <= 10) {
-            // Update intent in Supabase
+                      if (intentScore && intentScore >= 1 && intentScore <= 10) {
+             // Update intent in Supabase
             const { error: updateError } = await supabase
               .from('retention_harbor')
               .update({ 
@@ -4459,8 +4525,8 @@ ${JSON.stringify(parsedConvo)}`;
         // Call Navvii AI for intent analysis
         const intentScore = await callNavviiAIForIntentAnalysis(prompt);
         
-        if (intentScore && intentScore >= 1 && intentScore <= 10) {
-          // Update both intent AND parsed_convo in Supabase
+                  if (intentScore && intentScore >= 1 && intentScore <= 10) {
+           // Update both intent AND parsed_convo in Supabase
           const { error: updateError } = await supabase
             .from('retention_harbor')
             .update({ 
@@ -5302,9 +5368,7 @@ ${JSON.stringify(parsedConvo)}`;
   };
 
   return (
-    <div className="relative h-screen overflow-hidden">
-      {/* Main Content - blurred when overlay is shown */}
-      <div className={`flex h-screen relative overflow-hidden transition-colors duration-300 ${showContactOverlay ? 'blur-sm pointer-events-none' : ''}`} style={{backgroundColor: themeStyles.primaryBg}}>
+    <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
@@ -5404,26 +5468,26 @@ ${JSON.stringify(parsedConvo)}`;
             >
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
-                Analytics
-              </div>
-            </button>
+                                Analytics
+               </div>
+             </button>
 
-            {/* Navvii AI Tab */}
-            <button
-              onClick={() => setActiveTab('navvii-ai')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'navvii-ai' ? `text-white` : `hover:bg-white/5`
-              }`}
-              style={{
-                backgroundColor: activeTab === 'navvii-ai' ? `${themeStyles.accent}20` : 'transparent',
-                color: activeTab === 'navvii-ai' ? themeStyles.accent : themeStyles.textPrimary
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <Bot className="w-4 h-4" />
-                Navvii AI
-              </div>
-            </button>
+             {/* Navvii AI Tab */}
+             <button
+               onClick={() => setActiveTab('navvii-ai')}
+               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                 activeTab === 'navvii-ai' ? `text-white` : `hover:bg-white/5`
+               }`}
+               style={{
+                 backgroundColor: activeTab === 'navvii-ai' ? `${themeStyles.accent}20` : 'transparent',
+                 color: activeTab === 'navvii-ai' ? themeStyles.accent : themeStyles.textPrimary
+               }}
+             >
+               <div className="flex items-center gap-2">
+                 <Bot className="w-4 h-4" />
+                 Navvii AI
+               </div>
+             </button>
                       </div>
 
           <div className="flex items-center space-x-3">
@@ -5546,7 +5610,19 @@ ${JSON.stringify(parsedConvo)}`;
 
                 {/* Email Accounts List */}
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {apiKeys.accounts.map((account, index) => (
+                  {isLoadingApiKeys ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin" style={{color: themeStyles.accent}} />
+                      <span className="ml-2" style={{color: themeStyles.textSecondary}}>Loading API keys...</span>
+                    </div>
+                  ) : apiKeys.accounts.length === 0 ? (
+                    <div className="text-center py-8" style={{color: themeStyles.textMuted}}>
+                      <div className="text-lg mb-2">📭</div>
+                      <div className="text-sm">No API keys found</div>
+                      <div className="text-xs mt-1">Click "Add Account" to get started</div>
+                    </div>
+                  ) : (
+                    apiKeys.accounts.map((account, index) => (
                     <div key={account.id} className="p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -5717,7 +5793,8 @@ ${JSON.stringify(parsedConvo)}`;
                         </p>
                       </div>
                     </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -8218,17 +8295,12 @@ Keyboard shortcuts:
         </div>
         )}
 
-        {/* Main Content - Templates */}
-        {activeTab === 'templates' && (
-          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-            <TemplateManager user={user} brandId={brandId} />
-          </div>
-        )}
-
         {/* Main Content - Navvii AI Settings */}
         {activeTab === 'navvii-ai' && (
-          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
-            <div className="p-6">
+          <div className="flex-1 p-8 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+            <div className="max-w-7xl mx-auto">
+              <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', border: `1px solid ${themeStyles.border}`}}>
+                <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
@@ -8280,7 +8352,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="e.g., Your Company Name"
                     />
@@ -8298,7 +8370,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="e.g., Technology, Healthcare, Real Estate, Consulting"
                     />
@@ -8316,7 +8388,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="Describe your main services and offerings..."
                     />
@@ -8334,7 +8406,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="What makes your company unique? Key benefits you provide..."
                     />
@@ -8359,7 +8431,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="e.g., Connor"
                     />
@@ -8377,7 +8449,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="e.g., CEO, Sales Manager, Account Executive, Founder"
                     />
@@ -8394,7 +8466,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                     >
                       <option value="professional">Professional</option>
@@ -8417,29 +8489,47 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="Specific writing style preferences, sentence structure, etc..."
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Company Website
-                    </label>
-                    <input
-                      type="url"
-                      value={navviiSettings.company_website}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, company_website: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
-                      }}
-                      placeholder="https://your-website.com"
-                    />
-                  </div>
+                                     <div>
+                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                       Company Website
+                     </label>
+                     <input
+                       type="url"
+                       value={navviiSettings.company_website}
+                       onChange={(e) => setNavviiSettings(prev => ({...prev, company_website: e.target.value}))}
+                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                       style={{
+                         backgroundColor: themeStyles.inputBg,
+                         borderColor: themeStyles.border,
+                         color: '#000000'
+                       }}
+                       placeholder="https://your-website.com"
+                     />
+                   </div>
+
+                   <div>
+                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                       Phone Number
+                     </label>
+                     <input
+                       type="tel"
+                       value={navviiSettings.phone_number}
+                       onChange={(e) => setNavviiSettings(prev => ({...prev, phone_number: e.target.value}))}
+                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                       style={{
+                         backgroundColor: themeStyles.inputBg,
+                         borderColor: themeStyles.border,
+                         color: '#000000'
+                       }}
+                       placeholder="e.g., +1 (555) 123-4567"
+                     />
+                   </div>
                 </div>
               </div>
 
@@ -8462,7 +8552,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="Additional instructions for AI to follow when generating drafts..."
                     />
@@ -8480,7 +8570,7 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="Main benefits, features, and selling points to emphasize..."
                     />
@@ -8498,66 +8588,84 @@ Keyboard shortcuts:
                       style={{
                         backgroundColor: themeStyles.inputBg,
                         borderColor: themeStyles.border,
-                        color: themeStyles.textPrimary
+                        color: '#000000'
                       }}
                       placeholder="Description of your ideal customers and target market..."
                     />
                   </div>
 
-                                     <div>
-                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                       Common Pain Points
-                     </label>
-                     <textarea
-                       value={navviiSettings.pain_points}
-                       onChange={(e) => setNavviiSettings(prev => ({...prev, pain_points: e.target.value}))}
-                       rows="3"
-                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                       style={{
-                         backgroundColor: themeStyles.inputBg,
-                         borderColor: themeStyles.border,
-                         color: themeStyles.textPrimary
-                       }}
-                       placeholder="Customer problems and challenges you solve..."
-                     />
-                   </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Common Pain Points
+                    </label>
+                    <textarea
+                      value={navviiSettings.pain_points}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, pain_points: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: '#000000'
+                      }}
+                      placeholder="Customer problems and challenges you solve..."
+                    />
+                  </div>
 
-                   <div>
-                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                       Common Objections & Responses
-                     </label>
-                     <textarea
-                       value={navviiSettings.common_objections}
-                       onChange={(e) => setNavviiSettings(prev => ({...prev, common_objections: e.target.value}))}
-                       rows="3"
-                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                       style={{
-                         backgroundColor: themeStyles.inputBg,
-                         borderColor: themeStyles.border,
-                         color: themeStyles.textPrimary
-                       }}
-                       placeholder="Common objections from prospects and how you typically address them..."
-                     />
-                   </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                      Common Objections & Responses
+                    </label>
+                    <textarea
+                      value={navviiSettings.common_objections}
+                      onChange={(e) => setNavviiSettings(prev => ({...prev, common_objections: e.target.value}))}
+                      rows="3"
+                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      style={{
+                        backgroundColor: themeStyles.inputBg,
+                        borderColor: themeStyles.border,
+                        color: '#000000'
+                      }}
+                      placeholder="Common objections from prospects and how you typically address them..."
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                    Success Stories & Examples
-                  </label>
-                  <textarea
-                    value={navviiSettings.success_stories}
-                    onChange={(e) => setNavviiSettings(prev => ({...prev, success_stories: e.target.value}))}
-                    rows="4"
-                    className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    style={{
-                      backgroundColor: themeStyles.inputBg,
-                      borderColor: themeStyles.border,
-                      color: themeStyles.textPrimary
-                    }}
-                    placeholder="Brief success stories, case studies, or results you can reference..."
-                  />
-                </div>
+                                 <div>
+                   <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                     Success Stories & Examples
+                   </label>
+                   <textarea
+                     value={navviiSettings.success_stories}
+                     onChange={(e) => setNavviiSettings(prev => ({...prev, success_stories: e.target.value}))}
+                     rows="4"
+                     className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                     style={{
+                       backgroundColor: themeStyles.inputBg,
+                       borderColor: themeStyles.border,
+                       color: '#000000'
+                     }}
+                     placeholder="Brief success stories, case studies, or results you can reference..."
+                   />
+                 </div>
+
+                 <div>
+                   <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
+                     Draft Template
+                   </label>
+                   <textarea
+                     value={navviiSettings.draft_template}
+                     onChange={(e) => setNavviiSettings(prev => ({...prev, draft_template: e.target.value}))}
+                     rows="4"
+                     className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                     style={{
+                       backgroundColor: themeStyles.inputBg,
+                       borderColor: themeStyles.border,
+                       color: '#000000'
+                     }}
+                     placeholder="Optional email template structure or format preferences..."
+                   />
+                 </div>
               </div>
 
               {isLoadingNavviiSettings && (
@@ -8565,8 +8673,17 @@ Keyboard shortcuts:
                   <Loader2 className="w-6 h-6 animate-spin" style={{color: themeStyles.accent}} />
                   <span className="ml-2" style={{color: themeStyles.textSecondary}}>Loading settings...</span>
                 </div>
-              )}
-            </div>
+                             )}
+             </div>
+           </div>
+             </div>
+           </div>
+         )}
+
+        {/* Main Content - Templates */}
+        {activeTab === 'templates' && (
+          <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', border: `1px solid ${themeStyles.border}`}}>
+            <TemplateManager user={user} brandId={brandId} />
           </div>
         )}
       </div>
@@ -8612,50 +8729,6 @@ Keyboard shortcuts:
             setRecentDropdownPosition(null);
           }}
         />
-      )}
-      </div>
-
-      {/* Contact Navvii Overlay */}
-      {showContactOverlay && (
-        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black bg-opacity-30">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-md mx-4 border-2 border-blue-500">
-            <div className="text-center">
-              <div className="mb-4">
-                <Bot className="w-16 h-16 mx-auto text-blue-500" />
-              </div>
-              <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
-                Account Setup Required
-              </h2>
-              <p className="text-gray-700 dark:text-gray-300 mb-6">
-                Your account needs to be activated by the Navvii team. Please contact us to unlock your inbox and start managing your leads.
-              </p>
-              <div className="space-y-3">
-                <a
-                  href="mailto:support@navvii.com?subject=Account Activation Request&body=Hi, I need my account activated. My email: "
-                  className="block w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Contact Navvii Support
-                </a>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Logged in as: {user?.email}
-                </p>
-              </div>
-            </div>
-            
-            {/* Sign Out Button */}
-            {onSignOut && (
-              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <button
-                  onClick={onSignOut}
-                  className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
       )}
     </div>
   );
