@@ -589,8 +589,11 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Fetch the user's brand_id from the profiles table after login
   const [brandId, setBrandId] = useState(() => {
-    // Try localStorage first for immediate availability
-    return localStorage.getItem('user_brand_id') || null;
+    // Try sessionStorage first for immediate availability (consistent with caching)
+    const cached = sessionStorage.getItem('user_brand_id');
+    const initial = (cached && cached !== 'null') ? String(cached) : null;
+    console.log('🏁 Initial brandId:', initial, 'from cache:', cached);
+    return initial;
   });
 
   // Fetch the user's brand_id from the profiles table after login
@@ -600,8 +603,9 @@ const InboxManager = ({ user, onSignOut }) => {
       
       // Check if we already have it cached in session
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
-      if (cachedBrandId) {
-        setBrandId(cachedBrandId);
+      if (cachedBrandId && cachedBrandId !== 'null') {
+        console.log('🔄 Using cached brand_id:', cachedBrandId);
+        setBrandId(String(cachedBrandId));
         return;
       }
       
@@ -613,9 +617,10 @@ const InboxManager = ({ user, onSignOut }) => {
         .single();
         
       if (profile?.brand_id) {
-        setBrandId(profile.brand_id);
-        sessionStorage.setItem('user_brand_id', profile.brand_id); // Cache it in session
-        console.log('✅ Loaded brand_id from profile:', profile.brand_id);
+        const brandIdString = String(profile.brand_id);
+        setBrandId(brandIdString);
+        sessionStorage.setItem('user_brand_id', brandIdString); // Cache it in session
+        console.log('✅ Loaded brand_id from profile:', profile.brand_id, 'converted to string:', brandIdString);
       } else {
         console.log('❌ No profile found for user:', user.id);
         setBrandId(null);
@@ -4020,8 +4025,11 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     );
   }
 
-  // If brandId is '1', show subscribe overlay and blur the rest of the UI
-  if (brandId === '1') {
+  // If brandId is '1' (string or number), show subscribe overlay and blur the rest of the UI
+  const shouldShowSubscriptionScreen = brandId === '1' || brandId === 1 || String(brandId) === '1';
+  console.log('🔒 Subscription screen check:', { brandId, type: typeof brandId, shouldShow: shouldShowSubscriptionScreen });
+  
+  if (shouldShowSubscriptionScreen) {
     return (
       <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
         {/* Blurred background */}
