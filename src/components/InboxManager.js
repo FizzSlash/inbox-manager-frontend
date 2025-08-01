@@ -589,11 +589,10 @@ const InboxManager = ({ user, onSignOut }) => {
 
   // Fetch the user's brand_id from the profiles table after login
   const [brandId, setBrandId] = useState(() => {
-    // Try sessionStorage first for immediate availability (consistent with caching)
-    const cached = sessionStorage.getItem('user_brand_id');
-    const initial = (cached && cached !== 'null') ? String(cached) : null;
-    console.log('🏁 Initial brandId:', initial, 'from cache:', cached);
-    return initial;
+    // TEMPORARY: Clear cache to fix stale data issue
+    sessionStorage.removeItem('user_brand_id');
+    console.log('🧹 Cleared stale brand_id cache');
+    return null;
   });
 
   // Fetch the user's brand_id from the profiles table after login
@@ -601,12 +600,20 @@ const InboxManager = ({ user, onSignOut }) => {
     const fetchBrandId = async () => {
       if (!user) return;
       
-      // Check if we already have it cached in session
+      // Check if we already have it cached in session (with user validation)
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
-      if (cachedBrandId && cachedBrandId !== 'null') {
-        console.log('🔄 Using cached brand_id:', cachedBrandId);
+      const cachedUserId = sessionStorage.getItem('cached_user_id');
+      
+      // Only use cache if it's for the same user
+      if (cachedBrandId && cachedBrandId !== 'null' && cachedUserId === user.id) {
+        console.log('🔄 Using cached brand_id:', cachedBrandId, 'for user:', user.id);
         setBrandId(String(cachedBrandId));
         return;
+      } else if (cachedUserId !== user.id) {
+        // Clear stale cache for different user
+        console.log('🧹 Clearing cache - user changed from', cachedUserId, 'to', user.id);
+        sessionStorage.removeItem('user_brand_id');
+        sessionStorage.removeItem('cached_user_id');
       }
       
       // Only fetch from database if not cached
@@ -620,7 +627,8 @@ const InboxManager = ({ user, onSignOut }) => {
         const brandIdString = String(profile.brand_id);
         setBrandId(brandIdString);
         sessionStorage.setItem('user_brand_id', brandIdString); // Cache it in session
-        console.log('✅ Loaded brand_id from profile:', profile.brand_id, 'converted to string:', brandIdString);
+        sessionStorage.setItem('cached_user_id', user.id); // Cache user ID for validation
+        console.log('✅ Loaded brand_id from profile:', profile.brand_id, 'converted to string:', brandIdString, 'for user:', user.id);
       } else {
         console.log('❌ No profile found for user:', user.id);
         setBrandId(null);
@@ -895,8 +903,8 @@ const InboxManager = ({ user, onSignOut }) => {
             setApiKeys(newState);
             sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
             console.log('✅ Loaded from Supabase via user profile');
-            return;
-          }
+          return;
+        }
         }
       }
       
@@ -1679,8 +1687,8 @@ const InboxManager = ({ user, onSignOut }) => {
 
     setActiveFilters(prev => {
       const newFilters = {
-        ...prev,
-        [category]: [...new Set([...(prev[category] || []), value])]
+      ...prev,
+      [category]: [...new Set([...(prev[category] || []), value])]
       };
       console.log('🔍 New activeFilters:', newFilters);
       return newFilters;
@@ -3044,7 +3052,7 @@ const InboxManager = ({ user, onSignOut }) => {
         },
         body: requestBody
       });
-      
+
       const response = await fetch(fullUrl, {
         method: 'POST',
         headers: { 
@@ -3108,7 +3116,7 @@ const InboxManager = ({ user, onSignOut }) => {
         console.error('⚠️ No conversation history available for this lead');
         throw new Error('No conversation history available');
       }
-
+      
       // Parse conversation into lightweight format (same as intent analysis)
       const parsedConvo = parseConversationForIntent(selectedLead.email_message_body);
       if (!parsedConvo) {
@@ -3165,7 +3173,7 @@ BRAND CONTEXT (MUST USE ONLY THIS INFORMATION - DO NOT INVENT ANYTHING):`;
           if (brandSettings.custom_prompt_instructions) brandContext += `\n- Additional Instructions: ${brandSettings.custom_prompt_instructions}`;
         }
       }
-
+      
       // Create the enhanced draft generation prompt
       const prompt = `You are writing an email FROM ${brandSettings?.company_name || 'the sender'} TO a potential lead/client.
 
@@ -3210,7 +3218,7 @@ ${JSON.stringify(parsedConvo)}`;
         // Convert plain text response to the specific HTML format requested
         const lines = cleanResponseText.split('\n');
         let editorHtml = '';
-        
+
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           
@@ -4347,12 +4355,12 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
 
 
   // Convert intent score to user-friendly label (for UI display)
-      const getIntentLabel = (score) => {
-     if (isIntentNull(score)) {
-       return 'Not Classified';
-     }
-     
-     const numScore = parseInt(score);
+  const getIntentLabel = (score) => {
+    if (isIntentNull(score)) {
+      return 'Not Classified';
+    }
+    
+    const numScore = parseInt(score);
     
     if (numScore >= 1 && numScore <= 3) return 'Low Intent';
     if (numScore >= 4 && numScore <= 6) return 'Medium Intent';
@@ -4452,8 +4460,8 @@ ${JSON.stringify(parsedConvo)}`;
           // Call Navvii AI for intent analysis
           const intentScore = await callNavviiAIForIntentAnalysis(prompt);
           
-                      if (intentScore && intentScore >= 1 && intentScore <= 10) {
-             // Update intent in Supabase
+          if (intentScore && intentScore >= 1 && intentScore <= 10) {
+            // Update intent in Supabase
             const { error: updateError } = await supabase
               .from('retention_harbor')
               .update({ 
@@ -4533,8 +4541,8 @@ ${JSON.stringify(parsedConvo)}`;
         // Call Navvii AI for intent analysis
         const intentScore = await callNavviiAIForIntentAnalysis(prompt);
         
-                  if (intentScore && intentScore >= 1 && intentScore <= 10) {
-           // Update both intent AND parsed_convo in Supabase
+        if (intentScore && intentScore >= 1 && intentScore <= 10) {
+          // Update both intent AND parsed_convo in Supabase
           const { error: updateError } = await supabase
             .from('retention_harbor')
             .update({ 
@@ -5476,8 +5484,8 @@ ${JSON.stringify(parsedConvo)}`;
             >
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
-                                Analytics
-               </div>
+                Analytics
+              </div>
              </button>
 
              {/* Navvii AI Tab */}
@@ -5495,7 +5503,7 @@ ${JSON.stringify(parsedConvo)}`;
                  <Bot className="w-4 h-4" />
                  Navvii AI
                </div>
-             </button>
+            </button>
                       </div>
 
           <div className="flex items-center space-x-3">
@@ -8685,8 +8693,8 @@ Keyboard shortcuts:
              </div>
            </div>
              </div>
-           </div>
-         )}
+        </div>
+        )}
 
         {/* Main Content - Templates */}
         {activeTab === 'templates' && (
