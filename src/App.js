@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import InboxManager from './components/InboxManager';
 import CRMManager from './components/CRMManager';
 import Auth from './components/Auth';
-import DemoPage from './components/DemoPage';
 import { getCurrentUser, onAuthStateChange, supabase } from './lib/supabase';
 
 function App() {
@@ -12,9 +11,9 @@ function App() {
   const [pendingUser, setPendingUser] = useState(null);
   const [activeTab, setActiveTab] = useState('inbox');
   const [brandId, setBrandId] = useState(null);
-
-  // Check if we're on the demo page
-  const isDemo = window.location.pathname === '/demo';
+  
+  // Check if we're in demo mode based on URL path
+  const isDemoMode = window.location.pathname === '/demo';
 
   // Fetch brandId after login
   useEffect(() => {
@@ -143,17 +142,20 @@ function App() {
     );
   }
 
-  // If on demo page, render demo without auth
-  if (isDemo) {
-    return <DemoPage />;
-  }
-
   return (
     <div className="App min-h-screen bg-gray-50 dark:bg-gray-900">
-      {user ? (
-        // Only render InboxManager, which now handles all navigation and tabs
+      {isDemoMode ? (
+        // Demo mode - show InboxManager with sample data, no auth required
+        <InboxManager 
+          user={{ email: "demo@emaillink.com", id: "demo-user" }} 
+          onSignOut={() => window.location.href = '/'}
+          demoMode={true}
+        />
+      ) : user ? (
+        // Normal mode - authenticated user
         <InboxManager user={user} onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }} />
       ) : (
+        // Login screen
         <Auth onAuthSuccess={setUser} />
       )}
     </div>

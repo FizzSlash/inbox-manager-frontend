@@ -207,7 +207,97 @@ const sanitizeHtml = (html) => {
   return temp.innerHTML;
 };
 
-const InboxManager = ({ user, onSignOut }) => {
+const InboxManager = ({ user, onSignOut, demoMode = false }) => {
+  // Demo data for marketing site
+  const demoLeads = [
+    {
+      id: 1,
+      email: "sarah.johnson@techstartup.com",
+      first_name: "Sarah",
+      last_name: "Johnson", 
+      company: "TechStartup Inc",
+      intent: 9,
+      status: "INBOX",
+      created_at_lead: "2024-01-15T10:30:00Z",
+      conversation: [
+        { type: "SENT", time: "2024-01-15T10:30:00Z", email_body: "Hi Sarah, saw your recent expansion. Our email marketing platform helped companies like yours increase lead conversion by 40%. Worth a quick chat?", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com" },
+        { type: "REPLY", time: "2024-01-15T11:45:00Z", email_body: "This sounds interesting! We're definitely looking to improve our email campaigns. Can you send me more details about pricing and features?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com" }
+      ],
+      website: "techstartup.com",
+      phone: "+1-555-0123",
+      subject: "Email Marketing Platform - Quick Chat?"
+    },
+    {
+      id: 2,
+      email: "marcus.chen@growthco.io",
+      first_name: "Marcus",
+      last_name: "Chen",
+      company: "GrowthCo",
+      intent: 7,
+      status: "INBOX", 
+      created_at_lead: "2024-01-14T14:20:00Z",
+      conversation: [
+        { type: "SENT", time: "2024-01-14T14:20:00Z", email_body: "Hi Marcus, noticed GrowthCo is scaling fast. Our email automation helped similar companies reduce manual work by 60%. Interested in a demo?", from: "demo@emaillink.com", to: "marcus.chen@growthco.io" },
+        { type: "REPLY", time: "2024-01-14T16:30:00Z", email_body: "We're always looking for ways to streamline our processes. What makes your platform different from others in the market?", from: "marcus.chen@growthco.io", to: "demo@emaillink.com" }
+      ],
+      website: "growthco.io",
+      phone: "+1-555-0456", 
+      subject: "Email Automation Demo"
+    },
+    {
+      id: 3,
+      email: "jennifer.white@retailplus.com",
+      first_name: "Jennifer", 
+      last_name: "White",
+      company: "RetailPlus",
+      intent: 8,
+      status: "INBOX",
+      created_at_lead: "2024-01-13T09:15:00Z",
+      conversation: [
+        { type: "SENT", time: "2024-01-13T09:15:00Z", email_body: "Hi Jennifer, saw RetailPlus's impressive Q4 results. Our email platform helped retailers increase customer engagement by 45%. Quick call this week?", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com" },
+        { type: "REPLY", time: "2024-01-13T11:20:00Z", email_body: "Thanks for reaching out! We're definitely interested in improving our email engagement. Can we schedule a call for Thursday afternoon?", from: "jennifer.white@retailplus.com", to: "demo@emaillink.com" },
+        { type: "SENT", time: "2024-01-13T11:45:00Z", email_body: "Perfect! Thursday at 2 PM works great. I'll send over a calendar invite with some prep materials.", from: "demo@emaillink.com", to: "jennifer.white@retailplus.com" }
+      ],
+      website: "retailplus.com", 
+      phone: "+1-555-0789",
+      subject: "Email Engagement - Call Thursday"
+    },
+    {
+      id: 4,
+      email: "david.kim@financeplus.net",
+      first_name: "David",
+      last_name: "Kim", 
+      company: "FinancePlus",
+      intent: 5,
+      status: "INBOX",
+      created_at_lead: "2024-01-12T16:45:00Z",
+      conversation: [
+        { type: "SENT", time: "2024-01-12T16:45:00Z", email_body: "Hi David, FinancePlus caught our attention with your recent funding round. Our email platform helps fintech companies nurture leads more effectively. Worth exploring?", from: "demo@emaillink.com", to: "david.kim@financeplus.net" },
+        { type: "REPLY", time: "2024-01-13T08:30:00Z", email_body: "We're pretty happy with our current setup, but always open to seeing what's out there. What's your unique value prop?", from: "david.kim@financeplus.net", to: "demo@emaillink.com" }
+      ],
+      website: "financeplus.net",
+      phone: "+1-555-0321",
+      subject: "Email Platform for Fintech"
+    },
+    {
+      id: 5,
+      email: "lisa.rodriguez@healthtech.org", 
+      first_name: "Lisa",
+      last_name: "Rodriguez",
+      company: "HealthTech Solutions",
+      intent: 6,
+      status: "INBOX",
+      created_at_lead: "2024-01-11T13:30:00Z", 
+      conversation: [
+        { type: "SENT", time: "2024-01-11T13:30:00Z", email_body: "Hi Lisa, HealthTech Solutions is doing amazing work in patient engagement. Our email automation helped healthcare companies improve patient communication by 50%. Interested in learning more?", from: "demo@emaillink.com", to: "lisa.rodriguez@healthtech.org" },
+        { type: "REPLY", time: "2024-01-12T09:15:00Z", email_body: "Patient communication is definitely a priority for us. Do you have experience specifically with healthcare compliance requirements?", from: "lisa.rodriguez@healthtech.org", to: "demo@emaillink.com" }
+      ],
+      website: "healthtech.org",
+      phone: "+1-555-0654", 
+      subject: "Healthcare Email Automation"
+    }
+  ];
+
   // Helper function to check if intent is null/undefined/invalid
   const isIntentNull = (intent) => {
     return intent === null || intent === undefined || intent === '' || intent === 'null' || isNaN(Number(intent));
@@ -1107,6 +1197,16 @@ const InboxManager = ({ user, onSignOut }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // In demo mode, use sample data instead of Supabase
+      if (demoMode) {
+        console.log('📺 Demo mode: Using sample leads');
+        setTimeout(() => {
+          setLeads(demoLeads);
+          setLoading(false);
+        }, 1000); // Simulate loading time
+        return;
+      }
       
       // Fetch all leads first
       const { data, error } = await supabase
@@ -3107,6 +3207,21 @@ const InboxManager = ({ user, onSignOut }) => {
       return;
     }
 
+    // In demo mode, show a simulated AI response
+    if (demoMode) {
+      setIsGeneratingDraft(true);
+      console.log('📺 Demo mode: Generating simulated AI draft');
+      
+      setTimeout(() => {
+        const demoDraft = `Hi ${selectedLead.first_name},\n\nThanks for your interest in our email marketing platform! Based on your conversation, I can see you're looking to improve your email campaigns.\n\nOur platform has helped companies like ${selectedLead.company} increase their email conversion rates by 40% while reducing manual work by 60%.\n\nWould you be available for a quick 15-minute demo this week? I'd love to show you exactly how our AI-powered features can streamline your email marketing process.\n\nBest regards,\nDemo Team`;
+        
+        setDraftContent(demoDraft);
+        setIsGeneratingDraft(false);
+        setShowDraftModal(true);
+      }, 2000);
+      return;
+    }
+
     setIsGeneratingDraft(true);
     console.log('🤖 Generating draft with Navvii AI for lead:', selectedLead.email);
     
@@ -4034,8 +4149,9 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
   }
 
   // If brandId is '1' (string or number), show subscribe overlay and blur the rest of the UI
-  const shouldShowSubscriptionScreen = brandId === '1' || brandId === 1 || String(brandId) === '1';
-  console.log('🔒 Subscription screen check:', { brandId, type: typeof brandId, shouldShow: shouldShowSubscriptionScreen });
+  // Skip subscription screen in demo mode
+  const shouldShowSubscriptionScreen = !demoMode && (brandId === '1' || brandId === 1 || String(brandId) === '1');
+  console.log('🔒 Subscription screen check:', { brandId, type: typeof brandId, shouldShow: shouldShowSubscriptionScreen, demoMode });
   
   if (shouldShowSubscriptionScreen) {
     return (
@@ -5385,8 +5501,24 @@ ${JSON.stringify(parsedConvo)}`;
 
   return (
     <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
+      {/* Demo Banner */}
+      {demoMode && (
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 text-center z-30">
+          <div className="flex items-center justify-center gap-2">
+            <span className="font-medium">🎯 Interactive Demo</span>
+            <span className="hidden sm:inline">- Explore all features with sample data</span>
+          </div>
+          <a 
+            href="/" 
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors"
+          >
+            Exit Demo
+          </a>
+        </div>
+      )}
+      
       {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
+      <div className={`absolute ${demoMode ? 'top-10' : 'top-0'} left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300`} style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
           <div className="flex space-x-4">
             {/* Inbox Tab */}
@@ -5502,7 +5634,7 @@ ${JSON.stringify(parsedConvo)}`;
                <div className="flex items-center gap-2">
                  <Bot className="w-4 h-4" />
                  Navvii AI
-               </div>
+              </div>
             </button>
                       </div>
 
