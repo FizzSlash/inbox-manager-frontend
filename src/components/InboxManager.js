@@ -225,7 +225,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ],
       website: "techstartup.com",
       phone: "+1-555-0123",
-      subject: "Email Marketing Platform - Quick Chat?"
+      subject: "Email Marketing Platform - Quick Chat?",
+      tags: ["hot-lead", "tech", "expansion"],
+      notes: "Interested in improving email campaigns, expanding team",
+      lead_category: "1",
+      custom_field: "High Priority",
+      role: "Marketing Director",
+      company_data: "50-100 employees, Series B funded",
+      personal_linkedin_url: "https://linkedin.com/in/sarah-johnson-tech",
+      business_linkedin_url: "https://linkedin.com/company/techstartup-inc",
+      call_booked: false,
+      deal_size: 5000,
+      closed: false
     },
     {
       id: 2,
@@ -242,7 +253,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ],
       website: "growthco.io",
       phone: "+1-555-0456", 
-      subject: "Email Automation Demo"
+      subject: "Email Automation Demo",
+      tags: ["warm-lead", "saas", "automation"],
+      notes: "Looking for process optimization, open to demos",
+      lead_category: "2",
+      custom_field: "Qualified Lead",
+      role: "Head of Operations",
+      company_data: "100-200 employees, profitable",
+      personal_linkedin_url: "https://linkedin.com/in/marcus-chen-growth",
+      business_linkedin_url: "https://linkedin.com/company/growthco",
+      call_booked: false,
+      deal_size: 3500,
+      closed: false
     },
     {
       id: 3,
@@ -260,7 +282,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ],
       website: "retailplus.com", 
       phone: "+1-555-0789",
-      subject: "Email Engagement - Call Thursday"
+      subject: "Email Engagement - Call Thursday",
+      tags: ["hot-lead", "retail", "meeting-scheduled"],
+      notes: "Call scheduled for Thursday 2 PM, interested in engagement metrics",
+      lead_category: "1",
+      custom_field: "Meeting Booked",
+      role: "VP Marketing",
+      company_data: "500+ employees, established retailer",
+      personal_linkedin_url: "https://linkedin.com/in/jennifer-white-retail",
+      business_linkedin_url: "https://linkedin.com/company/retailplus",
+      call_booked: true,
+      deal_size: 8000,
+      closed: false
     },
     {
       id: 4,
@@ -277,7 +310,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ],
       website: "financeplus.net",
       phone: "+1-555-0321",
-      subject: "Email Platform for Fintech"
+      subject: "Email Platform for Fintech",
+      tags: ["cold-lead", "fintech", "comparison-shopping"],
+      notes: "Happy with current setup, but open to alternatives",
+      lead_category: "3",
+      custom_field: "Competitor Research",
+      role: "Head of Growth",
+      company_data: "50-100 employees, Series A funded",
+      personal_linkedin_url: "https://linkedin.com/in/david-kim-fintech",
+      business_linkedin_url: "https://linkedin.com/company/financeplus",
+      call_booked: false,
+      deal_size: 2500,
+      closed: false
     },
     {
       id: 5,
@@ -294,7 +338,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ],
       website: "healthtech.org",
       phone: "+1-555-0654", 
-      subject: "Healthcare Email Automation"
+      subject: "Healthcare Email Automation",
+      tags: ["warm-lead", "healthcare", "compliance-focused"],
+      notes: "Concerned about healthcare compliance, patient communication focus",
+      lead_category: "2",
+      custom_field: "Compliance Question",
+      role: "Director of Operations",
+      company_data: "200-500 employees, healthcare tech",
+      personal_linkedin_url: "https://linkedin.com/in/lisa-rodriguez-health",
+      business_linkedin_url: "https://linkedin.com/company/healthtech-solutions",
+      call_booked: false,
+      deal_size: 4000,
+      closed: false
     }
   ];
 
@@ -7693,7 +7748,7 @@ ${JSON.stringify(parsedConvo)}`;
                     <div className="col-span-2">
                       <span className="transition-colors duration-300" style={{color: themeStyles.textSecondary}}>Tags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedLead.tags.map(tag => (
+                        {(selectedLead.tags || []).map(tag => (
                           <span key={tag} className="text-xs px-2 py-1 rounded-full transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}15`, border: `1px solid ${themeStyles.border}`, color: themeStyles.textPrimary}}>
                             {tag}
                           </span>
