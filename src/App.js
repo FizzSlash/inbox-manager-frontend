@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import InboxManager from './components/InboxManager';
 import CRMManager from './components/CRMManager';
 import Auth from './components/Auth';
+import DemoPage from './components/DemoPage';
 import { getCurrentUser, onAuthStateChange, supabase } from './lib/supabase';
 
 function App() {
@@ -11,6 +12,9 @@ function App() {
   const [pendingUser, setPendingUser] = useState(null);
   const [activeTab, setActiveTab] = useState('inbox');
   const [brandId, setBrandId] = useState(null);
+
+  // Check if we're on the demo page
+  const isDemo = window.location.pathname === '/demo';
 
   // Fetch brandId after login
   useEffect(() => {
@@ -137,6 +141,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // If on demo page, render demo without auth
+  if (isDemo) {
+    return <DemoPage />;
   }
 
   return (
