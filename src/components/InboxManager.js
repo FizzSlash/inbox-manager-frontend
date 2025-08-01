@@ -690,6 +690,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     const fetchBrandId = async () => {
       if (!user) return;
       
+      // In demo mode, set a fake brand_id and skip database calls
+      if (demoMode) {
+        console.log('📺 Demo mode: Setting fake brand_id');
+        setBrandId('demo-brand');
+        return;
+      }
+      
       // Check if we already have it cached in session (with user validation)
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
       const cachedUserId = sessionStorage.getItem('cached_user_id');
@@ -730,6 +737,20 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // SIMPLE SAVE: Save to both Supabase and localStorage
   const saveApiKeys = async (showSuccessMessage = true) => {
     console.log('💾 Saving API keys...');
+    
+    // In demo mode, simulate saving without database call
+    if (demoMode) {
+      setIsSavingApi(true);
+      console.log('📺 Demo mode: Simulating API keys save');
+      setTimeout(() => {
+        setIsSavingApi(false);
+        if (showSuccessMessage) {
+          showToast('Demo: API keys saved successfully!', 'success');
+        }
+      }, 1000);
+      return;
+    }
+    
     setIsSavingApi(true);
     
     try {
@@ -899,6 +920,12 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const loadApiKeys = async () => {
     if (isLoadingApiKeys) return; // Prevent double-loading
     
+    // In demo mode, skip API key loading
+    if (demoMode) {
+      console.log('📺 Demo mode: Skipping API key loading');
+      return;
+    }
+    
     setIsLoadingApiKeys(true);
     console.log('📥 Loading API keys...');
     
@@ -1062,6 +1089,17 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       return;
     }
 
+    // In demo mode, simulate saving without database call
+    if (demoMode) {
+      setIsSavingNavviiSettings(true);
+      console.log('📺 Demo mode: Simulating Navvii AI settings save');
+      setTimeout(() => {
+        setIsSavingNavviiSettings(false);
+        showToast('Demo: Settings saved successfully!', 'success');
+      }, 1000);
+      return;
+    }
+
     setIsSavingNavviiSettings(true);
     try {
       const saveData = {
@@ -1115,6 +1153,12 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // Load Navvii AI settings from Supabase
   const loadNavviiSettings = async () => {
     if (!user || !brandId) {
+      return;
+    }
+
+    // In demo mode, skip Navvii AI settings loading
+    if (demoMode) {
+      console.log('📺 Demo mode: Skipping Navvii AI settings loading');
       return;
     }
 
