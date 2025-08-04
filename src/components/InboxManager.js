@@ -5278,7 +5278,7 @@ ${JSON.stringify(parsedConvo)}`;
 
   // Function to generate webhook URL for an account  
   const generateWebhookUrl = (accountId) => {
-    return `https://tktfmpkqzjgluzqjpnxe.supabase.co/functions/v1/process-lead-webhook/${accountId}`;
+    return `https://xajedwcurzdgzrlnrcqi.supabase.co/functions/v1/swift-handler/${accountId}`;
   };
 
   // Function to copy webhook URL to clipboard
