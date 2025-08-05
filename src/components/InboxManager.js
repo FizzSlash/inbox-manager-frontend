@@ -460,8 +460,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [isSavingNavviiSettings, setIsSavingNavviiSettings] = useState(false);
   const [currentAccountId, setCurrentAccountId] = useState(null);
   
-  // Intent filter state (default to 'positive' to show only leads with positive intent)
-  const [intentFilter, setIntentFilter] = useState('positive');
+  // Intent filter state (default to 'all' to show all leads including those without intent)
+  const [intentFilter, setIntentFilter] = useState('all');
   
   // Lead backfill states
   const [showBackfillModal, setShowBackfillModal] = useState(false);
@@ -4586,7 +4586,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return await response.json();
   };
 
-  // Fetch leads for a campaign from all categories (1-8)
+  // Fetch leads for a campaign from all categories (1-8) + uncategorized leads
   const fetchLeadsForCampaign = async (apiKey, campaignId) => {
     const categories = [1, 2, 3, 4, 5, 6, 7, 8];
     const leadPromises = categories.map(async (categoryId) => {
@@ -4594,25 +4594,48 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}&lead_category_id=${categoryId}`);
         if (!response.ok) {
           console.warn(`Failed to fetch leads for campaign ${campaignId}, category ${categoryId}: ${response.status}`);
-          return { data: [] };
+          return { data: [], categoryId };
         }
-        return await response.json();
+        const result = await response.json();
+        return { ...result, categoryId };
       } catch (error) {
         console.warn(`Error fetching leads for campaign ${campaignId}, category ${categoryId}:`, error);
-        return { data: [] };
+        return { data: [], categoryId };
       }
     });
 
-    const results = await Promise.all(leadPromises);
+    // Also fetch uncategorized leads (no category filter)
+    const uncategorizedPromise = (async () => {
+      try {
+        const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}`);
+        if (!response.ok) {
+          console.warn(`Failed to fetch uncategorized leads for campaign ${campaignId}: ${response.status}`);
+          return { data: [], categoryId: 'uncategorized' };
+        }
+        const result = await response.json();
+        return { ...result, categoryId: 'uncategorized' };
+      } catch (error) {
+        console.warn(`Error fetching uncategorized leads for campaign ${campaignId}:`, error);
+        return { data: [], categoryId: 'uncategorized' };
+      }
+    })();
+
+    const results = await Promise.all([...leadPromises, uncategorizedPromise]);
     
-    // Merge all leads from different categories
+    // Merge all leads from different categories + uncategorized
     const allLeads = [];
-    results.forEach((result, index) => {
+    const seenLeadIds = new Set(); // Prevent duplicates
+    
+    results.forEach((result) => {
       if (result.data && Array.isArray(result.data)) {
         result.data.forEach(lead => {
+          // Skip duplicates (uncategorized call might return leads already in categories)
+          if (seenLeadIds.has(lead.lead.id)) return;
+          seenLeadIds.add(lead.lead.id);
+          
           allLeads.push({
             ...lead,
-            lead_category_id: categories[index],
+            lead_category_id: result.categoryId === 'uncategorized' ? null : result.categoryId,
             campaign_id: campaignId
           });
         });
