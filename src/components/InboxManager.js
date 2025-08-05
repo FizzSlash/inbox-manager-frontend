@@ -2612,12 +2612,59 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       }
 
       console.log('🔍 Leads after filtering:', filtered.length);
+      
+      // Apply sorting
+      if (activeSorts && activeSorts.length > 0) {
+        console.log('🔍 Applying sorts:', activeSorts);
+        
+        filtered.sort((a, b) => {
+          for (const sort of activeSorts) {
+            const sortOption = sortOptions.find(opt => opt.field === sort.field);
+            if (!sortOption) continue;
+            
+            try {
+              const aValue = sortOption.getValue(a);
+              const bValue = sortOption.getValue(b);
+              
+              // Handle null/undefined values
+              if (aValue === null || aValue === undefined) {
+                if (bValue === null || bValue === undefined) continue;
+                return sort.direction === 'desc' ? 1 : -1;
+              }
+              if (bValue === null || bValue === undefined) {
+                return sort.direction === 'desc' ? -1 : 1;
+              }
+              
+              // Compare values
+              let comparison = 0;
+              if (aValue instanceof Date && bValue instanceof Date) {
+                comparison = aValue.getTime() - bValue.getTime();
+              } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+                comparison = aValue - bValue;
+              } else {
+                // String comparison
+                comparison = String(aValue).localeCompare(String(bValue));
+              }
+              
+              if (comparison !== 0) {
+                return sort.direction === 'desc' ? -comparison : comparison;
+              }
+            } catch (e) {
+              console.warn('Error in sort comparison:', e);
+              continue;
+            }
+          }
+          return 0;
+        });
+      }
+      
+      console.log('🔍 Leads after sorting:', filtered.length);
       return filtered;
     } catch (e) {
       console.error('Error in filteredAndSortedLeads:', e);
       return leads || [];
     }
-  }, [leads, searchQuery, activeFilters, intentFilter]);
+  }, [leads, searchQuery, activeFilters, intentFilter, activeSorts]);
 
   // Auto-populate email fields and restore drafts when lead is selected
   useEffect(() => {
@@ -5278,7 +5325,7 @@ ${JSON.stringify(parsedConvo)}`;
 
   // Function to generate webhook URL for an account  
   const generateWebhookUrl = (accountId) => {
-    return `https://xajedwcurzdgzrlnrcqi.supabase.co/functions/v1/swift-handler/${accountId}`;
+    return `https://inbox.navvii.com/functions/v1/process-lead-webhook/${accountId}`;
   };
 
   // Function to copy webhook URL to clipboard
@@ -5683,7 +5730,7 @@ ${JSON.stringify(parsedConvo)}`;
       {/* Main Container - adjust height when demo mode is active */}
       <div className={`flex ${demoMode ? 'h-[calc(100vh-44px)]' : 'h-screen'} relative overflow-hidden transition-colors duration-300`} style={{backgroundColor: themeStyles.primaryBg}}>
         {/* Top Navigation Bar - always at top-0 now */}
-        <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
+      <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
           <div className="flex space-x-4">
             {/* Inbox Tab */}
@@ -9048,7 +9095,7 @@ Keyboard shortcuts:
           }}
         />
       )}
-      </div>
+    </div>
     </>
   );
 };

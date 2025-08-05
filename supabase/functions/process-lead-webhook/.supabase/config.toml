@@ -1,0 +1,2 @@
+[functions.process-lead-webhook]
+verify_jwt = false 
