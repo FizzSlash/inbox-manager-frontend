@@ -5348,7 +5348,7 @@ ${JSON.stringify(parsedConvo)}`;
 
   // Function to generate webhook URL for an account  
   const generateWebhookUrl = (accountId) => {
-    return `https://inbox.navvii.com/functions/v1/process-lead-webhook/${accountId}`;
+    return `https://api.navvii.com/functions/v1/process-lead-webhook/${accountId}`;
   };
 
   // Function to copy webhook URL to clipboard
