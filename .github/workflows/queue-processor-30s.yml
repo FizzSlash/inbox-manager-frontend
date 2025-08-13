@@ -1,0 +1,37 @@
+name: Queue Processor - 30 Second Intervals
+
+on:
+  schedule:
+    # Run every 30 seconds (GitHub Actions limitation - every minute is minimum)
+    # We'll run every minute but that's still way better than 30 minutes
+    - cron: '* * * * *'
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    
+    steps:
+      - name: Call Queue Processor
+        run: |
+          echo "🚀 Calling queue-processor function..."
+          
+          response=$(curl -w "%{http_code}" -s -X POST \
+            "https://xajedwcurzdgzrlnrcqi.supabase.co/functions/v1/queue-processor" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            --max-time 25)
+          
+          http_code="${response: -3}"
+          body="${response%???}"
+          
+          echo "📊 Response Code: $http_code"
+          echo "📝 Response Body: $body"
+          
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Queue processing successful"
+          else
+            echo "❌ Queue processing failed with code: $http_code"
+            exit 1
+          fi
