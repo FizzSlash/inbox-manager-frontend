@@ -27,10 +27,18 @@ const Auth = ({ onAuthSuccess }) => {
           return;
         }
         signupUser = data?.user;
-        // Immediately create profile after signup, even before verification
+        // Immediately create brand and profile after signup
         if (signupUser) {
+          // Create a brand for this user
+          const { data: brandData } = await supabase.rpc('create_brand_for_user', {
+            user_id: signupUser.id,
+            user_email: signupUser.email
+          });
+          
+          const brandId = brandData || 1; // Fallback to 1 if function fails
+          
           await supabase.from('profiles').insert([
-            { id: signupUser.id, email: signupUser.email, brand_id: '1' }
+            { id: signupUser.id, email: signupUser.email, brand_id: brandId }
           ]);
         }
         if (!signupUser?.email_confirmed_at) {
@@ -67,8 +75,16 @@ const Auth = ({ onAuthSuccess }) => {
       .eq('id', user.id)
       .single();
     if (!profile) {
+      // Create a brand for this user
+      const { data: brandData } = await supabase.rpc('create_brand_for_user', {
+        user_id: user.id,
+        user_email: user.email
+      });
+      
+      const brandId = brandData || 1; // Fallback to 1 if function fails
+      
       await supabase.from('profiles').insert([
-        { id: user.id, email: user.email, brand_id: '1' }
+        { id: user.id, email: user.email, brand_id: brandId }
       ]);
     }
   };

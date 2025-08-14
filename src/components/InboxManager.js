@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Info, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot, Settings } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
 import CRMManager from './CRMManager';
 import TemplateManager from './TemplateManager';
+import TrialExpiredModal from './TrialExpiredModal';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -205,6 +206,25 @@ const sanitizeHtml = (html) => {
   });
   
   return temp.innerHTML;
+};
+
+// Helper function to get display name or email if no name available
+const getDisplayName = (lead) => {
+  const fullName = `${lead.first_name || ''} ${lead.last_name || ''}`.trim();
+  
+  // If we have a full name, use it
+  if (fullName) {
+    return fullName;
+  }
+  
+  // Check both email fields (email and lead_email) - leads from backfill use lead_email
+  const email = lead.email || lead.lead_email;
+  if (email && email !== 'undefined' && email.trim()) {
+    return email.trim();
+  }
+  
+  // Last resort: show "No Email" which is more helpful than "Unknown"
+  return 'No Email';
 };
 
 const InboxManager = ({ user, onSignOut, demoMode = false }) => {
@@ -436,6 +456,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [activeTab, setActiveTab] = useState('all');
   const [showApiSettings, setShowApiSettings] = useState(false);
   
+  // Plan management state
+  const [currentPlan, setCurrentPlan] = useState({
+    name: 'trial',
+    displayName: 'Trial',
+    leadsUsed: 0,
+    maxLeads: 50,
+    price: 0,
+    billingCycle: new Date()
+  });
+  
   // Navvii AI Settings state
   const [navviiSettings, setNavviiSettings] = useState({
     company_name: '',
@@ -458,16 +488,173 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   });
   const [isLoadingNavviiSettings, setIsLoadingNavviiSettings] = useState(false);
   const [isSavingNavviiSettings, setIsSavingNavviiSettings] = useState(false);
+  
+  // Queue processor polling state
+  const [queueProcessorActive, setQueueProcessorActive] = useState(true);
+  const queueProcessorIntervalRef = useRef(null);
+  
+  // Persistent AI processing toast state
+  const [persistentAIToast, setPersistentAIToast] = useState(null); // { id, totalLeads, processedLeads, startTime }
   const [currentAccountId, setCurrentAccountId] = useState(null);
   
   // Intent filter state (default to 'all' to show all leads including those without intent)
   const [intentFilter, setIntentFilter] = useState('all');
   
   // Lead backfill states
-  const [showBackfillModal, setShowBackfillModal] = useState(false);
+  const [showBackfillModal, _setShowBackfillModal] = useState(false);
+  
+  // Debug wrapper to track all calls to setShowBackfillModal
+  const setShowBackfillModal = (value) => {
+    if (value === true) {
+      console.log('🎯 MODAL TRIGGER: Something is showing the backfill modal!');
+      console.trace('📍 Stack trace for modal trigger:');
+    } else {
+      console.log('🎯 MODAL CLOSED: Something is hiding the backfill modal');
+    }
+    _setShowBackfillModal(value);
+  };
   const [backfillDays, setBackfillDays] = useState(30);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  
+  // Ref to track current tab closure handler for proper cleanup
+  const currentTabClosureHandlerRef = useRef(null);
   const [backfillProgress, setBackfillProgress] = useState({ current: 0, total: 0, status: '' });
+  const [progressId, setProgressId] = useState(null);
+  const [progressTimer, setProgressTimer] = useState(null);
+  const [backfillSessionId, setBackfillSessionId] = useState(null);
+  
+  // 🆕 Campaign Selection States
+  const [showCampaignSelection, setShowCampaignSelection] = useState(false);
+  const [availableCampaigns, setAvailableCampaigns] = useState([]);
+  const [selectedCampaigns, setSelectedCampaigns] = useState([]);
+  
+  // 🆕 Account Selection States
+  const [showAccountSelection, setShowAccountSelection] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [intentFilters, setIntentFilters] = useState(['high', 'medium']);
+  const [campaignSelectionLoading, setCampaignSelectionLoading] = useState(false);
+  const [pendingBackfillConfig, setPendingBackfillConfig] = useState(null);
+  
+
+
+  // Progress polling functions
+  const pollProgress = async (progressId) => {
+    try {
+      const { data, error } = await supabase
+        .from('backfill_progress')
+        .select('*')
+        .eq('id', progressId)
+        .single();
+
+      if (error) {
+        console.error('❌ Error polling progress:', error);
+        
+        // If the progress record doesn't exist (user deleted it), reset the progress bar
+        if (error.code === 'PGRST116') {
+          console.log('🔄 Progress record not found, resetting progress bar');
+          resetProgressBar();
+        }
+        return;
+      }
+
+      if (data) {
+        const percentage = data.total_leads > 0 ? Math.round((data.processed_leads / data.total_leads) * 100) : 0;
+        
+        console.log(`📊 Progress update: ${data.processed_leads}/${data.total_leads} (${percentage}%) - Status: ${data.status}`);
+        
+        setBackfillProgress({
+          current: data.processed_leads,
+          total: data.total_leads,
+          status: data.status === 'running' ? 
+            data.operation_type === 'lead_backfill' ?
+              `Processing ${data.processed_leads}/${data.total_leads} campaigns (${percentage}%)...` :
+              `AI processing ${data.processed_leads}/${data.total_leads} leads (${percentage}%)...` :
+            data.status === 'completed' ? 
+            `✅ Complete! Processed ${data.total_leads} ${data.operation_type === 'lead_backfill' ? 'campaigns' : 'leads'}` :
+            `❌ Processing failed`
+        });
+
+        // Stop polling if completed or failed
+        if (data.status !== 'running') {
+          console.log(`🏁 Backfill ${data.status}, stopping progress polling`);
+          
+          if (progressTimer) {
+            clearInterval(progressTimer);
+            setProgressTimer(null);
+          }
+          
+          // Auto-close modal after completion
+          if (data.status === 'completed') {
+            console.log('✅ Backfill completed successfully, refreshing leads in 3 seconds');
+            setTimeout(() => {
+              setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
+              setIsBackfilling(false);
+              setProgressId(null);
+              fetchLeads(); // Refresh to show intent scores
+            }, 3000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error polling progress:', error);
+    }
+  };
+
+  // Reset progress bar state and clear all resume flags
+  const resetProgressBar = () => {
+    console.log('🔄 Resetting progress bar state and clearing resume flags');
+    
+    // Clear any existing timer
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      setProgressTimer(null);
+    }
+    
+    // Clear all resume flags (removed all resume functionality)
+    
+    // Reset all progress states
+    setProgressId(null);
+    setBackfillProgress({ current: 0, total: 0, status: '' });
+    setBackfillSessionId(null);
+    setIsBackfilling(false);
+    setShowBackfillModal(false);
+    
+    // Clear any stuck database records
+    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+    if (currentBrandId) {
+      supabase
+        .from('backfill_progress')
+        .update({ status: 'failed', completed_at: new Date().toISOString() })
+        .eq('brand_id', currentBrandId)
+        .eq('status', 'running')
+        .then(() => console.log('✅ Cleared stuck database records'))
+        .catch(err => console.error('❌ Failed to clear database records:', err));
+    }
+    
+    showToast('Reset complete - you can start a fresh backfill', 'success');
+  };
+
+  // Start progress polling
+  const startProgressPolling = (progressId) => {
+    // Clear any existing timer first
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      setProgressTimer(null);
+    }
+    
+    setProgressId(progressId);
+    
+    // Poll every 3 seconds
+    const timer = setInterval(() => {
+      pollProgress(progressId);
+    }, 3000);
+    
+    setProgressTimer(timer);
+    
+    // Initial poll
+    pollProgress(progressId);
+  };
+
   // ===== SIMPLE BULLETPROOF API KEY SYSTEM =====
   const [apiKeys, setApiKeys] = useState({
     accounts: [],
@@ -478,6 +665,10 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     esp: null,
     fullenrich: null
   });
+
+  // ===== TRIAL MANAGEMENT =====
+  const [trialStatus, setTrialStatus] = useState(null);
+  const [showTrialModal, setShowTrialModal] = useState(false);
 
   // Debug: Track apiKeys state changes
   useEffect(() => {
@@ -565,6 +756,210 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     };
   }, []);
 
+  // PAGE REFRESH PROTECTION & CLEANUP
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isBackfilling || progressId) {
+        e.preventDefault();
+        e.returnValue = 'Backfill is running! Are you sure you want to leave?';
+        return 'Backfill is running! Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+    };
+  }, [isBackfilling, progressId, progressTimer]);
+
+  // 💾 PHASE 3: Resume Detection (runs AFTER page loads with safety gates)
+  const [resumeModalData, setResumeModalData] = useState({ visible: false, candidate: null, options: [] });
+  
+  useEffect(() => {
+    const checkForResume = async () => {
+      // 🔒 SAFETY GATE 1: Page must be fully loaded
+      if (loading) {
+        console.log('🚫 RESUME: Page still loading, skipping resume check');
+        return;
+      }
+      
+      // 🔒 SAFETY GATE 2: BrandId must be available
+      const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+      if (!currentBrandId) {
+        console.log('🚫 RESUME: No brandId available, skipping resume check');
+        return;
+      }
+      
+      // 🔒 SAFETY GATE 3: API keys must be loaded
+      if (apiKeys.accounts.length === 0) {
+        console.log('🚫 RESUME: API keys not loaded yet, skipping resume check');
+        return;
+      }
+      
+      // 🔒 SAFETY GATE 4: Don't check if already backfilling
+      if (isBackfilling || progressId) {
+        console.log('🚫 RESUME: Backfill already in progress, skipping resume check');
+        return;
+      }
+      
+      console.log('✅ RESUME: All safety gates passed, checking for interrupted backfills...');
+      
+      let resumeCandidate = null;
+      
+      // Check 1: Interrupted backfill (highest priority)
+      const interrupted = localStorage.getItem('interrupted_backfill');
+      if (interrupted) {
+        try {
+          const data = JSON.parse(interrupted);
+          const minutesAgo = (Date.now() - data.interruptedAt) / (1000 * 60);
+          
+          if (minutesAgo < 30 && data.brandId === currentBrandId) {
+            console.log(`🔍 RESUME: Found interrupted backfill from ${minutesAgo.toFixed(1)} minutes ago`);
+            resumeCandidate = { ...data, source: 'interrupted', minutesAgo: minutesAgo.toFixed(1) };
+          }
+        } catch (error) {
+          console.error('❌ RESUME: Error parsing interrupted backfill data:', error);
+          localStorage.removeItem('interrupted_backfill');
+        }
+      }
+      
+      // Check 2: Active backfill (if no interrupted found)
+      if (!resumeCandidate) {
+        const active = localStorage.getItem('active_backfill');
+        if (active) {
+          try {
+            const data = JSON.parse(active);
+            const minutesAgo = (Date.now() - data.timestamp) / (1000 * 60);
+            
+            if (minutesAgo < 60 && data.brandId === currentBrandId) {
+              console.log(`🔍 RESUME: Found active backfill from ${minutesAgo.toFixed(1)} minutes ago`);
+              resumeCandidate = { ...data, source: 'active', minutesAgo: minutesAgo.toFixed(1) };
+            }
+          } catch (error) {
+            console.error('❌ RESUME: Error parsing active backfill data:', error);
+            localStorage.removeItem('active_backfill');
+          }
+        }
+      }
+      
+      // Check 3: Database running backfills (if no localStorage found)
+      if (!resumeCandidate) {
+        try {
+          const { data: dbBackfills } = await supabase
+          .from('backfill_progress')
+            .select('*, selected_config') // 🆕 Include selectedConfig for enhanced resume
+          .eq('brand_id', currentBrandId)
+          .eq('status', 'running')
+          .order('started_at', { ascending: false })
+          .limit(1);
+          
+          if (dbBackfills?.[0]) {
+            const minutesSinceUpdate = (Date.now() - new Date(dbBackfills[0].updated_at).getTime()) / (1000 * 60);
+            
+            if (minutesSinceUpdate < 120) {
+              console.log(`🔍 RESUME: Found database backfill from ${minutesSinceUpdate.toFixed(1)} minutes ago`);
+              resumeCandidate = {
+                backfillId: dbBackfills[0].id,
+                brandId: dbBackfills[0].brand_id,
+                source: 'database',
+                minutesAgo: minutesSinceUpdate.toFixed(1),
+                selectedConfig: dbBackfills[0].selected_config, // 🆕 Include stored selections
+                dbRecord: dbBackfills[0]
+              };
+            }
+          }
+        } catch (error) {
+          console.error('❌ RESUME: Error checking database for running backfills:', error);
+        }
+      }
+      
+      // Show resume modal if we found a candidate
+      if (resumeCandidate) {
+        console.log('🎯 RESUME: Showing resume modal for:', resumeCandidate.source);
+        showResumeModal(resumeCandidate);
+          } else {
+        console.log('✅ RESUME: No backfills to resume found');
+      }
+      
+      // Clean up old data
+      cleanupOldBackfillData();
+    };
+    
+    // ⏰ CRITICAL: 5-second delay to ensure page is fully loaded
+    console.log('🕰️ RESUME: Scheduling resume check in 5 seconds...');
+    const resumeTimer = setTimeout(checkForResume, 5000);
+    
+    return () => {
+      clearTimeout(resumeTimer);
+      console.log('🚫 RESUME: Resume check cancelled');
+    };
+  }, [user?.id, apiKeys.accounts.length, loading, isBackfilling, progressId]);
+  
+  // 🔧 CRITICAL: Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Clean up tab closure handler on unmount to prevent memory leaks
+      if (currentTabClosureHandlerRef.current) {
+        window.removeEventListener('beforeunload', currentTabClosureHandlerRef.current);
+        currentTabClosureHandlerRef.current = null;
+        console.log('💾 RESUME: Tab closure handler cleaned up on unmount');
+      }
+    };
+  }, []); // Empty dependency array = only run on mount/unmount
+  
+  // Resume modal functions
+  const showResumeModal = (resumeCandidate) => {
+    const getResumeMessage = () => {
+      switch(resumeCandidate.source) {
+        case 'interrupted':
+          return `Your backfill was interrupted ${resumeCandidate.minutesAgo} minutes ago when you closed the tab.`;
+        case 'active':
+          return `You have an active backfill that started ${resumeCandidate.minutesAgo} minutes ago.`;
+        case 'database':
+          return `Found a running backfill (${resumeCandidate.dbRecord?.processed_leads || 0}/${resumeCandidate.dbRecord?.total_leads || 0} completed).`;
+        default:
+          return 'Found an incomplete backfill.';
+      }
+    };
+    
+    setResumeModalData({
+      visible: true,
+      message: getResumeMessage(),
+      candidate: resumeCandidate,
+      options: [
+        { label: 'Resume', action: 'resume', color: 'green' },
+        { label: 'Start Fresh', action: 'restart', color: 'blue' },
+        { label: 'Cancel', action: 'cancel', color: 'gray' }
+      ]
+    });
+  };
+  
+  const cleanupOldBackfillData = () => {
+    const keys = ['active_backfill', 'interrupted_backfill'];
+    
+    keys.forEach(key => {
+      const data = localStorage.getItem(key);
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          const hoursAgo = (Date.now() - (parsed.timestamp || parsed.interruptedAt)) / (1000 * 60 * 60);
+          
+          if (hoursAgo > 24) {
+            localStorage.removeItem(key);
+            console.log(`🧩 RESUME: Cleaned up old ${key} data (${hoursAgo.toFixed(1)} hours old)`);
+        }
+      } catch (error) {
+          localStorage.removeItem(key);
+          console.log(`🧩 RESUME: Removed corrupted ${key} data`);
+        }
+      }
+    });
+  };
+
   // Click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -641,7 +1036,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     if (!lead) return;
     
     const newRecent = [
-      { id: lead.id, name: `${lead.first_name} ${lead.last_name}`, email: lead.email },
+      { id: lead.id, name: getDisplayName(lead), email: lead.email },
       ...recentlyViewed.filter(item => item.id !== lead.id)
     ].slice(0, 8); // Keep only last 8
     
@@ -797,22 +1192,20 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   };
 
   // Fetch the user's brand_id from the profiles table after login
-  const [brandId, setBrandId] = useState(() => {
-    // TEMPORARY: Clear cache to fix stale data issue
-    sessionStorage.removeItem('user_brand_id');
-    console.log('🧹 Cleared stale brand_id cache');
-    return null;
-  });
+  const [brandId, setBrandId] = useState(null);
 
   // Fetch the user's brand_id from the profiles table after login
   useEffect(() => {
     const fetchBrandId = async () => {
-      if (!user) return;
+      if (!user?.id) return;
+      
+
       
       // In demo mode, set a fake brand_id and skip database calls
       if (demoMode) {
         console.log('📺 Demo mode: Setting fake brand_id');
         setBrandId('demo-brand');
+
         return;
       }
       
@@ -824,12 +1217,14 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       if (cachedBrandId && cachedBrandId !== 'null' && cachedUserId === user.id) {
         console.log('🔄 Using cached brand_id:', cachedBrandId, 'for user:', user.id);
         setBrandId(String(cachedBrandId));
+
         return;
       } else if (cachedUserId !== user.id) {
         // Clear stale cache for different user
         console.log('🧹 Clearing cache - user changed from', cachedUserId, 'to', user.id);
         sessionStorage.removeItem('user_brand_id');
         sessionStorage.removeItem('cached_user_id');
+
       }
       
       // Only fetch from database if not cached
@@ -845,13 +1240,15 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         sessionStorage.setItem('user_brand_id', brandIdString); // Cache it in session
         sessionStorage.setItem('cached_user_id', user.id); // Cache user ID for validation
         console.log('✅ Loaded brand_id from profile:', profile.brand_id, 'converted to string:', brandIdString, 'for user:', user.id);
+
       } else {
         console.log('❌ No profile found for user:', user.id);
         setBrandId(null);
+
       }
     };
     fetchBrandId();
-  }, [user]);
+  }, [user?.id]); // Only run when user ID changes
 
   // SIMPLE SAVE: Save to both Supabase and localStorage
   const saveApiKeys = async (showSuccessMessage = true) => {
@@ -1012,9 +1409,53 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         
         if (newSmartleadAccounts.length > 0) {
           console.log(`📋 Found ${newSmartleadAccounts.length} new Smartlead accounts that need backfill`);
-          setTimeout(() => {
-            setShowBackfillModal(true);
-          }, 1000); // Show after API settings modal closes
+          
+          // PREVENT CONFLICT: Don't show fresh backfill modal if resume modal is already shown or being processed
+          if (showBackfillModal || progressId || isBackfilling || isLoadingApiKeys) {
+            console.log('🚫 FRESH BACKFILL BLOCKED: Resume modal is active, backfill in progress, or API keys still loading', {
+              showBackfillModal,
+              progressId,
+              isBackfilling,
+            isLoadingApiKeys,
+            isResuming: false
+            });
+            return;
+          }
+          
+          console.log('✅ FRESH BACKFILL CHECK: No conflicts detected, proceeding with check');
+          
+          // Only show backfill modal if there's no running backfill to resume
+          const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+          console.log('🔍 FRESH BACKFILL CHECK: Checking for running backfills before showing modal...');
+        
+        // Double-check for resume conflicts before showing fresh backfill
+        setTimeout(async () => {
+          // Final check before showing modal
+          if (showBackfillModal || progressId || isBackfilling) {
+            console.log('🚫 FRESH BACKFILL: Final conflict check failed, skipping modal');
+            return;
+          }
+          
+          const { data: runningBackfills } = await supabase
+            .from('backfill_progress')
+            .select('id')
+            .eq('brand_id', currentBrandId)
+            .eq('status', 'running')
+            .limit(1);
+            
+          console.log('📊 FRESH BACKFILL CHECK: Database result:', { 
+            found: runningBackfills?.length || 0, 
+            backfills: runningBackfills 
+          });
+            
+          if (!runningBackfills?.length && !showBackfillModal && !isBackfilling) {
+            console.log('💡 No running backfill found - showing fresh backfill modal for new accounts');
+              console.log('🎯 MODAL TRIGGER: Fresh backfill logic (API save) showing modal');
+              setShowBackfillModal(true);
+          } else {
+            console.log('🔄 Running backfill detected or conflicts present - skipping new account backfill modal');
+          }
+        }, 2000); // Longer delay to let resume logic complete
         } else {
           console.log('✅ All Smartlead accounts have already been backfilled');
         }
@@ -1037,7 +1478,10 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // BULLETPROOF LOAD: Multiple fallback strategies
   const loadApiKeys = async () => {
-    if (isLoadingApiKeys) return; // Prevent double-loading
+    if (isLoadingApiKeys) {
+      console.log('🚫 API KEYS: Already loading, skipping...');
+      return;
+    }
     
     // In demo mode, skip API key loading
     if (demoMode) {
@@ -1046,20 +1490,48 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
     
     setIsLoadingApiKeys(true);
-    console.log('📥 Loading API keys...');
+    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+    console.log('📥 Loading API keys...', {
+      brandId: currentBrandId,
+      user: user?.id,
+      isResuming: false
+    });
     
     try {
       // STEP 1: Try Supabase with brandId if available
-      if (brandId && user) {
-        console.log('📊 Trying Supabase with brandId...');
+      if (currentBrandId && user) {
+        console.log('📊 Trying Supabase with brandId:', currentBrandId);
+        console.log('🔍 API KEYS: Query details:', {
+          table: 'api_settings',
+          field: 'brand_id',
+          value: currentBrandId,
+          valueType: typeof currentBrandId,
+          user: user.id
+        });
         
         const { data, error } = await supabase
           .from('api_settings')
           .select('*')
-          .eq('brand_id', brandId);
+          .eq('brand_id', currentBrandId);
           
-        if (!error && data && data.length > 0) {
-          console.log(`✅ Found ${data.length} records in Supabase`);
+        console.log('📊 API KEYS: Raw query response:', {
+          data: data,
+          error: error,
+          dataLength: data?.length,
+          dataType: typeof data
+        });
+          
+        if (error) {
+          console.error('❌ Supabase query error:', error);
+        } else if (!data || data.length === 0) {
+          console.log('💬 No API settings found in database for brand:', currentBrandId);
+        } else {
+          console.log(`✅ Found ${data.length} records in Supabase:`, data.map(d => ({
+            account_name: d.account_name,
+            esp_provider: d.esp_provider,
+            has_esp_key: !!d.esp_api_key,
+            has_fullenrich_key: !!d.fullenrich_api_key
+          })));
           
           const accounts = [];
           let fullenrichKey = '';
@@ -1083,11 +1555,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           });
           
           const newState = { accounts, fullenrich: fullenrichKey };
+          console.log('🔑 Setting API keys state:', {
+            accountCount: accounts.length,
+            hasFullenrich: !!fullenrichKey,
+            accounts: accounts.map(a => ({ name: a.name, provider: a.esp.provider, hasKey: !!a.esp.key }))
+          });
           setApiKeys(newState);
           
           // Sync to sessionStorage as backup
           sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
-          console.log('✅ Loaded from Supabase');
+          console.log('✅ Loaded from Supabase successfully');
           return;
         }
       }
@@ -1157,17 +1634,32 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       console.log('ℹ️ No API keys found anywhere - will show empty state');
       
     } catch (error) {
-      console.error('❌ Load failed:', error);
+      console.error('❌ API KEYS: Load failed:', {
+        error: error.message,
+        brandId: currentBrandId,
+        user: user?.id,
+        stack: error.stack
+      });
     } finally {
       setIsLoadingApiKeys(false);
+      
+      console.log('✅ API KEYS: Loading completed, final state:', {
+        isLoadingApiKeys: false,
+        accountCount: apiKeys.accounts.length,
+        hasFullenrich: !!apiKeys.fullenrich
+      });
     }
   };
 
   // Clear session storage when brandId changes (ensures fresh sessions per brand)
   useEffect(() => {
-    sessionStorage.removeItem('apiKeys_session');
-    console.log('🧹 Cleared sessionStorage for fresh session');
-  }, [brandId]);
+    // Only clear if we have a valid brandId (avoid initialization issues)
+    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+    if (currentBrandId && currentBrandId !== 'demo-brand') {
+      sessionStorage.removeItem('apiKeys_session');
+      console.log('🧹 Cleared sessionStorage for fresh session');
+    }
+  }, [user?.id]); // Only run when user ID changes
 
   // Clear session storage on component unmount (extra security)
   useEffect(() => {
@@ -1181,10 +1673,14 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // Load API keys when brandId and user are available
   useEffect(() => {
-    if (brandId && user) {
+    // Always load API keys when user/brand available (resume needs them!)
+    if (brandId && brandId !== 'demo-brand' && user?.id) {
+      console.log('🔑 ⚡ INSTANT: Loading API keys for user and brand:', { user: user.id, brand: brandId });
       loadApiKeys();
+    } else if (user?.id && brandId === null) {
+      console.log('⏳ API KEYS: Waiting for brandId to be fetched from database');
     }
-  }, [brandId, user]);
+  }, [user?.id, brandId]); // Run when user ID OR brandId changes
 
   // Also load API keys when API settings modal opens (ensuring always available)
   useEffect(() => {
@@ -1195,7 +1691,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         loadApiKeys();
       }
     }
-  }, [showApiSettings, brandId, user]);
+  }, [showApiSettings, user?.id]); // brandId checked inside effect
 
   // ===== NAVVII AI SETTINGS FUNCTIONS =====
   
@@ -1325,12 +1821,184 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   };
 
+  // Sync lead counts from actual retention_harbor data
+  const syncLeadCounts = async () => {
+    if (!brandId || demoMode) {
+      return;
+    }
+
+    try {
+      console.log('📊 Syncing lead counts for brand:', brandId);
+      const { data, error } = await supabase
+        .rpc('sync_lead_counts_for_brand', { brand_uuid: brandId });
+
+      if (error) throw error;
+      
+      console.log('✅ Lead count synced:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to sync lead counts:', error);
+    }
+  };
+
+  // Load plan data from brands table
+  const loadPlanData = async () => {
+    console.log('🔍 LoadPlanData called with brandId:', brandId, 'demoMode:', demoMode);
+    
+    if (!brandId || demoMode) {
+      console.log('⏹️ LoadPlanData skipped: no brandId or demo mode');
+      return;
+    }
+
+    try {
+      console.log('📊 LoadPlanData: Syncing lead counts first...');
+      // First sync lead counts to ensure accuracy
+      await syncLeadCounts();
+      
+      console.log('🔍 LoadPlanData: Querying brands table for:', brandId);
+      const { data, error } = await supabase
+        .from('brands')
+        .select('id, name, subscription_plan, leads_used_this_month, max_leads_per_month, billing_cycle_start, price, backfill_max_days')
+        .eq('id', brandId)
+        .single();
+
+      if (error) {
+        console.error('❌ LoadPlanData: Database error:', error);
+        throw error;
+      }
+
+      console.log('📊 LoadPlanData: Database result:', data);
+
+      if (data) {
+        const planConfig = {
+          trial: { displayName: 'Trial', price: 0, maxLeads: 50, backfillDays: 45 },
+          professional: { displayName: 'Professional', price: 297, maxLeads: 500, backfillDays: 45 },
+          enterprise: { displayName: 'Enterprise', price: 597, maxLeads: 2000, backfillDays: 90 },
+          agency: { displayName: 'Agency', price: 997, maxLeads: 99999, backfillDays: 180 },
+          god: { displayName: 'God Mode', price: 1997, maxLeads: 999999, backfillDays: 365 }
+        };
+
+        const config = planConfig[data.subscription_plan] || planConfig.trial;
+        console.log('🎯 LoadPlanData: Plan lookup:', {
+          subscription_plan: data.subscription_plan,
+          config_found: config,
+          fallback_used: !planConfig[data.subscription_plan]
+        });
+        
+        const finalPlan = {
+          name: data.subscription_plan || 'trial',
+          displayName: config.displayName,
+          leadsUsed: data.leads_used_this_month || 0,
+          maxLeads: data.max_leads_per_month || config.maxLeads,
+          price: data.price || 0,
+          billingCycle: new Date(data.billing_cycle_start || new Date()),
+          backfillMaxDays: data.backfill_max_days || config.backfillDays
+        };
+        
+        console.log('🚀 LoadPlanData: Setting currentPlan to:', finalPlan);
+        setCurrentPlan(finalPlan);
+        
+        // Make it available in window for debugging
+        window.currentPlan = finalPlan;
+      } else {
+        console.log('⚠️ LoadPlanData: No data returned from brands table');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load plan data:', error);
+    }
+  };
+
+  // ===== TRIAL MANAGEMENT FUNCTIONS =====
+  
+  // Check trial status for current brand
+  const checkTrialStatus = async () => {
+    if (!brandId || brandId === 'demo-brand') return;
+
+    try {
+      const { data, error } = await supabase
+        .from('brand_trial_status')
+        .select('*')
+        .eq('id', brandId)
+        .single();
+
+      if (error) {
+        console.error('❌ Failed to check trial status:', error);
+        return;
+      }
+
+      if (data) {
+        setTrialStatus(data);
+        
+        // Show modal if trial is expired or ending soon (1 day left)
+        if (data.status === 'trial_expired' || (data.status === 'trial_active' && data.days_remaining <= 1)) {
+          setShowTrialModal(true);
+        }
+        
+        console.log('📅 Trial Status:', {
+          status: data.status,
+          daysRemaining: data.days_remaining,
+          expiresAt: data.trial_ends_at
+        });
+      }
+    } catch (error) {
+      console.error('❌ Trial status check failed:', error);
+    }
+  };
+
+  // Handle trial expiration - blocks access to main features
+  const isTrialBlocked = () => {
+    return trialStatus && trialStatus.status === 'trial_expired';
+  };
+
+  // Handle upgrade redirect
+  const handleTrialUpgrade = () => {
+    // Redirect to pricing page or show upgrade modal
+    setShowTrialModal(false);
+    // You can integrate this with your existing handleUpgrade function
+    handleUpgrade('professional');
+  };
+
+  // Handle plan upgrades via Stripe
+  const handleUpgrade = async (plan) => {
+    if (!brandId) {
+      showToast('Brand ID not found. Please refresh and try again.', 'error');
+      return;
+    }
+
+    try {
+      console.log(`🚀 Upgrading to ${plan} plan for brand:`, brandId);
+      
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { plan: plan, brandId: brandId }
+      });
+
+      if (error) throw error;
+
+      if (data?.checkoutUrl) {
+        // Redirect to Stripe Checkout using the proper URL
+        window.location.href = data.checkoutUrl;
+      } else if (data?.sessionId) {
+        // Fallback to manual URL construction
+        window.location.href = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
+      } else {
+        throw new Error('No checkout URL or session ID returned');
+      }
+    } catch (error) {
+      console.error('❌ Upgrade failed:', error);
+      showToast(`Upgrade failed: ${error.message}`, 'error');
+    }
+  };
+
   // Load Navvii AI settings when brand changes
   useEffect(() => {
-    if (brandId && user) {
+    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+    if (currentBrandId && currentBrandId !== 'demo-brand' && user && brandId) {
+      console.log('🔄 Triggering loadPlanData - brandId is now available:', brandId);
       loadNavviiSettings();
+      loadPlanData();
+      checkTrialStatus();
     }
-  }, [brandId, user]);
+  }, [user?.id, brandId]); // Run when user ID OR brandId changes
 
   // Set current account ID from API keys
   useEffect(() => {
@@ -1342,22 +2010,94 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   }, [apiKeys.accounts]);
 
-  // Fetch leads when brandId or API keys are available
+  // Fetch leads when brandId is available (avoid conflicts with backfill)
   useEffect(() => {
-    const shouldFetchLeads = brandId || (apiKeys.accounts && apiKeys.accounts.length > 0);
-    
-    if (shouldFetchLeads) {
-      // Small delay to avoid rapid re-fetching during initialization
-      const timeoutId = setTimeout(() => {
-      fetchLeads();
-      }, 100);
-      
-      return () => clearTimeout(timeoutId);
+    // Don't fetch leads if backfill is running to avoid conflicts
+    if (isBackfilling || progressId) {
+      console.log('⏸️ FETCH LEADS: Skipping - backfill in progress');
+      return;
     }
-  }, [brandId, apiKeys.accounts?.length]); // Only depend on accounts length, not entire apiKeys object
+    
+    if (brandId && brandId !== 'demo-brand' && user?.id) {
+      console.log('📊 FETCH LEADS: ⚡ INSTANT - Triggering fetchLeads with brandId:', brandId);
+        fetchLeads();
+    } else if (user?.id && brandId === null) {
+      console.log('⏳ FETCH LEADS: Waiting for brandId to be fetched from database');
+    }
+  }, [user?.id, brandId, isBackfilling, progressId]); // Run when brandId changes
+  
+  // Separate effect to fetch leads when API keys first load (but not during backfill)
+  useEffect(() => {
+    // Only trigger on first load of API keys, not during backfill
+    if (brandId && brandId !== 'demo-brand' && apiKeys.accounts.length > 0 && !isBackfilling && !progressId && !isLoadingApiKeys && user?.id) {
+      console.log('📊 FETCH LEADS: ⚡ INSTANT - API keys loaded, refreshing leads');
+      fetchLeads();
+    }
+  }, [apiKeys.accounts.length, user?.id, brandId, isBackfilling, progressId, isLoadingApiKeys]); // Run when brandId changes
+
+  // Queue processor polling - THE BEST SOLUTION for reliable AI processing
+  useEffect(() => {
+    const processQueue = async () => {
+      try {
+        const response = await fetch('https://xajedwcurzdgzrlnrcqi.supabase.co/functions/v1/queue-processor', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhamVkd2N1cnpkZ3pybG5yY3FpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcwNDQ2Nzc0NCwiZXhwIjoyMDIwMDQzNzQ0fQ.pUhLj0rE6AIqkYJSNTxXo1Cya-F2bBnZ6jMnytzNLEk`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.processed > 0) {
+            console.log(`🚀 Queue processor: ${result.processed} tasks processed, ${result.failed} failed`);
+            
+            // Update persistent AI toast if active
+            if (persistentAIToast) {
+              const newProcessedCount = persistentAIToast.processedLeads + result.processed;
+              if (newProcessedCount >= persistentAIToast.totalLeads) {
+                // AI processing complete - remove persistent toast and show completion
+                setPersistentAIToast(null);
+                showToast(`🎉 AI processing complete! ${persistentAIToast.totalLeads} leads analyzed with intent scores.`, 'success');
+    } else {
+                // Update progress
+                setPersistentAIToast(prev => ({
+                  ...prev,
+                  processedLeads: newProcessedCount
+                }));
+              }
+            }
+            
+            // Refresh leads if tasks were processed (AI intent scores may have updated)
+            fetchLeads();
+          }
+        }
+      } catch (error) {
+        console.error('⚠️ Queue processor error:', error.message);
+      }
+    };
+
+    if (queueProcessorActive && user?.id) {
+      // Process immediately on start
+      processQueue();
+      
+      // Set up 30-second interval
+      queueProcessorIntervalRef.current = setInterval(processQueue, 30000);
+      console.log('✅ Queue processor started - running every 30 seconds');
+    }
+
+    return () => {
+      if (queueProcessorIntervalRef.current) {
+        clearInterval(queueProcessorIntervalRef.current);
+        console.log('🛑 Queue processor stopped');
+      }
+    };
+  }, [queueProcessorActive, user?.id]);
 
   const fetchLeads = async () => {
     try {
+      
+      console.log('📊 FETCH LEADS: Starting fetchLeads function');
       setLoading(true);
       setError(null);
       
@@ -1371,11 +2111,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         return;
       }
       
-      // Fetch all leads first
+      // Fetch all leads from retention_harbor  
       const { data, error } = await supabase
         .from('retention_harbor')
         .select('*');
       if (error) throw error;
+      
+
 
       let filteredData = [];
 
@@ -1390,6 +2132,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
         // Filter leads by email_account_id 
         filteredData = (data || []).filter(lead => {
+
+          
           // Primary filter: Check if lead's email_account_id matches any of our account_id (UUIDs)
           if (lead.email_account_id) {
             const hasMatchingAccount = apiKeys.accounts.some(account => account.account_id === lead.email_account_id);
@@ -1494,7 +2238,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           created_at: lead.created_at,
           updated_at: lead.created_at,
           email: lead.lead_email,
-          first_name: lead.first_name || 'Unknown',
+          first_name: lead.first_name,
           last_name: lead.last_name || '',
           website: lead.website || lead.lead_email?.split('@')[1] || '',
           content_brief: `Email marketing campaign for ${lead.lead_category || 'business'}`,
@@ -1507,6 +2251,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           lead_category: lead.lead_category ? parseInt(lead.lead_category, 10) : null,
           tags: [lead.lead_category ? leadCategoryMap[parseInt(lead.lead_category, 10)] || 'Uncategorized' : 'Uncategorized'],
           conversation: conversation,
+          opened: lead.opened, // ✅ Preserve the opened field from database
           role: lead.role || 'N/A',
           company_data: lead.company_data || 'N/A',
           personal_linkedin_url: lead.personal_linkedin_url || null,
@@ -1521,6 +2266,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       console.error('Error fetching leads:', err);
       setError(err.message);
     } finally {
+      
+      console.log('✅ FETCH LEADS: Completed, setting loading to false');
       setLoading(false);
     }
   };
@@ -1794,7 +2541,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     { field: 'intent', label: 'Intent Score', getValue: (lead) => lead.intent },
     { field: 'engagement', label: 'Engagement Score', getValue: (lead) => lead.engagement_score },
     { field: 'response_time', label: 'Response Time', getValue: (lead) => lead.response_time_avg },
-    { field: 'name', label: 'Name (A-Z)', getValue: (lead) => `${lead.first_name} ${lead.last_name}`.toLowerCase() },
+          { field: 'name', label: 'Name (A-Z)', getValue: (lead) => getDisplayName(lead).toLowerCase() },
     { field: 'urgency', label: 'Urgency Level', getValue: (lead) => {
       const urgency = getResponseUrgency(lead);
       const urgencyOrder = { 'urgent-response': 4, 'needs-response': 3, 'needs-followup': 2, 'none': 1 };
@@ -1841,6 +2588,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
+  const [showPlanComparison, setShowPlanComparison] = useState(false);
 
   // Available filter options
   const filterOptions = {
@@ -1864,9 +2612,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     urgency: {
       label: 'Urgency Status',
       options: [
-        { value: 'urgent-response', label: '🚨 Urgent Response Needed' },
-        { value: 'needs-response', label: '⚡ Needs Response' },
-        { value: 'needs-followup', label: '📞 Needs Followup' },
+        { value: 'urgent-response', label: 'Urgent Response Needed' },
+        { value: 'needs-response', label: 'Needs Response' },
+        { value: 'needs-followup', label: 'Needs Followup' },
         { value: 'none', label: 'No Action Needed' }
       ]
     },
@@ -3357,7 +4105,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         url: fullUrl,
         headers: {
           'content-type': 'application/json',
-          'x-api-key': 'sk-ant-api03-...hidden',
+          'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
           'anthropic-version': '2023-06-01'
         },
         body: requestBody
@@ -4071,7 +4819,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         url: fullUrl,
         headers: {
           'content-type': 'application/json',
-          'x-api-key': 'sk-ant-api03-...hidden',
+          'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
           'anthropic-version': '2023-06-01'
         },
         body: requestBody
@@ -4278,7 +5026,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       }
 
       // Show success/not found toast with lead name
-      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      const leadName = getDisplayName(lead);
       if (enrichedData.Role || enrichedData["Company Summary"] || enrichedData["Personal LinkedIn"] || enrichedData["Business LinkedIn"]) {
         showToast(`Lead enriched with Navvii AI for ${leadName}`, 'success', lead.id);
       } else {
@@ -4291,7 +5039,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         message: error.message,
         stack: error.stack
       });
-      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      const leadName = getDisplayName(lead);
       showToast(`Error enriching ${leadName} with Navvii AI`, 'error', lead.id);
     } finally {
       setEnrichingLeads(prev => {
@@ -4358,41 +5106,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     );
   }
 
-  // If brandId is '1' (string or number), show subscribe overlay and blur the rest of the UI
-  // Skip subscription screen in demo mode
-  const shouldShowSubscriptionScreen = !demoMode && (brandId === '1' || brandId === 1 || String(brandId) === '1');
-  console.log('🔒 Subscription screen check:', { brandId, type: typeof brandId, shouldShow: shouldShowSubscriptionScreen, demoMode });
-  
-  if (shouldShowSubscriptionScreen) {
-    return (
-      <div className="relative h-screen flex flex-col items-center justify-center" style={{backgroundColor: '#1A1C1A'}}>
-        {/* Blurred background */}
-        <div className="absolute inset-0 backdrop-blur-sm z-0" />
-        {/* Main content blurred */}
-        <div className="relative z-10 flex flex-col items-center justify-center h-full w-full">
-          <div className="bg-white/90 dark:bg-gray-900/90 p-10 rounded-2xl shadow-2xl border-2 border-blue-400 flex flex-col items-center max-w-lg mx-auto">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Subscribe to unlock the inbox</h2>
-            <p className="text-gray-700 dark:text-gray-300 mb-4">Your account is not yet associated with a brand. Please subscribe or contact Navvii support to unlock your inbox.</p>
-            <div className="text-gray-500 dark:text-gray-400 text-sm">No leads are currently associated with your account.</div>
-          </div>
-        </div>
-        {/* User info and sign out button */}
-        {user && (
-          <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-20">
-            <div className="text-white text-sm">Logged in as <span className="font-semibold">{user.email}</span></div>
-            {onSignOut && (
-              <button
-                onClick={onSignOut}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:bg-red-500/10 flex items-center gap-2"
-                style={{color: '#ef4444', border: '1px solid #ef4444'}}>
-                Sign Out
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Removed blocking subscription screen - users can always access the app
 
   // Function to handle API key updates (updated for multiple accounts)
   const handleApiKeyChange = (key, value) => {
@@ -4413,7 +5127,32 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
 
 
   // Function to add a new email account
+  // Check email account limits based on plan
+  const checkAccountLimit = () => {
+    const accountLimits = {
+      trial: 1,
+      professional: 3,
+      enterprise: 99999,
+      agency: 99999,
+      god: 99999
+    };
+    
+    const currentLimit = accountLimits[currentPlan.name] || 1;
+    const currentCount = apiKeys.accounts.length;
+    
+    if (currentCount >= currentLimit) {
+      showToast(`Account limit reached! ${currentPlan.displayName} plan allows ${currentLimit} email account${currentLimit > 1 ? 's' : ''}. Upgrade to add more.`, 'error');
+      return false;
+    }
+    
+    return true;
+  };
+
   const addEmailAccount = () => {
+    // Check account limits before allowing addition
+    if (!checkAccountLimit()) {
+      return;
+    }
     const newAccount = {
       // Don't set id - database will auto-assign integer ID
       account_id: crypto.randomUUID(), // UUID for webhook routing
@@ -4429,6 +5168,35 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         ...prev,
       accounts: [...prev.accounts, newAccount]
     }));
+  };
+
+  // Template cleanup function for when API accounts are deleted
+  const cleanupTemplatesForAccount = async (accountIdInt) => {
+    try {
+      console.log('🧹 Cleaning up templates for deleted account:', accountIdInt);
+      
+      // Deactivate templates linked to this account
+      const { data: templatesAffected, error: templateError } = await supabase
+        .from('email_templates')
+        .update({ 
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('api_account_id', accountIdInt)
+        .select('id, name');
+      
+      if (templateError) {
+        console.warn('⚠️ Failed to cleanup templates:', templateError.message);
+      } else if (templatesAffected && templatesAffected.length > 0) {
+        console.log(`✅ Deactivated ${templatesAffected.length} templates:`, 
+                    templatesAffected.map(t => t.name));
+        
+        // Show user notification
+        showToast(`${templatesAffected.length} templates were deactivated with this account`, 'info');
+      }
+    } catch (error) {
+      console.error('❌ Template cleanup error:', error);
+    }
   };
 
     // CASCADE DELETE: Remove account and all associated leads
@@ -4495,6 +5263,9 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         }
         
         console.log('✅ Account deleted - CASCADE automatically removed associated leads');
+        
+        // STEP 2.5: Clean up templates associated with this account
+        await cleanupTemplatesForAccount(accountIdInt);
       }
       
       // STEP 3: Update local state
@@ -4589,38 +5360,45 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
   // Fetch leads for a campaign from all categories (1-8) + uncategorized leads
   const fetchLeadsForCampaign = async (apiKey, campaignId) => {
     const categories = [1, 2, 3, 4, 5, 6, 7, 8];
-    const leadPromises = categories.map(async (categoryId) => {
+    const results = [];
+    
+    // Fetch categories sequentially with delays to avoid rate limiting
+    for (const categoryId of categories) {
       try {
+        console.log(`📡 Fetching category ${categoryId} for campaign ${campaignId}...`);
         const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}&lead_category_id=${categoryId}`);
         if (!response.ok) {
           console.warn(`Failed to fetch leads for campaign ${campaignId}, category ${categoryId}: ${response.status}`);
-          return { data: [], categoryId };
+          results.push({ data: [], categoryId });
+        } else {
+          const result = await response.json();
+          results.push({ ...result, categoryId });
         }
-        const result = await response.json();
-        return { ...result, categoryId };
+        
+        // Add delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
         console.warn(`Error fetching leads for campaign ${campaignId}, category ${categoryId}:`, error);
-        return { data: [], categoryId };
+        results.push({ data: [], categoryId });
       }
-    });
+    }
 
-    // Also fetch uncategorized leads (no category filter)
-    const uncategorizedPromise = (async () => {
-      try {
-        const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}`);
-        if (!response.ok) {
-          console.warn(`Failed to fetch uncategorized leads for campaign ${campaignId}: ${response.status}`);
-          return { data: [], categoryId: 'uncategorized' };
-        }
+    // Also fetch uncategorized leads (no category filter) with delay
+    try {
+      console.log(`📡 Fetching uncategorized leads for campaign ${campaignId}...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads?api_key=${apiKey}`);
+      if (!response.ok) {
+        console.warn(`Failed to fetch uncategorized leads for campaign ${campaignId}: ${response.status}`);
+        results.push({ data: [], categoryId: 'uncategorized' });
+      } else {
         const result = await response.json();
-        return { ...result, categoryId: 'uncategorized' };
-      } catch (error) {
-        console.warn(`Error fetching uncategorized leads for campaign ${campaignId}:`, error);
-        return { data: [], categoryId: 'uncategorized' };
+        results.push({ ...result, categoryId: 'uncategorized' });
       }
-    })();
-
-    const results = await Promise.all([...leadPromises, uncategorizedPromise]);
+    } catch (error) {
+      console.warn(`Error fetching uncategorized leads for campaign ${campaignId}:`, error);
+      results.push({ data: [], categoryId: 'uncategorized' });
+    }
     
     // Merge all leads from different categories + uncategorized
     const allLeads = [];
@@ -4658,6 +5436,161 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       console.warn(`Error fetching message history for lead ${leadId}:`, error);
       return { history: [] };
     }
+  };
+
+  // Conservative message history fetch with proper 3-second delays on failures and timeout
+  const fetchMessageHistoryWithRetry = async (apiKey, campaignId, leadId, maxRetries = 2) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`📞 Fetching message history for lead ${leadId} (attempt ${attempt}/${maxRetries})`);
+        
+        // Add 30-second timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
+        const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${campaignId}/leads/${leadId}/message-history?api_key=${apiKey}`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.status === 429) {
+          // Rate limited - wait 3 seconds as requested
+          console.warn(`⚠️ Rate limited on lead ${leadId}, waiting 3 seconds (attempt ${attempt}/${maxRetries})`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Fixed 3-second delay
+            continue;
+          } else {
+            throw new Error(`Rate limited after ${maxRetries} attempts: 429`);
+          }
+        }
+        
+        if (!response.ok) {
+          console.warn(`Failed to fetch message history for lead ${leadId}: ${response.status}`);
+          return { history: [] };
+        }
+        
+        const result = await response.json();
+        console.log(`✅ Got message history for lead ${leadId}: ${result?.history?.length || 0} messages`);
+        return result;
+        
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.error(`⏱️ Timeout fetching message history for lead ${leadId} after 30 seconds`);
+        } else {
+          console.error(`❌ Error fetching message history for lead ${leadId}:`, error);
+        }
+        
+        if (attempt === maxRetries) {
+          console.warn(`Giving up on lead ${leadId} after ${maxRetries} attempts`);
+          return { history: [] };
+        }
+        
+        // Wait 3 seconds on ANY failure as requested
+        console.warn(`⚠️ API call failed for lead ${leadId}, waiting 3 seconds before retry`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+  };
+
+  // 🐌 CONSERVATIVE: Follow SmartLead's rate limits exactly (100 calls in intervals of 10, then 3s break)
+  const exportCampaignData = async (apiKey, campaignId) => {
+    try {
+      console.log(`🐌 Conservative processing campaign ${campaignId} following SmartLead rate limits...`);
+      
+      // Get all leads for campaign (this works and is fast)
+      const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId);
+      console.log(`📧 Campaign ${campaignId}: ${campaignLeads.length} leads found`);
+      
+      const leadsWithHistory = [];
+      let callCount = 0;
+      const CALLS_PER_INTERVAL = 10;
+      const CALLS_BEFORE_BREAK = 100;
+      const BREAK_DELAY = 3000; // 3 seconds
+      const INTERVAL_DELAY = 500; // Small delay between intervals of 10
+      
+      // Process leads sequentially in groups of 10
+      for (let i = 0; i < campaignLeads.length; i++) {
+        const lead = campaignLeads[i];
+        
+        try {
+          console.log(`🔄 Processing lead ${i + 1}/${campaignLeads.length}: ${lead.lead.email || lead.lead.id} for campaign ${campaignId}`);
+          
+          const messageHistory = await fetchMessageHistoryWithRetry(apiKey, campaignId, lead.lead.id);
+          leadsWithHistory.push({
+            lead: lead.lead,
+            lead_category_id: lead.lead_category_id,
+            created_at: lead.created_at,
+            conversation_history: messageHistory
+          });
+          
+          callCount++;
+          
+          // Progress logging (more frequent to see where it gets stuck)
+          if (callCount % 5 === 0) {
+            console.log(`✅ Processed ${i + 1}/${campaignLeads.length} leads for campaign ${campaignId} (${callCount} API calls made)`);
+          }
+          
+          // Rate limiting logic
+          if (callCount % CALLS_BEFORE_BREAK === 0) {
+            // After 100 calls, take a 3-second break
+            console.log(`🛑 Reached 100 API calls, taking 3-second break...`);
+            await new Promise(resolve => setTimeout(resolve, BREAK_DELAY));
+            callCount = 0; // Reset counter
+          } else if (callCount % CALLS_PER_INTERVAL === 0) {
+            // After every 10 calls, small delay
+            console.log(`⏸️ Taking ${INTERVAL_DELAY}ms break after ${CALLS_PER_INTERVAL} calls...`);
+            await new Promise(resolve => setTimeout(resolve, INTERVAL_DELAY));
+          }
+          
+        } catch (error) {
+          console.error(`❌ Failed to process lead ${lead.lead.email || lead.lead.id} (${i + 1}/${campaignLeads.length}):`, error);
+          
+          // On ANY error, wait 3 seconds as requested
+          console.log(`🛑 API error occurred, waiting 3 seconds before continuing...`);
+          await new Promise(resolve => setTimeout(resolve, BREAK_DELAY));
+          
+          // Still add the lead but with empty history
+          leadsWithHistory.push({
+            lead: lead.lead,
+            lead_category_id: lead.lead_category_id,
+            created_at: lead.created_at,
+            conversation_history: { history: [] }
+          });
+        }
+      }
+      
+      console.log(`✅ Successfully processed campaign ${campaignId} with ${leadsWithHistory.length} leads (${callCount} total API calls)`);
+      return { leads: leadsWithHistory };
+      
+    } catch (error) {
+      console.warn(`❌ Error processing campaign ${campaignId}:`, error);
+      return { leads: [] };
+    }
+  };
+
+  // Fallback function if export fails
+  const fallbackToIndividualCalls = async (apiKey, campaignId) => {
+    console.log(`🔄 Using fallback individual calls for campaign ${campaignId}`);
+    
+    const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId);
+    const leadsWithHistory = [];
+    
+    for (const lead of campaignLeads) {
+      const messageHistory = await fetchMessageHistory(apiKey, campaignId, lead.lead.id);
+      leadsWithHistory.push({
+        lead: lead.lead,
+        lead_category_id: lead.lead_category_id,
+        created_at: lead.created_at,
+        conversation_history: messageHistory
+      });
+      
+      // Add delay for rate limiting with individual calls
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
+    return { leads: leadsWithHistory };
   };
 
   // Parse conversation history into lightweight format for AI analysis
@@ -4851,7 +5784,7 @@ ${JSON.stringify(parsedConvo)}`;
     }
   };
 
-  const analyzeLeadIntents = async (leadsToAnalyze) => {
+  const analyzeLeadIntents = async (leadsToAnalyze, progressId = null) => {
     // Filter leads that need intent analysis
     const leadsForAnalysis = leadsToAnalyze.filter(lead => shouldAnalyzeIntent(lead.lead_category));
     
@@ -4887,49 +5820,76 @@ Here is the message history. AGAIN, just respond with a number. NOTHING else. If
 
 ${JSON.stringify(parsedConvo)}`;
 
-        // Call Navvii AI for intent analysis
-        const intentScore = await callNavviiAIForIntentAnalysis(prompt);
-        
-        if (intentScore && intentScore >= 1 && intentScore <= 10) {
-          // Update both intent AND parsed_convo in Supabase
+        // Queue AI intent analysis task (NEW EFFICIENT SYSTEM)
+        const { error: queueError } = await supabase
+          .from('processing_queue')
+          .insert({
+            task_type: 'ai_intent',
+            payload: {
+              conversation_history: parsedConvo,  // 🔧 FIX: Use correct field name
+              lead_email: leadRecord.lead_email,  // 🔧 FIX: Use correct field name
+              brand_id: leadRecord.brand_id,      // 🔧 FIX: Add missing brand_id
+              prompt: prompt
+            },
+            status: 'pending',
+            priority: 1,
+            brand_id: leadRecord.brand_id,
+            lead_id: leadRecord.id,
+            // Let database set created_at and scheduled_for to NOW()
+            // This prevents timezone/date issues
+          });
+
+        if (queueError) {
+          console.error(`❌ Failed to queue AI task for ${leadRecord.lead_email}:`, queueError);
+        } else {
+          // Update lead with parsed_convo immediately (AI score will be added later by queue processor)
           const { error: updateError } = await supabase
             .from('retention_harbor')
             .update({ 
-              intent: intentScore, // Store the raw score (number) in database
-              parsed_convo: JSON.stringify(parsedConvo)
+              parsed_convo: JSON.stringify(parsedConvo),
+              processed: false // Mark as needing AI processing
             })
             .eq('lead_email', leadRecord.lead_email)
             .eq('brand_id', leadRecord.brand_id);
 
           if (updateError) {
-            console.error(`❌ Failed to update intent for ${leadRecord.lead_email}:`, updateError);
+            console.error(`❌ Failed to update parsed_convo for ${leadRecord.lead_email}:`, updateError);
           } else {
             analyzed++;
-            if (analyzed % 3 === 0) {
+            if (analyzed % 5 === 0) {
               setBackfillProgress(prev => ({ 
-        ...prev,
-                status: `Analyzed intent for ${analyzed}/${leadsForAnalysis.length} relevant leads...` 
+                ...prev,
+                status: `Queued AI analysis for ${analyzed}/${leadsForAnalysis.length} leads...` 
               }));
             }
           }
-        } else {
-          console.log(`⚠️ Invalid intent score for ${leadRecord.lead_email}: ${intentScore}`);
         }
 
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // No delay needed - queuing is fast!
 
       } catch (error) {
         console.error(`❌ Error analyzing intent for ${leadRecord.lead_email}:`, error);
       }
     }
     
-    console.log(`✅ AI intent analysis completed! Analyzed ${analyzed}/${leadsForAnalysis.length} relevant leads`);
-    console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${leadsForAnalysis.length} relevant for intent analysis)`);
+    console.log(`✅ AI tasks queued successfully! Queued ${analyzed}/${leadsForAnalysis.length} leads for background processing`);
+    console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${leadsForAnalysis.length} queued for AI analysis)`);
+    console.log(`🔄 AI processing will happen in background - check processing_queue table to monitor`);
+    
+    // Initialize persistent AI processing toast
+    if (analyzed > 0) {
+      setPersistentAIToast({
+        id: 'ai_processing_' + Date.now(),
+        totalLeads: analyzed,
+        processedLeads: 0,
+        startTime: new Date()
+      });
+      console.log(`🍞 Started persistent AI processing toast for ${analyzed} leads`);
+    }
     
     if (analyzed < leadsForAnalysis.length) {
-      console.log(`⚠️ ${leadsForAnalysis.length - analyzed} relevant leads could not be analyzed due to API issues.`);
-      console.log('💡 Use your n8n "Populate Past Intent" workflow to analyze the remaining leads.');
+      console.log(`⚠️ ${leadsForAnalysis.length - analyzed} leads could not be queued due to database issues.`);
+      console.log('💡 The queue processor will handle AI analysis automatically every 30 seconds.');
     }
     
     return analyzed;
@@ -4961,7 +5921,7 @@ ${JSON.stringify(parsedConvo)}`;
           url: fullUrl,
           headers: {
             'content-type': 'application/json',
-            'x-api-key': 'sk-ant-api03-...hidden',
+            'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY || 'your-api-key-here',
             'anthropic-version': '2023-06-01'
           },
           body: requestBody
@@ -5065,11 +6025,66 @@ ${JSON.stringify(parsedConvo)}`;
   };
 
   // Main backfill function
-  const backfillLeads = async (apiKey, days, accountId) => {
+  const backfillLeads = async (apiKey, days, accountId, selectedConfig = null) => {
+    console.log('🚀 BACKFILL START: Called with:', { apiKey: apiKey?.substring(0, 10) + '...', days, accountId });
+    
+    let progressRecordId = null; // Declare at function scope
+    let isResuming = false;
+    
+    // CONCURRENT BACKFILL PREVENTION & RESUME
+    try {
+      const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+      const { data: existingBackfills } = await supabase
+        .from('backfill_progress')
+        .select('*') // Get full record, not just ID
+        .eq('brand_id', currentBrandId)
+        .eq('status', 'running');
+        
+      if (existingBackfills?.length > 0) {
+        const runningBackfill = existingBackfills[0];
+        
+        // Check if the backfill is actually stuck (no updates for 2+ minutes)
+        const lastUpdate = new Date(runningBackfill.updated_at);
+        const minutesSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60);
+        
+        if (minutesSinceUpdate > 2) {
+          console.log(`🔄 Found stuck backfill (${minutesSinceUpdate.toFixed(1)} min old), marking as failed and starting fresh`);
+          
+          // Mark the stuck backfill as failed
+          await supabase
+            .from('backfill_progress')
+            .update({ status: 'failed', completed_at: new Date().toISOString() })
+            .eq('id', runningBackfill.id);
+            
+          showToast('Previous backfill was stuck - starting fresh', 'info');
+          // Continue with new backfill below
+        } else {
+          console.log('🔄 RESUME MODE: Found recent running backfill - continuing from where it left off');
+          
+          // Resume the existing backfill
+          progressRecordId = runningBackfill.id;
+          isResuming = true;
+          
+          console.log('📋 RESUME: Will start from campaign', (runningBackfill.processed_leads || 0) + 1);
+          
+          // Don't show modal or start polling here - that's already handled by resume logic
+          // Just continue with the processing logic below using the existing progress record
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to check for existing backfills:', error);
+    }
+
+    if (!isResuming) {
     setIsBackfilling(true);
     setBackfillProgress({ current: 0, total: 0, status: 'Fetching campaigns...' });
+    } else {
+      console.log('🔄 RESUME: Backfill state already set, continuing processing...');
+    }
 
-    try {
+    let relevantLeadsCount = 0; // Declare at function level to avoid scope issues
+
+    try {  
       // Ensure we have the required auth data for RLS policies
       if (!user || !brandId) {
         throw new Error('User authentication or brand ID missing. Please refresh and try again.');
@@ -5080,6 +6095,77 @@ ${JSON.stringify(parsedConvo)}`;
         brand_id: brandId,
         account_id: accountId
       });
+      
+      // Check lead limits before starting backfill
+      console.log('🚦 Checking lead limits before backfill...');
+      
+      // First sync the current lead count to get accurate data
+      await syncLeadCounts();
+      
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('subscription_plan, leads_used_this_month, max_leads_per_month, backfill_max_days')
+        .eq('id', brandId)
+        .single();
+
+      if (brandError) {
+        console.error('❌ Could not check lead limits:', brandError.message);
+        showToast('Unable to verify lead limits. Please try again.', 'error');
+        setIsBackfilling(false);
+        return;
+      }
+      
+      if (brandData) {
+        const remaining = brandData.max_leads_per_month - brandData.leads_used_this_month;
+        console.log(`📊 Current usage: ${brandData.leads_used_this_month}/${brandData.max_leads_per_month} (${remaining} remaining)`);
+        
+        if (remaining <= 0) {
+          const upgradeMessage = `Lead limit reached! Your ${brandData.subscription_plan} plan allows ${brandData.max_leads_per_month} leads per month. Please upgrade your plan to import more leads.`;
+          
+          setBackfillProgress({ 
+            current: 0, 
+            total: 0, 
+            status: upgradeMessage
+          });
+          
+          showToast(upgradeMessage, 'error');
+          
+          setTimeout(() => {
+            setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
+            setIsBackfilling(false);
+          }, 5000);
+          
+          return;
+        } else if (remaining < 10) {
+          showToast(`⚠️ Warning: Only ${remaining} leads remaining on your ${brandData.subscription_plan} plan`, 'warning');
+        }
+      }
+      
+      // 🚀 VALIDATE BACKFILL DAYS AGAINST PLAN LIMITS
+      const maxBackfillDays = brandData.backfill_max_days || 45; // Default to 45 if not set
+      
+      if (days > maxBackfillDays) {
+        const errorMessage = `⚠️ Backfill limit exceeded! Your ${brandData.subscription_plan} plan allows up to ${maxBackfillDays} days of backfill data. You selected ${days} days.`;
+        
+        setBackfillProgress({ 
+          current: 0, 
+          total: 0, 
+          status: errorMessage
+        });
+        
+        showToast(errorMessage, 'error');
+        
+        setTimeout(() => {
+          setShowBackfillModal(false);
+          console.log('🎯 MODAL CLOSED - Days limit exceeded');
+          setIsBackfilling(false);
+        }, 5000);
+        
+        return;
+      }
+      
+      console.log(`✅ Backfill days validation passed: ${days}/${maxBackfillDays} days (${brandData.subscription_plan} plan)`);
+      
       // Calculate date filter (X days ago)
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -5092,58 +6178,249 @@ ${JSON.stringify(parsedConvo)}`;
       console.log(`📋 Found ${campaigns.length} campaigns`);
 
       // Filter campaigns by date (only recent ones)
-      const recentCampaigns = campaigns.filter(campaign => {
+      let filteredCampaigns = campaigns.filter(campaign => {
         return new Date(campaign.created_at) > new Date(cutoffISOString);
       });
 
-      console.log(`📋 ${recentCampaigns.length} campaigns match date filter`);
+      console.log(`📋 ${filteredCampaigns.length} campaigns match date filter`);
+      
+      // 🆕 CAMPAIGN SELECTION: Apply user selections if provided
+      if (selectedConfig?.campaigns?.length > 0) {
+        const originalCount = filteredCampaigns.length;
+        filteredCampaigns = filteredCampaigns.filter(campaign => 
+          selectedConfig.campaigns.includes(campaign.id)
+        );
+        console.log(`🎯 CAMPAIGN SELECTION: Filtered from ${originalCount} to ${filteredCampaigns.length} campaigns based on user selection`);
+        console.log(`🎯 Selected campaign IDs:`, selectedConfig.campaigns);
+      } else {
+        console.log(`📦 LEGACY MODE: Processing all ${filteredCampaigns.length} campaigns (no selection provided)`);
+      }
+      
+      const recentCampaigns = filteredCampaigns;
       
       if (recentCampaigns.length === 0) {
         setBackfillProgress({ current: 0, total: 0, status: 'No recent campaigns found' });
-        setTimeout(() => setShowBackfillModal(false), 2000);
+        setTimeout(() => { setShowBackfillModal(false); console.log('🎯 MODAL CLOSED'); }, 2000);
         return;
       }
 
       setBackfillProgress({ current: 0, total: recentCampaigns.length, status: 'Processing campaigns...' });
 
-      let allLeadsToInsert = [];
-      let processedCampaigns = 0;
+      // Create progress record in database (only if not resuming)
+      if (!progressRecordId) {
+        try {
+          const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+          
+          // Find the account info for this API key to store with progress
+          const matchingAccount = apiKeys.accounts.find(acc => acc.esp.key === apiKey) || 
+                                  { name: `Account-${accountId}`, account_id: accountId }; // Fallback for resume scenarios
+          
+          console.log('📝 Creating backfill progress record with API key info:', {
+            brand_id: currentBrandId,
+            api_key_preview: apiKey ? apiKey.substring(0, 10) + '...' : 'None',
+            account_id: accountId,
+            account_name: matchingAccount?.name || 'Unknown Account'
+          });
+          
+          const { data: progressRecord, error: progressError } = await supabase
+            .from('backfill_progress')
+            .insert({
+              brand_id: currentBrandId,
+              operation_type: 'lead_backfill',
+              total_leads: recentCampaigns.length,
+              processed_leads: 0,
+              status: 'running',
+              api_key: apiKey,           // 🔑 STORE API KEY for resume
+              account_id: accountId,     // 🔑 STORE ACCOUNT ID for resume  
+              account_name: matchingAccount?.name || 'Unknown Account', // 🔑 STORE NAME for logging
+              selected_config: selectedConfig // 🆕 STORE SELECTED CAMPAIGNS for enhanced resume
+            })
+            .select()
+            .single();
 
-      // Step 2: Process each campaign
-      for (const campaign of recentCampaigns) {
+          if (progressError) {
+            console.error('❌ Failed to create progress record:', progressError);
+          } else {
+            progressRecordId = progressRecord.id;
+            console.log('✅ Created new progress record:', progressRecordId);
+            
+            // 💾 PHASE 1: State tracking for resume functionality
+            const backfillStateData = {
+              backfillId: progressRecordId,
+              brandId: currentBrandId,
+              accountId: accountId,
+              accountName: matchingAccount?.name || 'Unknown Account',
+              apiKeyPreview: apiKey ? apiKey.substring(0, 10) + '...' : 'None',
+              selectedConfig: selectedConfig, // 🆕 STORE USER SELECTIONS for enhanced resume
+              timestamp: Date.now(),
+              sessionId: crypto.randomUUID(),
+              status: 'running'
+            };
+            
+            // Store in localStorage (survives tab closure)
+            localStorage.setItem('active_backfill', JSON.stringify(backfillStateData));
+            
+            // Store in sessionStorage (this tab only)
+            sessionStorage.setItem('backfill_session', JSON.stringify(backfillStateData));
+            
+            // 🔧 CRITICAL: Clean up any existing tab closure handler first
+            if (currentTabClosureHandlerRef.current) {
+              window.removeEventListener('beforeunload', currentTabClosureHandlerRef.current);
+              console.log('💾 RESUME: Removed previous tab closure handler');
+            }
+            
+            // Add new tab closure handler
+            const handleTabClosure = (event) => {
+              const sessionData = sessionStorage.getItem('backfill_session');
+              if (sessionData) {
+                try {
+                  const data = JSON.parse(sessionData);
+                  localStorage.setItem('interrupted_backfill', JSON.stringify({
+                    ...data,
+                    interruptedAt: Date.now(),
+                    reason: 'tab_closure'
+                  }));
+                  console.log('💾 RESUME: Backfill marked as interrupted due to tab closure');
+                } catch (error) {
+                  console.error('❌ RESUME: Error saving interrupted backfill data:', error);
+                }
+              }
+            };
+            
+            // Store handler reference for proper cleanup
+            currentTabClosureHandlerRef.current = handleTabClosure;
+            window.addEventListener('beforeunload', handleTabClosure);
+            
+            console.log('💾 RESUME: State tracking enabled for backfill', progressRecordId);
+            
+            // Start polling for this progress record (only if not already polling)
+            if (!isResuming) {
+            startProgressPolling(progressRecordId);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error creating progress record:', error);
+        }
+      } else {
+        console.log('✅ RESUME: Using existing progress record:', progressRecordId);
+        
+        // Update the total_leads in case the campaign count changed
+        try {
+          await supabase
+            .from('backfill_progress')
+            .update({ total_leads: recentCampaigns.length })
+            .eq('id', progressRecordId);
+        } catch (error) {
+          console.error('❌ Error updating progress record total:', error);
+        }
+      }
+
+      let processedCampaigns = 0;
+      
+      // Check if we're resuming an existing backfill
+      let startFromCampaign = 0;
+      if (progressRecordId) {
+        try {
+          const { data: existingProgress } = await supabase
+            .from('backfill_progress')
+            .select('processed_leads')
+            .eq('id', progressRecordId)
+            .single();
+            
+          if (existingProgress) {
+            startFromCampaign = existingProgress.processed_leads || 0;
+            processedCampaigns = startFromCampaign;
+            console.log(`📍 RESUMING from campaign ${startFromCampaign + 1}/${recentCampaigns.length}`);
+          }
+        } catch (error) {
+          console.error('❌ Error checking existing progress:', error);
+        }
+      }
+
+      // Step 2: Process each campaign (starting from the right one)
+      for (let i = startFromCampaign; i < recentCampaigns.length; i++) {
+        const campaign = recentCampaigns[i];
+        console.log(`🚀 Starting campaign ${processedCampaigns + 1}/${recentCampaigns.length}: ${campaign.name || campaign.id}`);
+        
         setBackfillProgress({ 
           current: processedCampaigns, 
           total: recentCampaigns.length, 
-          status: `Processing campaign: ${campaign.name || campaign.id}` 
+          status: `Processing campaign ${processedCampaigns + 1}/${recentCampaigns.length}: ${campaign.name || campaign.id}` 
         });
 
-        // Get all leads for this campaign
-        const campaignLeads = await fetchLeadsForCampaign(apiKey, campaign.id);
-        console.log(`📧 Campaign ${campaign.id}: ${campaignLeads.length} leads`);
+        let campaignExport;
+        try {
+          console.log(`📞 Calling exportCampaignData for campaign ${campaign.id}...`);
+          
+          // 🚀 OPTIMIZED: Export entire campaign data with conversations in ONE call
+          campaignExport = await exportCampaignData(apiKey, campaign.id);
+          console.log(`📧 Campaign ${campaign.id}: ${campaignExport.leads?.length || 0} leads exported`);
+          
+        } catch (campaignError) {
+          console.error(`❌ Failed to process campaign ${campaign.id}:`, campaignError);
+          
+          // Update progress even on failure
+          processedCampaigns++;
+          if (progressRecordId) {
+            try {
+              console.log(`📊 Updating progress after campaign failure: ${processedCampaigns}/${recentCampaigns.length}`);
+              await supabase
+                .from('backfill_progress')
+                .update({
+                  processed_leads: processedCampaigns,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', progressRecordId);
+            } catch (updateError) {
+              console.error('❌ Error updating progress after campaign failure:', updateError);
+            }
+          }
+          
+          // Continue with next campaign instead of crashing
+          continue;
+        }
 
-        // Step 3: Get message history for each lead and prepare for Supabase
-        for (const lead of campaignLeads) {
+        // Step 3: Process exported leads (already includes message histories!)
+        const leadsWithHistory = campaignExport.leads || [];
+        const campaignLeads = []; // Collect leads for bulk processing
+        
+        for (const leadData of leadsWithHistory) {
           try {
-            const messageHistory = await fetchMessageHistory(apiKey, campaign.id, lead.lead.id);
+            // leadData should already include conversation history from export
+            const messageHistory = leadData.conversation_history || leadData.message_history || { history: [] };
+            
+            // FILTER: Only include leads that have actually responded
+            const hasResponded = messageHistory.history && messageHistory.history.some(msg => 
+              msg.type === 'REPLY' || (msg.from && msg.from.toLowerCase().includes(leadData.lead.email.toLowerCase()))
+            );
+            
+            if (!hasResponded) {
+              console.log(`⏭️ Skipping lead ${leadData.lead.email} - no responses found`);
+              continue; // Skip leads that haven't responded
+            }
+            
+            console.log(`✅ Including lead ${leadData.lead.email} - has ${messageHistory.history.length} messages`);
             
             // Parse conversation immediately for storage
             const parsedConvo = parseConversationForIntent(JSON.stringify(messageHistory.history));
             
+            // No delay needed - we're processing bulk exported data!
+            
             // Transform to match your EXACT Supabase schema (from column list)
             const leadRecord = {
-              lead_email: lead.lead.email,
-              lead_category: String(lead.lead_category_id),
-              first_name: lead.lead.first_name,
-              last_name: lead.lead.last_name,
-              website: lead.lead.website,
-              custom_field: lead.lead.custom_fields?.Response || null,
+              lead_email: leadData.lead.email,
+              lead_category: leadData.lead_category_id ? String(leadData.lead_category_id) : '8', // Default to "Uncategorizable by AI" for null categories
+              first_name: leadData.lead.first_name,
+              last_name: leadData.lead.last_name,
+              website: leadData.lead.website,
+              custom_field: leadData.lead.custom_fields?.Response || null,
               subject: null,
               email_message_body: JSON.stringify(messageHistory.history), // Full conversation history
-              created_at_lead: lead.created_at,
+              created_at_lead: leadData.created_at,
               intent: null, // Will be updated by AI analysis
               stage: null,
               campaign_ID: campaign.id, // numeric
-              lead_ID: lead.lead.id, // numeric
+              lead_ID: leadData.lead.id, // numeric
               role: null,
               company_data: null,
               personal_linkedin_url: null, // CORRECT: personal_linkedin_url not personal_linkedin
@@ -5157,157 +6434,234 @@ ${JSON.stringify(parsedConvo)}`;
               closed: false, // boolean default false
               email_account_id: accountId, // uuid
               source_api_key: null,
-              parsed_convo: parsedConvo ? JSON.stringify(parsedConvo) : null // ✅ FIXED: Populate immediately
+              parsed_convo: parsedConvo ? JSON.stringify(parsedConvo) : null, // ✅ FIXED: Populate immediately
+              opened: true // Backlog leads are already seen - mark as opened
             };
             
-            console.log('🔍 Lead record for insertion:', {
-              lead_email: leadRecord.lead_email,
-              lead_category: leadRecord.lead_category,
-              campaign_ID: leadRecord.campaign_ID,
-              lead_ID: leadRecord.lead_ID,
-              brand_id: leadRecord.brand_id,
-              email_account_id: leadRecord.email_account_id,
-              email_message_body: leadRecord.email_message_body ? 'JSON data present' : null,
-              status: leadRecord.status
-            });
-
-            allLeadsToInsert.push(leadRecord);
+            // Add to batch for bulk processing
+            campaignLeads.push(leadRecord);
           } catch (error) {
             console.warn(`Error processing lead ${lead.lead.id}:`, error);
           }
         }
 
+        // BULK PROCESSING: Process campaignLeads in batches of 10 with specified timing
+        if (campaignLeads.length > 0) {
+          console.log(`📦 Processing ${campaignLeads.length} leads in bulk batches for campaign ${campaign.name || campaign.id}`);
+          
+          let totalProcessed = 0;
+          
+          // Process in batches of 10
+          for (let batchStart = 0; batchStart < campaignLeads.length; batchStart += 10) {
+            const batch = campaignLeads.slice(batchStart, batchStart + 10);
+            
+            console.log(`⚡ Processing batch ${Math.floor(batchStart / 10) + 1}: ${batch.length} leads`);
+            
+            // Process each lead in the batch (check duplicates + insert/update)
+            for (const leadRecord of batch) {
+              try {
+                // Check if lead already exists
+                const { data: existingLead } = await supabase
+                  .from('retention_harbor')
+                  .select('id')
+                  .eq('lead_email', leadRecord.lead_email)
+                  .single();
+                
+                if (existingLead) {
+                  // Update existing lead
+                  const { error: updateError } = await supabase
+                    .from('retention_harbor')
+                    .update(leadRecord)
+                    .eq('lead_email', leadRecord.lead_email);
+                    
+                  if (updateError) {
+                    console.error(`❌ Failed to update lead ${leadRecord.lead_email}:`, updateError);
+                  } else {
+                    console.log(`🔄 Updated: ${leadRecord.lead_email}`);
+                  }
+                } else {
+                  // Insert new lead
+                  const { error: insertError } = await supabase
+                    .from('retention_harbor')
+                    .insert(leadRecord);
+                    
+                  if (insertError) {
+                    console.error(`❌ Failed to insert lead ${leadRecord.lead_email}:`, insertError);
+                  } else {
+                    console.log(`✅ Inserted: ${leadRecord.lead_email}`);
+                  }
+                }
+              } catch (error) {
+                console.error(`❌ Error processing lead ${leadRecord.lead_email}:`, error);
+              }
+            }
+            
+            totalProcessed += batch.length;
+            
+            // 100ms delay between batches
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 300ms break every 100 operations (10 batches)
+            if (totalProcessed > 0 && totalProcessed % 100 === 0) {
+              console.log(`⏸️ Taking 300ms break after processing ${totalProcessed} leads`);
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+          
+          console.log(`✅ Bulk processing complete: ${totalProcessed} leads processed for campaign ${campaign.name || campaign.id}`);
+        }
+
         processedCampaigns++;
         
-        // Add delay to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Update progress in database AFTER each campaign is fully processed and inserted
+        if (progressRecordId) {
+          try {
+            console.log(`📊 Campaign ${processedCampaigns}/${recentCampaigns.length} completed - updating progress`);
+            await supabase
+              .from('backfill_progress')
+              .update({
+                processed_leads: processedCampaigns,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', progressRecordId);
+          } catch (error) {
+            console.error('❌ Error updating progress:', error);
+          }
+        }
+        
+        // Add 300ms delay between campaigns as requested
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      console.log(`📦 Prepared ${allLeadsToInsert.length} leads for insertion`);
+      console.log(`✅ All ${processedCampaigns} campaigns processed with leads inserted immediately!`);
 
-      // Step 4: Insert all leads into Supabase in batches
-      if (allLeadsToInsert.length > 0) {
-        setBackfillProgress({ 
-          current: processedCampaigns, 
-          total: recentCampaigns.length, 
-          status: `Testing database permissions...` 
-        });
-
-        // Test insert with first record to validate RLS policy
-        console.log('🧪 Testing RLS policy with sample record...');
-        const testRecord = { ...allLeadsToInsert[0] }; // Create a copy for testing
-        const { data: testData, error: testError } = await supabase
-          .from('retention_harbor')
-          .insert([testRecord])
-          .select();
-
-        if (testError) {
-          console.error('❌ RLS Test Failed:', testError);
-          throw new Error(`Database security policy test failed: ${testError.message}\n\nThis usually means your account doesn't have permission to insert leads or the brand_id doesn't match.`);
-        }
-
-        console.log('✅ RLS test passed! Proceeding with bulk insert...');
-        
-        // Delete the test record to avoid duplicate
-        console.log('🗑️ Removing test record to avoid duplicates...');
-        await supabase
-          .from('retention_harbor')
-          .delete()
-          .eq('id', testData[0].id);
-        
-        console.log('✅ Test record cleaned up - proceeding with full insert including first lead');
-        
-        setBackfillProgress({ 
-          current: processedCampaigns, 
-          total: recentCampaigns.length, 
-          status: `Inserting ${allLeadsToInsert.length} remaining leads...` 
-        });
-
-        // Use single row inserts to avoid RLS bulk insert issues
-        console.log(`📦 Inserting ${allLeadsToInsert.length} leads one by one (RLS-friendly approach)`);
-        
-        for (let i = 0; i < allLeadsToInsert.length; i++) {
-          const leadRecord = allLeadsToInsert[i];
+      // Complete the lead backfill progress record
+      if (progressRecordId) {
+        try {
+          await supabase
+            .from('backfill_progress')
+            .update({
+              processed_leads: recentCampaigns.length,
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', progressRecordId);
+          console.log('✅ Completed lead backfill progress record');
           
-          if (i % 10 === 0) {
-            console.log(`📦 Progress: ${i + 1}/${allLeadsToInsert.length} leads inserted`);
+          // 💾 PHASE 1: Cleanup state tracking on completion
+          localStorage.removeItem('active_backfill');
+          localStorage.removeItem('interrupted_backfill');
+          sessionStorage.removeItem('backfill_session');
+          
+          // 🔧 CRITICAL: Properly remove tab closure handler
+          if (currentTabClosureHandlerRef.current) {
+            window.removeEventListener('beforeunload', currentTabClosureHandlerRef.current);
+            currentTabClosureHandlerRef.current = null;
+            console.log('💾 RESUME: Tab closure handler properly removed on completion');
           }
           
-          const { data, error } = await supabase
-            .from('retention_harbor')
-            .insert([leadRecord])
-            .select(); // Single row insert
-
-          if (error) {
-            // Handle duplicate key errors gracefully (expected from our RLS test cleanup)
-            if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-              console.log(`⚠️ Skipping duplicate lead ${i + 1}: ${leadRecord.lead_email || 'unknown'}`);
-              continue; // Skip this lead and continue with the next one
-            }
-            
-            console.error(`❌ RLS/Database Error on lead ${i + 1}:`, error);
-            console.error('📋 Failed record:', leadRecord);
-            
-            // More specific error messages for common RLS issues
-            if (error.message.includes('RLS') || error.message.includes('policy')) {
-              throw new Error(`Database security policy prevented insert on lead ${i + 1}. This usually means:\n- Your user doesn't have permission to insert leads\n- The brand_id doesn't match your account\n- Missing required fields for the security policy\n\nTechnical error: ${error.message}`);
-            } else if (error.message.includes('column')) {
-              throw new Error(`Database column error on lead ${i + 1}: ${error.message}\n\nPlease check that all required columns exist in your retention_harbor table.`);
-            }
-            
-            throw new Error(`Database insert failed on lead ${i + 1}: ${error.message}`);
-          }
-
-          // Success - no need to log every single insert
-        }
-        
-        console.log(`✅ Successfully inserted all ${allLeadsToInsert.length} leads using single-row inserts!`);
-        
-        // Step 5: Analyze intent for relevant leads using Navvii AI
-        const relevantLeadsCount = allLeadsToInsert.filter(lead => shouldAnalyzeIntent(lead.lead_category)).length;
-        
-        setBackfillProgress({ 
-          current: processedCampaigns, 
-          total: recentCampaigns.length, 
-          status: `Analyzing intent for ${relevantLeadsCount} relevant leads with Navvii AI...` 
-        });
-        
-        const analyzedCount = await analyzeLeadIntents(allLeadsToInsert);
-        
-        // Final success message with smart analysis approach
-        const statusMessage = relevantLeadsCount === 0 
-          ? `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (no intent analysis needed)`
-          : analyzedCount === relevantLeadsCount
-          ? `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (${analyzedCount} analyzed for intent)`
-          : `✅ Backfill complete! Imported ${allLeadsToInsert.length} leads (${analyzedCount}/${relevantLeadsCount} analyzed)`;
+          console.log('💾 RESUME: State tracking cleaned up on completion');
           
+        } catch (error) {
+          console.error('❌ Error completing progress record:', error);
+        }
+      }
+
+      // Step 5: Analyze intent for relevant leads using Navvii AI
+      // Get leads that were just inserted for this brand to queue AI processing
+      const { data: insertedLeads } = await supabase
+        .from('retention_harbor')
+        .select('*')
+        .eq('brand_id', brandId)
+        .is('intent', null); // Only leads without intent scores
+
+      relevantLeadsCount = insertedLeads ? insertedLeads.filter(lead => shouldAnalyzeIntent(lead.lead_category)).length : 0;
+      
+      if (relevantLeadsCount > 0) {
+        // 🔧 FIX: Queue leads directly to processing_queue (NO backfill_progress for AI)
+        console.log(`🧪 Queuing ${relevantLeadsCount} leads directly to processing_queue for background AI processing...`);
+        
+        // Queue leads for AI analysis (goes directly to processing_queue)
+        const analyzedCount = await analyzeLeadIntents(insertedLeads, null); // No progress tracking!
+        
+        // Show immediate completion (AI happens in background)
         setBackfillProgress({ 
           current: recentCampaigns.length, 
           total: recentCampaigns.length, 
-          status: statusMessage
+          status: `✅ Successfully processed ${processedCampaigns} campaigns! ${relevantLeadsCount} leads queued for AI.` 
         });
         
-        // Mark the account as backfilled in both Supabase and local state
-        await markAccountAsBackfilled(accountId);
+        console.log(`🔄 AI processing will happen in background - check processing_queue table to monitor`);
+        
+        // Close modal after short delay
+        setTimeout(() => {
+          setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
+          setIsBackfilling(false);
+        }, 2000);
+        
+      } else {
+        // No AI processing needed, show immediate completion
+        setBackfillProgress({ 
+          current: recentCampaigns.length, 
+          total: recentCampaigns.length, 
+          status: `✅ Backfill complete! Processed ${processedCampaigns} campaigns (no AI processing needed)`
+        });
+        
+        setTimeout(() => {
+          setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
+          setIsBackfilling(false);
+        }, 2000);
       }
+      
+      // Mark the account as backfilled in both Supabase and local state
+      await markAccountAsBackfilled(accountId);
 
-      setBackfillProgress({ 
-        current: recentCampaigns.length, 
-        total: recentCampaigns.length, 
-        status: `✅ Successfully backfilled ${allLeadsToInsert.length} leads!` 
-      });
+      // Show user notification about background processing
+      if (relevantLeadsCount > 0) {
+        // Initialize persistent AI processing toast for backfill
+        setPersistentAIToast({
+          id: 'ai_backfill_' + Date.now(),
+          totalLeads: relevantLeadsCount,
+          processedLeads: 0,
+          startTime: new Date()
+        });
+        console.log(`🍞 Started persistent AI processing toast for backfill: ${relevantLeadsCount} leads`);
+        
+        showToast(`Backfill complete! ${relevantLeadsCount} leads queued for AI processing - watch progress above.`, 'info');
+      }
 
       // Refresh leads to show the new data
       await fetchLeads();
+      
+      // Sync lead counts after backfill
+      await syncLeadCounts();
 
       // Close modal after success
       setTimeout(() => {
-        setShowBackfillModal(false);
+        setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
         setIsBackfilling(false);
       }, 3000);
 
     } catch (error) {
       console.error('❌ Backfill failed:', error);
+      
+      // Mark progress record as failed
+      if (progressRecordId) {
+        try {
+          await supabase
+            .from('backfill_progress')
+            .update({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', progressRecordId);
+        } catch (progressError) {
+          console.error('❌ Error updating failed progress:', progressError);
+        }
+      }
+      
       setBackfillProgress({ 
         current: 0, 
         total: 0, 
@@ -5318,6 +6672,142 @@ ${JSON.stringify(parsedConvo)}`;
         setIsBackfilling(false);
       }, 3000);
     }
+  };
+
+  // 🆕 ACCOUNT SELECTION FUNCTIONS
+  
+  // Show account selection modal for multiple accounts
+  const showAccountSelectionModal = () => {
+    setShowAccountSelection(true);
+  };
+
+  // Handle account selection and proceed to campaign selection
+  const handleAccountSelected = async (account) => {
+    setSelectedAccount(account);
+    setShowAccountSelection(false);
+    
+    // Reset backfill days to default when starting a new backfill (respect plan limits)
+    const defaultDays = Math.min(30, currentPlan?.backfillMaxDays || 45);
+    setBackfillDays(defaultDays);
+    console.log(`🔄 Reset backfill days to ${defaultDays} (plan: ${currentPlan?.name}, max: ${currentPlan?.backfillMaxDays})`);
+    
+    // Proceed to campaign selection with selected account
+    await showCampaignSelectionModal(
+      account.esp.key,
+      account.account_id, 
+      account.name
+    );
+  };
+
+  // 🆕 CAMPAIGN SELECTION FUNCTIONS
+  
+  // Fetch campaigns and show selection modal
+  const showCampaignSelectionModal = async (apiKey, accountId, accountName) => {
+    try {
+      setCampaignSelectionLoading(true);
+      setShowCampaignSelection(true);
+      
+      console.log('🎯 Fetching campaigns for selection...', { accountId, accountName });
+      
+      // Fetch campaigns from Smartlead
+      const campaigns = await fetchSmartleadCampaigns(apiKey);
+      
+      // Calculate date filter for display
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - backfillDays);
+      
+      // Filter campaigns by date and add metadata
+      const filteredCampaigns = campaigns
+        .filter(campaign => new Date(campaign.created_at) > cutoffDate)
+        .map(campaign => ({
+          ...campaign,
+          estimatedLeads: campaign.total_leads || 0,
+          selected: false // Default unselected
+        }));
+      
+      console.log(`📋 Found ${filteredCampaigns.length} campaigns for selection`);
+      
+      setAvailableCampaigns(filteredCampaigns);
+      setSelectedCampaigns([]); // Reset selections
+      
+      // Store pending backfill config
+      setPendingBackfillConfig({
+        apiKey,
+        accountId,
+        accountName,
+        days: backfillDays
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch campaigns:', error);
+      showToast('Failed to load campaigns. Please try again.', 'error');
+      setShowCampaignSelection(false);
+    } finally {
+      setCampaignSelectionLoading(false);
+    }
+  };
+  
+  // Handle campaign selection confirmation
+  const confirmCampaignSelection = async () => {
+    if (!pendingBackfillConfig) {
+      showToast('Configuration error. Please try again.', 'error');
+      return;
+    }
+    
+    if (selectedCampaigns.length === 0) {
+      showToast('Please select at least one campaign to process.', 'warning');
+      return;
+    }
+    
+    console.log(`🎯 User selected ${selectedCampaigns.length} campaigns:`, selectedCampaigns);
+    
+    // Create selected config for enhanced resume
+    const selectedConfig = {
+      campaigns: selectedCampaigns.map(c => c.id),
+      campaignNames: selectedCampaigns.map(c => c.name),
+      intentFilters: intentFilters,
+      days: backfillDays,
+      estimatedLeads: selectedCampaigns.reduce((sum, c) => sum + (c.estimatedLeads || 0), 0),
+      selectionTimestamp: Date.now()
+    };
+    
+    console.log('🚀 Starting backfill with configuration:', selectedConfig);
+    
+    // Close campaign selection, show progress modal
+    setShowCampaignSelection(false);
+    setShowBackfillModal(true);
+    
+    // Start backfill with selected configuration
+    backfillLeads(
+      pendingBackfillConfig.apiKey,
+      pendingBackfillConfig.days,
+      pendingBackfillConfig.accountId,
+      selectedConfig // 🆕 Pass configuration to backfill
+    );
+    
+    // Clear pending config
+    setPendingBackfillConfig(null);
+  };
+  
+  // Toggle campaign selection
+  const toggleCampaignSelection = (campaign) => {
+    const isSelected = selectedCampaigns.some(c => c.id === campaign.id);
+    
+    if (isSelected) {
+      setSelectedCampaigns(prev => prev.filter(c => c.id !== campaign.id));
+    } else {
+      setSelectedCampaigns(prev => [...prev, campaign]);
+    }
+  };
+  
+  // Select all campaigns
+  const selectAllCampaigns = () => {
+    setSelectedCampaigns([...availableCampaigns]);
+  };
+  
+  // Clear all selections
+  const clearAllCampaigns = () => {
+    setSelectedCampaigns([]);
   };
 
   // Function to get the correct API key for a lead
@@ -5346,9 +6836,9 @@ ${JSON.stringify(parsedConvo)}`;
     return firstAccount;
   };
 
-  // Function to generate webhook URL for an account  
+  // Function to generate webhook URL for an account (now using batch processor for 10x performance)
   const generateWebhookUrl = (accountId) => {
-    return `https://api.navvii.com/functions/v1/process-lead-webhook/${accountId}`;
+    return `https://api.navvii.com/functions/v1/batch-webhook-processor/${accountId}`;
   };
 
   // Function to copy webhook URL to clipboard
@@ -5441,7 +6931,7 @@ ${JSON.stringify(parsedConvo)}`;
       }
 
       // Show success/not found toast with lead name
-      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      const leadName = getDisplayName(lead);
       if (phoneNumber) {
         showToast(`Phone found for ${leadName}`, 'success', lead.id);
       } else {
@@ -5454,7 +6944,7 @@ ${JSON.stringify(parsedConvo)}`;
         message: error.message,
         stack: error.stack
       });
-      const leadName = `${lead.first_name} ${lead.last_name}`.trim();
+      const leadName = getDisplayName(lead);
       showToast(`Error searching phone for ${leadName}`, 'error', lead.id);
     } finally {
       setSearchingPhoneLeads(prev => {
@@ -5559,25 +7049,28 @@ ${JSON.stringify(parsedConvo)}`;
   const handleAddToCRM = async (lead) => {
     if (!lead || !brandId) return;
     
+    // Default to first CRM stage (Interested)
+    const defaultStage = 'Interested';
+    
     // Optimistic update - update local state immediately
     setLeads(prev => prev.map(l => 
-      l.id === lead.id ? { ...l, status: 'CRM' } : l
+      l.id === lead.id ? { ...l, status: 'CRM', stage: defaultStage } : l
     ));
-    setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'CRM' } : prev);
+    setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'CRM', stage: defaultStage } : prev);
     
     try {
       const { error } = await supabase
         .from('retention_harbor')
-        .update({ status: 'CRM' })
+        .update({ status: 'CRM', stage: defaultStage })
         .eq('id', lead.id);
       if (error) throw error;
       showToast('Lead moved to CRM!', 'success');
     } catch (err) {
       // Revert optimistic update on error
       setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { ...l, status: 'INBOX' } : l
+        l.id === lead.id ? { ...l, status: 'INBOX', stage: null } : l
       ));
-      setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'INBOX' } : prev);
+      setSelectedLead(prev => prev?.id === lead.id ? { ...prev, status: 'INBOX', stage: null } : prev);
       showToast('Error moving lead to CRM: ' + err.message, 'error');
     }
   };
@@ -5738,7 +7231,7 @@ ${JSON.stringify(parsedConvo)}`;
       {demoMode && (
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 text-center relative z-50">
           <div className="flex items-center justify-center gap-2">
-            <span className="font-medium">🎯 Interactive Demo</span>
+                            <span className="font-medium">Interactive Demo</span>
             <span className="hidden sm:inline">- Explore all features with sample data</span>
           </div>
           <a 
@@ -5874,7 +7367,7 @@ ${JSON.stringify(parsedConvo)}`;
                       </div>
 
           <div className="flex items-center space-x-3">
-            {/* API Settings Tab */}
+            {/* Settings Tab */}
             <button
               onClick={() => setShowApiSettings(true)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -5886,8 +7379,8 @@ ${JSON.stringify(parsedConvo)}`;
               }}
             >
               <div className="flex items-center gap-2">
-                <Key className="w-4 h-4" />
-                API Settings
+                <Settings className="w-4 h-4" />
+                Settings
               </div>
             </button>
 
@@ -5908,12 +7401,12 @@ ${JSON.stringify(parsedConvo)}`;
             >
               {isDarkMode ? (
                 <>
-                  <span className="text-lg">☀️</span>
+                  <span className="text-lg">☀</span>
                   <span className="hidden sm:inline">Light</span>
                 </>
               ) : (
                 <>
-                  <span className="text-lg">🌙</span>
+                  <span className="text-lg">◐</span>
                   <span className="hidden sm:inline">Dark</span>
                 </>
               )}
@@ -5942,8 +7435,8 @@ ${JSON.stringify(parsedConvo)}`;
             <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                  <Key className="w-5 h-5" style={{color: themeStyles.accent}} />
-                  API Settings
+                  <Settings className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  Settings
                 </h2>
                 <button
                   type="button"
@@ -5961,6 +7454,135 @@ ${JSON.stringify(parsedConvo)}`;
             </div>
             
             <div className="p-6 space-y-6">
+              {/* Current Plan Section */}
+              <div className="rounded-lg p-4 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.accent}40`}}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-5 h-5" style={{color: themeStyles.accent}} />
+                    <h3 className="font-semibold" style={{color: themeStyles.textPrimary}}>Current Plan</h3>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold" style={{color: themeStyles.accent}}>
+                      {currentPlan.displayName}
+                    </div>
+                    {currentPlan.price > 0 && (
+                      <div className="text-sm" style={{color: themeStyles.textMuted}}>
+                        ${currentPlan.price}/month
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Lead Usage */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span style={{color: themeStyles.textMuted}}>Responding Leads This Month</span>
+                    <span style={{color: themeStyles.textPrimary}}>
+                      {currentPlan.leadsUsed} / {currentPlan.maxLeads === 99999 ? '∞' : currentPlan.maxLeads}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2" style={{backgroundColor: themeStyles.border}}>
+                    <div 
+                      className="h-2 rounded-full transition-all duration-300" 
+                      style={{
+                        backgroundColor: themeStyles.accent,
+                        width: currentPlan.maxLeads === 99999 ? '20%' : `${Math.min((currentPlan.leadsUsed / currentPlan.maxLeads) * 100, 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                                                  {/* Upgrade Buttons - Only show public plans */}
+                {currentPlan.name === 'trial' && (
+                  <div className="mt-4 pt-4 border-t" style={{borderColor: themeStyles.border}}>
+                    {/* Compare Plans Link */}
+                    <div className="mb-3 text-center">
+                      <button 
+                        onClick={() => setShowPlanComparison(!showPlanComparison)}
+                        className="text-xs underline transition-colors hover:opacity-80"
+                        style={{color: themeStyles.accent}}>
+                        {showPlanComparison ? 'Hide' : 'Compare'} Plan Features
+                      </button>
+                    </div>
+
+                    {/* Plan Comparison Table */}
+                    {showPlanComparison && (
+                      <div className="mb-4 p-3 rounded-lg" style={{backgroundColor: themeStyles.secondaryBg}}>
+                        <div className="grid grid-cols-4 gap-2 text-xs">
+                          <div className="font-medium" style={{color: themeStyles.textPrimary}}>Feature</div>
+                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Professional</div>
+                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Enterprise</div>
+                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Agency</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>Monthly Leads</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>500</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>2,000</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>Unlimited</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>ESP Accounts</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>1</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>3</div>
+                          <div className="text-center" style={{color: themeStyles.textPrimary}}>Unlimited</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>Unified Inbox</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>Auto-drafted Replies</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>CRM & Templates</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          
+                          <div style={{color: themeStyles.textSecondary}}>Priority Support</div>
+                          <div className="text-center" style={{color: themeStyles.textSecondary}}>-</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <button 
+                        onClick={() => handleUpgrade('professional')}
+                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm" 
+                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
+                        <div>Professional</div>
+                        <div className="text-lg font-bold">$297<span className="text-xs font-normal">/mo</span></div>
+                        <div className="text-xs opacity-90">500 leads/month + 1 ESP</div>
+                      </button>
+                      <button 
+                        onClick={() => handleUpgrade('enterprise')}
+                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm"
+                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
+                        <div>Enterprise</div>
+                        <div className="text-lg font-bold">$597<span className="text-xs font-normal">/mo</span></div>
+                        <div className="text-xs opacity-90">2,000 leads/month + 3 ESPs</div>
+                      </button>
+                      <button 
+                        onClick={() => handleUpgrade('agency')}
+                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm"
+                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
+                        <div>Agency</div>
+                        <div className="text-lg font-bold">$997<span className="text-xs font-normal">/mo</span></div>
+                        <div className="text-xs opacity-90">Unlimited leads + ESPs</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {currentPlan.name !== 'trial' && (
+                  <div className="mt-3 text-xs" style={{color: themeStyles.textMuted}}>
+                    Next billing cycle: {currentPlan.billingCycle.toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+
               {/* Security Notice */}
               <div className="rounded-lg p-3 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.success}40`}}>
                 <div className="flex items-center gap-2 text-sm" style={{color: themeStyles.success}}>
@@ -5976,6 +7598,12 @@ ${JSON.stringify(parsedConvo)}`;
                 <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4" style={{color: themeStyles.accent}} />
                     <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>Email Accounts</h3>
+                    <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
+                      {apiKeys.accounts.length} / {(() => {
+                        const limits = { trial: 1, professional: 3, enterprise: '∞', agency: '∞', god: '∞' };
+                        return limits[currentPlan.name] || 1;
+                      })()}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -6223,6 +7851,70 @@ ${JSON.stringify(parsedConvo)}`;
               </div>
             </div>
 
+            {/* Backlog Campaign Selection Section */}
+            <div className="px-6 py-4 border-t" style={{borderColor: themeStyles.border, backgroundColor: themeStyles.secondaryBg}}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-medium mb-1 flex items-center gap-2" style={{color: themeStyles.textPrimary}}>
+                    <Database className="w-4 h-4" style={{color: themeStyles.accent}} />
+                    Lead Backfill
+                  </h4>
+                  <p className="text-xs" style={{color: themeStyles.textMuted}}>
+                    Import historical leads with campaign selection
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Close settings modal first
+                    setShowApiSettings(false);
+                    
+                    // Check if we have API keys
+                    if (apiKeys.accounts.length === 0) {
+                      showToast('Please add API keys first before running a backfill', 'error');
+                      return;
+                    }
+
+                    // Get all Smartlead accounts
+                    const smartleadAccounts = apiKeys.accounts.filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key);
+                    if (smartleadAccounts.length === 0) {
+                      showToast('Please add a Smartlead API key first before running a backfill', 'error');
+                      return;
+                    }
+                    
+                    // If multiple accounts, show account selection first
+                    if (smartleadAccounts.length > 1) {
+                      showAccountSelectionModal();
+                    } else {
+                      // Single account - go directly to campaign selection
+                      const account = smartleadAccounts[0];
+                      // Reset backfill days to default when starting a new backfill (respect plan limits)
+                      const defaultDays = Math.min(30, currentPlan?.backfillMaxDays || 45);
+                      setBackfillDays(defaultDays);
+                      console.log(`🔄 [Settings] Reset backfill days to ${defaultDays} (plan: ${currentPlan?.name}, max: ${currentPlan?.backfillMaxDays})`);
+                      await showCampaignSelectionModal(
+                        account.esp.key, 
+                        account.account_id, 
+                        account.name
+                      );
+                    }
+                  }}
+                  className="px-3 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 flex items-center gap-2"
+                  style={{
+                    backgroundColor: themeStyles.accent,
+                    color: isDarkMode ? '#1A1C1A' : '#FFFFFF'
+                  }}
+                >
+                  <Database className="w-4 h-4" />
+                  Select Campaigns
+                </button>
+              </div>
+            </div>
+
+
             <div className="p-6 border-t flex justify-end gap-3 transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, borderColor: themeStyles.border}}>
               <button
                 type="button"
@@ -6287,16 +7979,74 @@ ${JSON.stringify(parsedConvo)}`;
 
       {/* Toast Notifications Container */}
       <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
+        
+        {/* Persistent AI Processing Toast */}
+        {persistentAIToast && (
+          <div 
+            className="flex items-center gap-3 px-5 py-4 rounded-lg shadow-lg min-w-[350px] border-2"
+            style={{
+              backgroundColor: `${themeStyles.accent}10`,
+              border: `2px solid ${themeStyles.accent}40`,
+              backdropFilter: 'blur(12px)'
+            }}
+          >
+            <div className="relative">
+              <Brain className="w-6 h-6 shrink-0" style={{color: themeStyles.accent}} />
+              <div 
+                className="absolute -top-1 -right-1 w-3 h-3 rounded-full animate-pulse"
+                style={{backgroundColor: themeStyles.accent}}
+              />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                AI Processing Leads...
+              </div>
+              <div className="text-xs transition-colors duration-300 mb-2" style={{color: themeStyles.textMuted}}>
+                {persistentAIToast.processedLeads} of {persistentAIToast.totalLeads} leads analyzed
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 rounded-full h-1.5" style={{backgroundColor: themeStyles.border}}>
+                <div 
+                  className="h-1.5 rounded-full transition-all duration-500" 
+                  style={{
+                    backgroundColor: themeStyles.accent,
+                    width: `${(persistentAIToast.processedLeads / persistentAIToast.totalLeads) * 100}%`
+                  }}
+                />
+              </div>
+            </div>
+            <button 
+              onClick={() => setPersistentAIToast(null)}
+              className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300 p-1"
+              style={{color: themeStyles.textMuted}}
+              title="Dismiss (processing will continue in background)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {toasts.map(toast => (
           <div 
             key={toast.id}
-            className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[200px]"
+            className="flex items-center gap-3 px-5 py-4 rounded-lg shadow-lg cursor-pointer transition-all transform hover:scale-102 min-w-[300px]"
             style={{
               backgroundColor: toast.type === 'success' 
                 ? `${themeStyles.success}20` 
+                : toast.type === 'info'
+                ? isDarkMode 
+                  ? 'rgba(255, 255, 255, 0.15)'
+                  : 'rgba(59, 130, 246, 0.15)'
                 : `${themeStyles.error}20`,
-              border: `1px solid ${toast.type === 'success' ? themeStyles.success : themeStyles.error}`,
-              backdropFilter: 'blur(8px)',
+              border: `1px solid ${
+                toast.type === 'success' 
+                  ? themeStyles.success 
+                  : toast.type === 'info'
+                  ? isDarkMode 
+                    ? 'rgba(255, 255, 255, 0.3)'
+                    : '#3b82f6'
+                  : themeStyles.error
+              }`,
+              backdropFilter: 'blur(12px)',
               animation: 'slideIn 0.2s ease-out'
             }}
             onClick={() => {
@@ -6311,6 +8061,10 @@ ${JSON.stringify(parsedConvo)}`;
           >
             {toast.type === 'success' ? (
               <CheckCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.success}} />
+            ) : toast.type === 'info' ? (
+              <Info className="w-5 h-5 shrink-0" style={{
+                color: isDarkMode ? 'rgba(255, 255, 255, 0.8)' : '#3b82f6'
+              }} />
             ) : (
               <AlertCircle className="w-5 h-5 shrink-0" style={{color: themeStyles.error}} />
             )}
@@ -6345,7 +8099,7 @@ ${JSON.stringify(parsedConvo)}`;
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setShowBackfillModal(false);
+                      setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
                     }}
                     className="transition-colors duration-300 hover:opacity-80"
                     style={{color: themeStyles.textMuted}}
@@ -6367,15 +8121,21 @@ ${JSON.stringify(parsedConvo)}`;
                     <p className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                       New Smartlead accounts ready for backfill:
                     </p>
-                    {apiKeys.accounts
-                      .filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key && !acc.backfilled)
-                      .map(account => (
-                        <div key={account.account_id} className="text-xs transition-colors duration-300 flex items-center gap-2" style={{color: themeStyles.textMuted}}>
-                          <div className="w-2 h-2 rounded-full" style={{backgroundColor: themeStyles.accent}}></div>
-                          {account.name}
-                        </div>
-                      ))
-                    }
+                    {apiKeys.accounts.length === 0 ? (
+                      <div className="text-xs transition-colors duration-300 flex items-center gap-2" style={{color: themeStyles.textMuted}}>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Loading account information...
+                      </div>
+                    ) : (
+                      apiKeys.accounts
+                        .filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key && !acc.backfilled)
+                        .map(account => (
+                          <div key={account.account_id} className="text-xs transition-colors duration-300 flex items-center gap-2" style={{color: themeStyles.textMuted}}>
+                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: themeStyles.accent}}></div>
+                            {account.name}
+                          </div>
+                        ))
+                    )}
                   </div>
                   
                   <div className="mb-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
@@ -6396,7 +8156,37 @@ ${JSON.stringify(parsedConvo)}`;
                   <div className="mb-4">
                     <label className="text-sm font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                       How many days back should we import?
+                      {currentPlan?.name === 'god' && (
+                        <span className="text-xs ml-2 px-2 py-1 rounded" style={{backgroundColor: themeStyles.accent, color: 'white'}}>
+                          God Mode: Up to {currentPlan.backfillMaxDays} days
+                        </span>
+                      )}
                     </label>
+                    
+                    {/* Dynamic options based on plan */}
+                    {currentPlan?.name === 'god' ? (
+                      /* God Plan: Custom input */
+                      <input
+                        type="number"
+                        min="1"
+                        max={currentPlan.backfillMaxDays}
+                        value={backfillDays}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value) || 1;
+                          const maxDays = currentPlan.backfillMaxDays || 365;
+                          setBackfillDays(Math.min(Math.max(value, 1), maxDays));
+                        }}
+                        placeholder={`Enter days (1-${currentPlan.backfillMaxDays})`}
+                        className="w-full px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
+                        style={{
+                          backgroundColor: themeStyles.secondaryBg,
+                          border: `1px solid ${themeStyles.border}`,
+                          color: themeStyles.textPrimary,
+                          '--tw-ring-color': themeStyles.accent
+                        }}
+                      />
+                    ) : (
+                      /* Other Plans: Fixed options based on plan */
                     <select
                       value={backfillDays}
                       onChange={(e) => setBackfillDays(parseInt(e.target.value))}
@@ -6411,7 +8201,24 @@ ${JSON.stringify(parsedConvo)}`;
                       <option value={15}>Last 15 days</option>
                       <option value={30}>Last 30 days</option>
                       <option value={45}>Last 45 days</option>
+                        {/* Enterprise gets 90 days */}
+                        {(currentPlan?.name === 'enterprise' || currentPlan?.backfillMaxDays >= 90) && (
+                          <option value={90}>Last 90 days (3 months)</option>
+                        )}
+                        {/* Agency gets 180 days */}
+                        {(currentPlan?.name === 'agency' || currentPlan?.backfillMaxDays >= 180) && (
+                          <option value={180}>Last 180 days (6 months)</option>
+                        )}
                     </select>
+                    )}
+                    
+                    {/* Plan limit info */}
+                    <p className="text-xs mt-1 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      {currentPlan?.name === 'god' 
+                        ? `God Mode: Import up to ${currentPlan.backfillMaxDays} days of data`
+                        : `${currentPlan?.displayName || 'Trial'} plan: Up to ${currentPlan?.backfillMaxDays || 45} days`
+                      }
+                    </p>
                   </div>
                   
                   <div className="flex justify-end gap-3">
@@ -6420,7 +8227,7 @@ ${JSON.stringify(parsedConvo)}`;
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setShowBackfillModal(false);
+                        setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
                       }}
                       className="px-4 py-2 rounded-lg text-sm transition-all hover:opacity-80"
                       style={{color: themeStyles.textPrimary, backgroundColor: themeStyles.tertiaryBg}}
@@ -6429,17 +8236,70 @@ ${JSON.stringify(parsedConvo)}`;
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => {
+                      disabled={isBackfilling}
+                      onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Use the first Smartlead account found
-                        const smartleadAccount = apiKeys.accounts.find(acc => acc.esp.provider === 'smartlead' && acc.esp.key);
-                        if (smartleadAccount) {
-                          backfillLeads(smartleadAccount.esp.key, backfillDays, smartleadAccount.account_id);
+                        
+                        // 🔧 CRITICAL: Check for database conflicts first
+                        const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+                        
+                        try {
+                          const { data: existingBackfills } = await supabase
+                            .from('backfill_progress')
+                            .select('*')
+                            .eq('brand_id', currentBrandId)
+                            .eq('status', 'running');
+                            
+                          if (existingBackfills?.length > 0) {
+                            const runningBackfill = existingBackfills[0];
+                            const lastUpdate = new Date(runningBackfill.updated_at);
+                            const minutesSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60);
+                            
+                            if (minutesSinceUpdate <= 2) {
+                              // There's an active backfill - show resume modal instead
+                              console.log('💾 MANUAL TRIGGER: Found active backfill, showing resume modal instead');
+                              setShowBackfillModal(false);
+                              
+                              showResumeModal({
+                                source: 'database',
+                                dbRecord: runningBackfill,
+                                minutesAgo: minutesSinceUpdate.toFixed(1)
+                              });
+                              
+                              showToast('Found an active backfill - please choose to resume or start fresh', 'info');
+                              return;
+                            }
+                          }
+                        } catch (error) {
+                          console.error('❌ Error checking for existing backfills:', error);
+                          showToast('Error checking backfill status - please try again', 'error');
+                          return;
+                        }
+                        
+                        // Get all Smartlead accounts
+                        const smartleadAccounts = apiKeys.accounts.filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key);
+                        if (smartleadAccounts.length > 0 && !isBackfilling) {
+                          // If multiple accounts, show account selection first
+                          if (smartleadAccounts.length > 1) {
+                            showAccountSelectionModal();
+                          } else {
+                            // Single account - go directly to campaign selection
+                            const account = smartleadAccounts[0];
+                            // Reset backfill days to default when starting a new backfill (respect plan limits)
+                            const defaultDays = Math.min(30, currentPlan?.backfillMaxDays || 45);
+                            setBackfillDays(defaultDays);
+                            console.log(`🔄 [Backfill] Reset backfill days to ${defaultDays} (plan: ${currentPlan?.name}, max: ${currentPlan?.backfillMaxDays})`);
+                            showCampaignSelectionModal(
+                              account.esp.key, 
+                              account.account_id,
+                              account.name
+                            );
+                          }
                         }
                       }}
-                      className="px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all hover:opacity-90"
-                      style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                      className="px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{backgroundColor: isBackfilling ? themeStyles.border : themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                     >
                       <Database className="w-4 h-4" />
                       Import Leads
@@ -6462,24 +8322,710 @@ ${JSON.stringify(parsedConvo)}`;
                     {backfillProgress.status}
                   </p>
                   
-                  {backfillProgress.total > 0 && (
-                    <div className="mb-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2 mb-2" style={{backgroundColor: themeStyles.tertiaryBg}}>
-                        <div 
-                          className="h-2 rounded-full transition-all duration-300"
-                          style={{
-                            backgroundColor: themeStyles.accent,
-                            width: `${(backfillProgress.current / backfillProgress.total) * 100}%`
-                          }}
-                        />
-                      </div>
-                      <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                        {backfillProgress.current} of {backfillProgress.total} campaigns processed
+                  {false && (
+                    <div className="mb-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: `${themeStyles.accent}10`, border: `1px solid ${themeStyles.accent}30`}}>
+                      <p className="text-xs font-medium transition-colors duration-300" style={{color: themeStyles.accent}}>
+                        🔄 Resume Mode: Continuing from where the backfill left off...
                       </p>
                     </div>
                   )}
+                  
+                  {backfillProgress.total > 0 && (
+                    <div className="mb-4">
+                      <div className="w-full bg-gray-200 rounded-full h-3 mb-3 overflow-hidden shadow-inner" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                        <div 
+                          className="h-3 rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            backgroundColor: themeStyles.accent,
+                            width: `${Math.min((backfillProgress.current / backfillProgress.total) * 100, 100)}%`,
+                            boxShadow: `0 0 10px ${themeStyles.accent}50`
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                          {backfillProgress.current} of {backfillProgress.total}
+                        </p>
+                        <p className="text-sm font-bold transition-colors duration-300" style={{color: themeStyles.accent}}>
+                          {Math.round((backfillProgress.current / backfillProgress.total) * 100)}%
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Reset button for stuck progress */}
+                  {progressId && (
+                    <button
+                      onClick={resetProgressBar}
+                      className="mt-4 px-4 py-2 text-sm rounded-lg border transition-all duration-200 hover:scale-105"
+                      style={{
+                        color: themeStyles.textMuted,
+                        borderColor: themeStyles.border,
+                        backgroundColor: themeStyles.tertiaryBg
+                      }}
+                    >
+                      Reset Progress
+                    </button>
+                  )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💾 PHASE 4: Resume Backfill Modal */}
+      {resumeModalData.visible && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20001] p-4">
+          <div className="rounded-xl shadow-xl max-w-md w-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <Database className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  Resume Backfill?
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setResumeModalData({ visible: false, candidate: null, options: [] })}
+                  className="transition-colors duration-300 hover:opacity-80"
+                  style={{color: themeStyles.textMuted}}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{backgroundColor: `${themeStyles.accent}20`}}>
+                    <Database className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  </div>
+                  <div>
+                    <h3 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      Incomplete Backfill Detected
+                    </h3>
+                    <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      {resumeModalData.message}
+                    </p>
+                  </div>
+                </div>
+                
+                {resumeModalData.candidate?.source === 'database' && resumeModalData.candidate.dbRecord && (
+                  <div className="p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                        Progress: {resumeModalData.candidate.dbRecord.processed_leads || 0} / {resumeModalData.candidate.dbRecord.total_leads || 0}
+                      </span>
+                      <span className="text-sm font-bold transition-colors duration-300" style={{color: themeStyles.accent}}>
+                        {Math.round(((resumeModalData.candidate.dbRecord.processed_leads || 0) / (resumeModalData.candidate.dbRecord.total_leads || 1)) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2" style={{backgroundColor: `${themeStyles.textMuted}20`}}>
+                      <div 
+                        className="h-2 rounded-full transition-all duration-300"
+                        style={{
+                          backgroundColor: themeStyles.accent,
+                          width: `${Math.min(((resumeModalData.candidate.dbRecord.processed_leads || 0) / (resumeModalData.candidate.dbRecord.total_leads || 1)) * 100, 100)}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* 🆕 Show Campaign Selection Details if available */}
+                {resumeModalData.candidate?.selectedConfig && (
+                  <div className="mt-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h4 className="text-sm font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      🎯 Original Campaign Selection
+                    </h4>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span style={{color: themeStyles.textMuted}}>Selected Campaigns:</span>
+                        <span style={{color: themeStyles.textPrimary}}>
+                          {resumeModalData.candidate.selectedConfig.campaigns?.length || 'All'}
+                        </span>
+                      </div>
+                      {resumeModalData.candidate.selectedConfig.campaignNames && (
+                        <div className="text-xs" style={{color: themeStyles.textMuted}}>
+                          {resumeModalData.candidate.selectedConfig.campaignNames.slice(0, 3).join(', ')}
+                          {resumeModalData.candidate.selectedConfig.campaignNames.length > 3 && 
+                            ` and ${resumeModalData.candidate.selectedConfig.campaignNames.length - 3} more`}
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span style={{color: themeStyles.textMuted}}>Intent Filters:</span>
+                        <span style={{color: themeStyles.textPrimary}}>
+                          {resumeModalData.candidate.selectedConfig.intentFilters?.join(', ') || 'All levels'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span style={{color: themeStyles.textMuted}}>Backfill Days:</span>
+                        <span style={{color: themeStyles.textPrimary}}>
+                          {resumeModalData.candidate.selectedConfig.days || 30}
+                        </span>
+                      </div>
+                      {resumeModalData.candidate.selectedConfig.estimatedLeads && (
+                        <div className="flex justify-between">
+                          <span style={{color: themeStyles.textMuted}}>Estimated Leads:</span>
+                          <span style={{color: themeStyles.textPrimary}}>
+                            {resumeModalData.candidate.selectedConfig.estimatedLeads}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    console.log('💾 RESUME: User chose to resume backfill');
+                    const candidate = resumeModalData.candidate;
+                    
+                    try {
+                      // Close the modal first
+                      setResumeModalData({ visible: false, candidate: null, options: [] });
+                      
+                      let apiKey, accountId, accountName;
+                      
+                      if (candidate.source === 'database' && candidate.dbRecord) {
+                        // Resume from database record
+                        apiKey = candidate.dbRecord.api_key;
+                        accountId = candidate.dbRecord.account_id;
+                        accountName = candidate.dbRecord.account_name || 'Resumed Account';
+                        
+                        console.log('💾 RESUME: Resuming from database record:', {
+                          backfillId: candidate.dbRecord.id,
+                          progress: `${candidate.dbRecord.processed_leads || 0}/${candidate.dbRecord.total_leads || 0}`,
+                          account: accountName
+                        });
+                      } else {
+                        // Resume from localStorage data (no API key stored for security)
+                        accountId = candidate.accountId;
+                        accountName = candidate.accountName || 'Resumed Account';
+                        
+                        // Try to find API key from current accounts
+                        const matchingAccount = apiKeys.accounts.find(acc => acc.account_id === accountId);
+                        if (matchingAccount?.esp?.key) {
+                          apiKey = matchingAccount.esp.key;
+                          console.log('💾 RESUME: Found matching API key for account:', accountId);
+                        }
+                        
+                        console.log('💾 RESUME: Resuming from localStorage:', {
+                          backfillId: candidate.backfillId,
+                          account: accountName,
+                          source: candidate.source,
+                          hasApiKey: !!apiKey
+                        });
+                      }
+                      
+                      if (!apiKey) {
+                        throw new Error('No API key available for this account. Please start a fresh backfill or check your API key settings.');
+                      }
+                      
+                      // Get the progress record ID for polling
+                      let progressRecordId;
+                      if (candidate.source === 'database' && candidate.dbRecord) {
+                        progressRecordId = candidate.dbRecord.id;
+                      } else if (candidate.backfillId) {
+                        progressRecordId = candidate.backfillId;
+                      }
+                      
+                      if (!progressRecordId) {
+                        throw new Error('No progress record ID found - please start a fresh backfill');
+                      }
+                      
+                      // Provide immediate feedback to user
+                      showToast(`Resuming backfill for ${accountName}...`, 'info');
+                      
+                      // 🔧 SHOW PROGRESS MODAL: Set backfill state and show modal
+                      setIsBackfilling(true);
+                      setShowBackfillModal(true); // Show the progress modal!
+                      
+                      // 🔧 CRITICAL: Start progress polling immediately
+                      console.log('💾 RESUME: Starting progress polling for:', progressRecordId);
+                      startProgressPolling(progressRecordId);
+                      
+                      // Set initial progress state (will be updated by polling)
+                      setBackfillProgress({ 
+                        current: candidate.dbRecord?.processed_leads || 0, 
+                        total: candidate.dbRecord?.total_leads || 0, 
+                        status: 'Resuming backfill...' 
+                      });
+                      
+                      // Start the resumed backfill (modal will show progress)
+                      console.log('💾 RESUME: Starting resumed backfill with modal...');
+                      console.log('💾 RESUME: Using selectedConfig:', candidate.selectedConfig);
+                      // Don't await - let modal show progress via polling
+                      backfillLeads(
+                        apiKey, 
+                        candidate.selectedConfig?.days || 30, 
+                        accountId,
+                        candidate.selectedConfig // 🆕 Pass original campaign selections
+                      ).then(() => {
+                        showToast('Backfill resumed and completed successfully!', 'success');
+                      }).catch((backfillError) => {
+                        console.error('❌ RESUME: Backfill error:', backfillError);
+                        showToast(`Resume backfill failed: ${backfillError.message}`, 'error');
+                        setIsBackfilling(false);
+                        setShowBackfillModal(false);
+                      });
+                      
+                      // Success - modal is now showing with progress
+                      showToast(`Backfill resumed - watch the progress!`, 'success');
+                      
+                    } catch (error) {
+                      console.error('❌ RESUME: Failed to resume backfill:', error);
+                      showToast(`Resume failed: ${error.message}`, 'error');
+                      
+                      // Clear resume data on error
+                      localStorage.removeItem('active_backfill');
+                      localStorage.removeItem('interrupted_backfill');
+                      sessionStorage.removeItem('backfill_session');
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg font-medium text-white transition-all duration-200 hover:scale-105"
+                  style={{backgroundColor: themeStyles.accent}}
+                >
+                  Resume
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('💾 RESUME: User chose to start fresh');
+                    // Clear all resume data and start fresh
+                    localStorage.removeItem('active_backfill');
+                    localStorage.removeItem('interrupted_backfill');
+                    sessionStorage.removeItem('backfill_session');
+                    setResumeModalData({ visible: false, candidate: null, options: [] });
+                    setShowBackfillModal(true); // Show regular backfill modal
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105"
+                  style={{color: themeStyles.accent, backgroundColor: `${themeStyles.accent}20`, border: `1px solid ${themeStyles.accent}`}}
+                >
+                  Start Fresh
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('💾 RESUME: User cancelled');
+                    setResumeModalData({ visible: false, candidate: null, options: [] });
+                  }}
+                  className="px-4 py-3 rounded-lg font-medium transition-all duration-200 hover:opacity-80"
+                  style={{color: themeStyles.textMuted, backgroundColor: themeStyles.tertiaryBg}}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 ACCOUNT SELECTION MODAL */}
+      {showAccountSelection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20000] p-4">
+          <div className="rounded-xl shadow-xl max-w-lg w-full overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <User className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  Select Smartlead Account
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountSelection(false)}
+                  className="transition-colors duration-300 hover:opacity-80"
+                  style={{color: themeStyles.textMuted}}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm mb-4 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                You have multiple Smartlead accounts. Select which account you'd like to backfill from:
+              </p>
+
+              <div className="space-y-3">
+                {apiKeys.accounts.filter(acc => acc.esp.provider === 'smartlead' && acc.esp.key).map((account, index) => (
+                  <button
+                    key={account.account_id || index}
+                    onClick={() => handleAccountSelected(account)}
+                    className="w-full p-4 rounded-lg text-left transition-all hover:opacity-90 border-2"
+                    style={{
+                      backgroundColor: themeStyles.secondaryBg,
+                      borderColor: themeStyles.border,
+                      color: themeStyles.textPrimary
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{backgroundColor: themeStyles.accent}}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                          {account.name || `Account ${account.account_id}`}
+                        </div>
+                        <div className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          ID: {account.account_id}
+                        </div>
+                        {account.esp.key && (
+                          <div className="text-xs mt-1 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                            API Key: ***{account.esp.key.slice(-4)}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="w-4 h-4" style={{color: themeStyles.textMuted}} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAccountSelection(false)}
+                  className="px-4 py-2 rounded-lg text-sm transition-all hover:opacity-80"
+                  style={{color: themeStyles.textPrimary, backgroundColor: themeStyles.tertiaryBg}}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 CAMPAIGN SELECTION MODAL */}
+      {showCampaignSelection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20002] p-4">
+          <div className="rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                  <Database className="w-5 h-5" style={{color: themeStyles.accent}} />
+                  Select Campaigns to Import
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCampaignSelection(false);
+                    setPendingBackfillConfig(null);
+                  }}
+                  className="transition-colors duration-300 hover:opacity-80"
+                  style={{color: themeStyles.textMuted}}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+              {campaignSelectionLoading ? (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center animate-pulse" style={{backgroundColor: `${themeStyles.accent}20`}}>
+                    <Database className="w-6 h-6 animate-spin" style={{color: themeStyles.accent}} />
+                  </div>
+                  <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                    Loading campaigns...
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Selection Summary */}
+                  <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                          {selectedCampaigns.length} of {availableCampaigns.length} campaigns selected
+                        </p>
+                        <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Estimated leads: {selectedCampaigns.reduce((sum, c) => sum + (c.estimatedLeads || 0), 0)}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={selectAllCampaigns}
+                          className="text-xs px-3 py-1 rounded transition-all"
+                          style={{color: themeStyles.accent, backgroundColor: `${themeStyles.accent}20`}}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          onClick={clearAllCampaigns}
+                          className="text-xs px-3 py-1 rounded transition-all"
+                          style={{color: themeStyles.textMuted, backgroundColor: themeStyles.tertiaryBg}}
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Intent Filters */}
+                  <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h3 className="text-sm font-medium mb-3 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      🧠 AI Intent Analysis Levels
+                    </h3>
+                    <div className="flex gap-3">
+                      {[
+                        { id: 'high', label: 'High Intent', description: 'Ready to buy' },
+                        { id: 'medium', label: 'Medium Intent', description: 'Interested/engaged' },
+                        { id: 'low', label: 'Low Intent', description: 'Early stage' }
+                      ].map(filter => (
+                        <label key={filter.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={intentFilters.includes(filter.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setIntentFilters(prev => [...prev, filter.id]);
+                              } else {
+                                setIntentFilters(prev => prev.filter(f => f !== filter.id));
+                              }
+                            }}
+                            className="rounded"
+                            style={{accentColor: themeStyles.accent}}
+                          />
+                          <div>
+                            <span className="text-xs font-medium" style={{color: themeStyles.textPrimary}}>
+                              {filter.label}
+                            </span>
+                            <p className="text-xs" style={{color: themeStyles.textMuted}}>
+                              {filter.description}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Days Selection */}
+                  <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <label className="text-sm font-medium mb-3 block transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      How many days back should we import?
+                      {currentPlan?.name === 'god' && (
+                        <span className="text-xs ml-2 px-2 py-1 rounded font-medium" style={{backgroundColor: isDarkMode ? '#2D4B3A' : '#F0F9F3', color: isDarkMode ? '#84D98A' : '#2D5A34', border: `1px solid ${isDarkMode ? '#4A9960' : '#84D98A'}`}}>
+                          God Mode: Up to {currentPlan.backfillMaxDays} days
+                        </span>
+                      )}
+                    </label>
+                    
+                    {/* Dynamic options based on plan */}
+                    {currentPlan?.name === 'god' ? (
+                      /* God Plan: Custom input with Apply button */
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          max={currentPlan.backfillMaxDays}
+                          value={backfillDays}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 1;
+                            const maxDays = currentPlan.backfillMaxDays || 365;
+                            const newDays = Math.min(Math.max(value, 1), maxDays);
+                            setBackfillDays(newDays);
+                          }}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              // Update campaigns when Enter is pressed
+                              if (pendingBackfillConfig) {
+                                await showCampaignSelectionModal(
+                                  pendingBackfillConfig.apiKey,
+                                  pendingBackfillConfig.accountId,
+                                  pendingBackfillConfig.accountName
+                                );
+                              }
+                            }
+                          }}
+                          placeholder={`Enter days (1-${currentPlan.backfillMaxDays})`}
+                          className="flex-1 px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
+                          style={{
+                            backgroundColor: themeStyles.tertiaryBg,
+                            border: `1px solid ${themeStyles.border}`,
+                            color: themeStyles.textPrimary,
+                            '--tw-ring-color': themeStyles.accent
+                          }}
+                        />
+                        <button
+                          onClick={async () => {
+                            // Update campaigns when Apply is clicked
+                            if (pendingBackfillConfig) {
+                              await showCampaignSelectionModal(
+                                pendingBackfillConfig.apiKey,
+                                pendingBackfillConfig.accountId,
+                                pendingBackfillConfig.accountName
+                              );
+                            }
+                          }}
+                          className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90"
+                          style={{
+                            backgroundColor: themeStyles.accent,
+                            color: isDarkMode ? '#1A1C1A' : '#FFFFFF'
+                          }}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    ) : (
+                      /* Other Plans: Fixed options based on plan */
+                    <select
+                      value={backfillDays}
+                      onChange={async (e) => {
+                        setBackfillDays(parseInt(e.target.value));
+                        
+                        // Update campaigns when days change
+                        if (pendingBackfillConfig) {
+                          await showCampaignSelectionModal(
+                            pendingBackfillConfig.apiKey,
+                            pendingBackfillConfig.accountId,
+                            pendingBackfillConfig.accountName
+                          );
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-lg text-sm transition-all focus:ring-1"
+                      style={{
+                        backgroundColor: themeStyles.tertiaryBg,
+                        border: `1px solid ${themeStyles.border}`,
+                        color: themeStyles.textPrimary,
+                        '--tw-ring-color': themeStyles.accent
+                      }}
+                    >
+                      <option value={15}>Last 15 days</option>
+                      <option value={30}>Last 30 days</option>
+                      <option value={45}>Last 45 days</option>
+                        {/* Enterprise gets 90 days */}
+                        {(currentPlan?.name === 'enterprise' || currentPlan?.backfillMaxDays >= 90) && (
+                          <option value={90}>Last 90 days (3 months)</option>
+                        )}
+                        {/* Agency gets 180 days */}
+                        {(currentPlan?.name === 'agency' || currentPlan?.backfillMaxDays >= 180) && (
+                          <option value={180}>Last 180 days (6 months)</option>
+                        )}
+                    </select>
+                    )}
+                    
+                    {/* Plan limit info */}
+                    <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                      {currentPlan?.name === 'god' 
+                        ? `God Mode: Import up to ${currentPlan.backfillMaxDays} days of data`
+                        : `${currentPlan?.displayName || 'Trial'} plan: Up to ${currentPlan?.backfillMaxDays || 45} days`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Campaign List */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      Available Campaigns (from last {backfillDays} days)
+                    </h3>
+                    
+                    {availableCampaigns.length === 0 ? (
+                      <div className="text-center py-8 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
+                        <p className="text-sm transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          No campaigns found in the selected date range.
+                        </p>
+                      </div>
+                    ) : (
+                      availableCampaigns.map(campaign => (
+                        <div
+                          key={campaign.id}
+                          onClick={() => toggleCampaignSelection(campaign)}
+                          className={`p-4 rounded-lg cursor-pointer transition-all border-2 ${
+                            selectedCampaigns.some(c => c.id === campaign.id) ? 'ring-2' : ''
+                          }`}
+                          style={{
+                            backgroundColor: selectedCampaigns.some(c => c.id === campaign.id) 
+                              ? `${themeStyles.accent}10` 
+                              : themeStyles.secondaryBg,
+                            borderColor: selectedCampaigns.some(c => c.id === campaign.id) 
+                              ? themeStyles.accent 
+                              : themeStyles.border,
+                            ringColor: themeStyles.accent
+                          }}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCampaigns.some(c => c.id === campaign.id)}
+                                  onChange={() => toggleCampaignSelection(campaign)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded"
+                                  style={{accentColor: themeStyles.accent}}
+                                />
+                                <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                  {campaign.name || `Campaign ${campaign.id}`}
+                                </h4>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4 text-xs">
+                                <div>
+                                  <span className="font-medium" style={{color: themeStyles.textMuted}}>Created:</span>
+                                  <span className="ml-1" style={{color: themeStyles.textPrimary}}>
+                                    {new Date(campaign.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="font-medium" style={{color: themeStyles.textMuted}}>Estimated Leads:</span>
+                                  <span className="ml-1" style={{color: themeStyles.textPrimary}}>
+                                    {campaign.estimatedLeads || 'Unknown'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="font-medium" style={{color: themeStyles.textMuted}}>Status:</span>
+                                  <span className="ml-1" style={{color: themeStyles.textPrimary}}>
+                                    {campaign.status || 'Active'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="font-medium" style={{color: themeStyles.textMuted}}>ID:</span>
+                                  <span className="ml-1" style={{color: themeStyles.textPrimary}}>
+                                    {campaign.id}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-6 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowCampaignSelection(false);
+                    setPendingBackfillConfig(null);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                  style={{color: themeStyles.textMuted, backgroundColor: themeStyles.tertiaryBg}}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmCampaignSelection}
+                  disabled={selectedCampaigns.length === 0}
+                  className="px-6 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: selectedCampaigns.length > 0 ? themeStyles.accent : themeStyles.border, 
+                    color: isDarkMode ? '#1A1C1A' : '#FFFFFF'
+                  }}
+                >
+                  Import {selectedCampaigns.length} Campaign{selectedCampaigns.length !== 1 ? 's' : ''}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -7112,7 +9658,7 @@ ${JSON.stringify(parsedConvo)}`;
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
-                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>🚨 URGENT</span>
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>URGENT</span>
                     {activeFilters.urgency?.includes('urgent-response') && (
                       <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
@@ -7133,7 +9679,7 @@ ${JSON.stringify(parsedConvo)}`;
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
-                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>⚡ NEEDS RESPONSE</span>
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>NEEDS RESPONSE</span>
                     {activeFilters.urgency?.includes('needs-response') && (
                       <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
@@ -7154,7 +9700,7 @@ ${JSON.stringify(parsedConvo)}`;
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-2">
                     <Target className="w-4 h-4" style={{color: themeStyles.textPrimary}} />
-                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>📞 NEEDS FOLLOWUP</span>
+                    <span className="font-bold text-sm" style={{color: themeStyles.textPrimary}}>NEEDS FOLLOWUP</span>
                     {activeFilters.urgency?.includes('needs-followup') && (
                       <span className="text-xs px-2 py-1 rounded-full" style={{backgroundColor: `${themeStyles.textPrimary}20`, color: themeStyles.textPrimary}}>ACTIVE</span>
                     )}
@@ -7494,28 +10040,30 @@ ${JSON.stringify(parsedConvo)}`;
             const getResponseBadge = () => {
               if (urgency === 'urgent-response') {
                 return (
-                  <div className="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold mb-3 shadow-lg relative overflow-hidden">
-                    <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />
-                    <span className="relative z-10">🚨 URGENT NEEDS RESPONSE</span>
+                  <div className="text-white px-4 py-2 rounded-lg text-xs font-bold mb-3 shadow-lg" style={{backgroundColor: 'rgb(239, 68, 68)'}}>
+                    <span>URGENT NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-response') {
                 return (
-                  <div className="bg-red-500 text-white px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 transform -skew-x-12 animate-shimmer" />
-                    <span className="relative z-10">⚡ NEEDS RESPONSE</span>
+                  <div className="text-black px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md" style={{backgroundColor: 'rgb(234, 179, 8)'}}>
+                    <span>NEEDS RESPONSE</span>
                   </div>
                 );
               } else if (urgency === 'needs-followup') {
                 return (
-                  <div className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md relative overflow-hidden">
-                    <div className="absolute inset-0 bg-white opacity-10 animate-pulse" />
-                    <span className="relative z-10">📞 NEEDS FOLLOWUP</span>
+                  <div className="text-white px-4 py-2 rounded-lg text-xs font-medium mb-3 shadow-md" style={{backgroundColor: 'rgb(34, 197, 94)'}}>
+                    <span>NEEDS FOLLOWUP</span>
                   </div>
                 );
               }
               return null;
             };
+            
+            
+
+                          
+
             
             return (
               <div
@@ -7526,12 +10074,39 @@ ${JSON.stringify(parsedConvo)}`;
                   setAttachedFiles([]);
                   setScheduledTime(null);
                   setShowScheduler(false);
+                  
+                  // Mark lead as opened if not already opened
+                  if (lead.opened === false) {
+                    supabase
+                      .from('retention_harbor')
+                      .update({ opened: true })
+                      .eq('id', lead.id)
+                      .then(({ error }) => {
+                        if (!error) {
+                          // Update local state to remove blue border immediately
+                          setLeads(prevLeads => 
+                            prevLeads.map(l => 
+                              l.id === lead.id ? { ...l, opened: true } : l
+                            )
+                          );
+                          console.log('✅ Marked lead as opened:', lead.lead_email);
+                        } else {
+                          console.error('❌ Failed to mark lead as opened:', error);
+                        }
+                      });
+                  }
                 }}
                 className={`p-5 cursor-pointer transition-all duration-300 ease-out relative m-2 rounded-lg group`}
                 style={{
-                  backgroundColor: selectedLead?.id === lead.id ? `${themeStyles.accent}20` : themeStyles.tertiaryBg,
-                  border: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
-                  borderLeft: urgency !== 'none' ? `4px solid ${themeStyles.accent}` : `1px solid ${themeStyles.border}`,
+                  backgroundColor: selectedLead?.id === lead.id 
+                    ? `${themeStyles.accent}20` 
+                    : lead.opened === false 
+                      ? `${themeStyles.accent}10` // Subtle accent tint for unopened leads
+                      : themeStyles.tertiaryBg,
+                  borderTop: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
+                  borderRight: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
+                  borderBottom: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
+                  borderLeft: lead.opened === false ? `6px solid ${themeStyles.accent}` : selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`, // Accent color for unopened, gray for opened
                   boxShadow: selectedLead?.id === lead.id ? `0 0 30px ${themeStyles.accent}30` : 'none',
                   animationDelay: `${index * 0.1}s`,
                   backdropFilter: 'blur(5px)'
@@ -7548,7 +10123,7 @@ ${JSON.stringify(parsedConvo)}`;
                   <div className="flex justify-between items-start mb-2">
                     <h3 className={`transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'} flex items-center gap-2`}
                         style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
-                      <span>{lead.first_name} {lead.last_name}</span>
+                                                  <span>{getDisplayName(lead)}</span>
                       {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
                       {drafts[lead.id] && (
                         <span 
@@ -7584,7 +10159,7 @@ ${JSON.stringify(parsedConvo)}`;
                   <div className="flex flex-wrap gap-2 mb-3">
                     <div className="relative category-dropdown" style={{zIndex: 10000}}>
                       {(() => {
-                        const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS[0];
+                        const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS.find(opt => opt.value === 8);
                         const isDropdownOpen = categoryDropdowns.has(lead.id);
                         
                         return (
@@ -7671,7 +10246,7 @@ ${JSON.stringify(parsedConvo)}`;
               console.error('Error rendering lead:', lead.first_name, error);
               return (
                 <div key={lead.id || index} className="p-4 m-2 bg-red-500/20 text-white rounded">
-                  Error rendering {lead.first_name || 'Unknown'}: {error.message}
+                  Error rendering {getDisplayName(lead)}: {error.message}
                 </div>
               );
             }
@@ -7689,7 +10264,7 @@ ${JSON.stringify(parsedConvo)}`;
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-3xl font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                    {selectedLead.first_name} {selectedLead.last_name}
+                    {getDisplayName(selectedLead)}
                   </h2>
                   <p className="mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{selectedLead.email}</p>
                   {selectedLead.phone ? (
@@ -8270,13 +10845,13 @@ ${JSON.stringify(parsedConvo)}`;
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
                                   <div className="flex-shrink-0">
                                     {attachment.type.startsWith('image/') ? (
-                                      <span className="text-lg">🖼️</span>
+                                      <span className="text-lg">◯</span>
                                     ) : attachment.type.includes('pdf') ? (
-                                      <span className="text-lg">📄</span>
+                                      <span className="text-lg">□</span>
                                     ) : attachment.type.includes('doc') ? (
-                                      <span className="text-lg">📝</span>
+                                      <span className="text-lg">▫</span>
                                     ) : (
-                                      <span className="text-lg">📎</span>
+                                      <span className="text-lg">▪</span>
                                     )}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -8574,7 +11149,7 @@ Keyboard shortcuts:
           <div className="rounded-lg p-6 max-w-md w-mx mx-4 shadow-xl" style={{backgroundColor: '#1A1C1A', border: '1px solid white'}}>
             <h3 className="text-lg font-semibold text-white mb-2">Delete Lead</h3>
             <p className="text-gray-300 mb-6">
-              Are you sure you want to delete <strong className="text-white">{leadToDelete.first_name} {leadToDelete.last_name}</strong>? 
+                              Are you sure you want to delete <strong className="text-white">{getDisplayName(leadToDelete)}</strong>? 
               This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
@@ -8686,386 +11261,489 @@ Keyboard shortcuts:
         {/* Main Content - Navvii AI Settings */}
         {activeTab === 'navvii-ai' && (
           <div className="flex-1 p-8 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
-            <div className="max-w-7xl mx-auto">
-              <div className="w-full flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', border: `1px solid ${themeStyles.border}`}}>
-                <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
+            <div className="max-w-7xl mx-auto space-y-8">
+              {/* Header Section */}
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <div className="p-3 rounded-xl" style={{backgroundColor: `${themeStyles.accent}15`, color: themeStyles.accent}}>
+                    <Bot className="w-8 h-8" />
+                  </div>
+                  <h1 className="text-4xl font-bold" style={{color: themeStyles.textPrimary}}>
                     Navvii AI Settings
-                  </h2>
-                  <p className="text-sm mt-1" style={{color: themeStyles.textSecondary}}>
-                    Configure your business information for personalized AI-generated drafts
-                  </p>
+                  </h1>
                 </div>
+                <p className="text-lg max-w-3xl mx-auto" style={{color: themeStyles.textSecondary}}>
+                  Configure your business information to generate personalized, high-converting AI drafts that represent your brand perfectly.
+                </p>
+              </div>
+
+              {/* Save Button - Fixed Top Right */}
+              <div className="flex justify-end">
                 <button
                   onClick={saveNavviiSettings}
                   disabled={isSavingNavviiSettings}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:scale-105"
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:shadow-xl transform hover:scale-105 active:scale-95"
                   style={{
                     backgroundColor: themeStyles.accent,
-                    color: 'white'
+                    color: isDarkMode ? '#1A1C1A' : '#FFFFFF',
+                    opacity: isSavingNavviiSettings ? 0.7 : 1
                   }}
                 >
                   {isSavingNavviiSettings ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Saving Changes...</span>
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
-                      Save Settings
+                      <Save className="w-5 h-5" />
+                      <span>Save Settings</span>
                     </>
                   )}
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Company Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
-                    Company Information
-                  </h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Company Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={navviiSettings.company_name}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, company_name: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="e.g., Your Company Name"
-                    />
+              {/* Company Information Card */}
+              <div className="rounded-2xl shadow-xl transition-all duration-300 hover:shadow-2xl" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="p-8">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="p-3 rounded-xl" style={{backgroundColor: `${themeStyles.accent}15`, color: themeStyles.accent}}>
+                      <Settings className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
+                        Company Information
+                      </h2>
+                      <p className="text-sm" style={{color: themeStyles.textSecondary}}>
+                        Tell us about your business to personalize AI responses
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Industry
-                    </label>
-                    <input
-                      type="text"
-                      value={navviiSettings.industry}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, industry: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="e.g., Technology, Healthcare, Real Estate, Consulting"
-                    />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Company Name */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Settings className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Company Name <span style={{color: '#ef4444'}}>*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={navviiSettings.company_name}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, company_name: e.target.value}))}
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                          placeholder="e.g., InnovateTech Solutions"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Industry */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <BarChart3 className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Industry
+                      </label>
+                      <input
+                        type="text"
+                        value={navviiSettings.industry}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, industry: e.target.value}))}
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="e.g., Technology, Healthcare, Real Estate"
+                      />
+                    </div>
+
+                    {/* Services Offered */}
+                    <div className="lg:col-span-2 space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Zap className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Services Offered
+                      </label>
+                      <textarea
+                        value={navviiSettings.services_offered}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, services_offered: e.target.value}))}
+                        rows="4"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="Describe your main services and offerings in detail. What solutions do you provide to clients?"
+                      />
+                    </div>
+
+                    {/* Value Proposition */}
+                    <div className="lg:col-span-2 space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Target className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Value Proposition
+                      </label>
+                      <textarea
+                        value={navviiSettings.value_proposition}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, value_proposition: e.target.value}))}
+                        rows="4"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="What makes your company unique? What key benefits and competitive advantages do you provide to clients?"
+                      />
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Services Offered
-                    </label>
-                    <textarea
-                      value={navviiSettings.services_offered}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, services_offered: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Describe your main services and offerings..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Value Proposition
-                    </label>
-                    <textarea
-                      value={navviiSettings.value_proposition}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, value_proposition: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="What makes your company unique? Key benefits you provide..."
-                    />
-                  </div>
-                </div>
-
-                {/* Contact & Style */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
-                    Contact & Style
-                  </h3>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Sender Name
-                    </label>
-                    <input
-                      type="text"
-                      value={navviiSettings.sender_name}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, sender_name: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="e.g., Connor"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Sender Title
-                    </label>
-                    <input
-                      type="text"
-                      value={navviiSettings.sender_title}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, sender_title: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="e.g., CEO, Sales Manager, Account Executive, Founder"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Tone of Voice
-                    </label>
-                    <select
-                      value={navviiSettings.tone_of_voice}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, tone_of_voice: e.target.value}))}
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                    >
-                      <option value="professional">Professional</option>
-                      <option value="friendly">Friendly</option>
-                      <option value="casual">Casual</option>
-                      <option value="authoritative">Authoritative</option>
-                      <option value="consultative">Consultative</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Writing Style Instructions
-                    </label>
-                    <textarea
-                      value={navviiSettings.writing_style}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, writing_style: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Specific writing style preferences, sentence structure, etc..."
-                    />
-                  </div>
-
-                                     <div>
-                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                       Company Website
-                     </label>
-                     <input
-                       type="url"
-                       value={navviiSettings.company_website}
-                       onChange={(e) => setNavviiSettings(prev => ({...prev, company_website: e.target.value}))}
-                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                       style={{
-                         backgroundColor: themeStyles.inputBg,
-                         borderColor: themeStyles.border,
-                         color: '#000000'
-                       }}
-                       placeholder="https://your-website.com"
-                     />
-                   </div>
-
-                   <div>
-                     <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                       Phone Number
-                     </label>
-                     <input
-                       type="tel"
-                       value={navviiSettings.phone_number}
-                       onChange={(e) => setNavviiSettings(prev => ({...prev, phone_number: e.target.value}))}
-                       className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                       style={{
-                         backgroundColor: themeStyles.inputBg,
-                         borderColor: themeStyles.border,
-                         color: '#000000'
-                       }}
-                       placeholder="e.g., +1 (555) 123-4567"
-                     />
-                   </div>
                 </div>
               </div>
 
-              {/* AI Prompting Section */}
-              <div className="mt-8 space-y-4">
-                <h3 className="text-lg font-semibold mb-4" style={{color: themeStyles.textPrimary}}>
-                  AI Prompting & Intelligence
-                </h3>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Custom Prompt Instructions
-                    </label>
-                    <textarea
-                      value={navviiSettings.custom_prompt_instructions}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, custom_prompt_instructions: e.target.value}))}
-                      rows="4"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Additional instructions for AI to follow when generating drafts..."
-                    />
+              {/* Contact & Communication Style Card */}
+              <div className="rounded-2xl shadow-xl transition-all duration-300 hover:shadow-2xl" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="p-8">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="p-3 rounded-xl" style={{backgroundColor: `${themeStyles.accent}15`, color: themeStyles.accent}}>
+                      <Mail className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
+                        Contact & Communication Style
+                      </h2>
+                      <p className="text-sm" style={{color: themeStyles.textSecondary}}>
+                        Configure how AI should represent you in communications
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Key Selling Points
-                    </label>
-                    <textarea
-                      value={navviiSettings.key_selling_points}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, key_selling_points: e.target.value}))}
-                      rows="4"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Main benefits, features, and selling points to emphasize..."
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Sender Name */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <User className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Sender Name
+                      </label>
+                      <input
+                        type="text"
+                        value={navviiSettings.sender_name}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, sender_name: e.target.value}))}
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="e.g., Connor"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Target Audience
-                    </label>
-                    <textarea
-                      value={navviiSettings.target_audience}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, target_audience: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Description of your ideal customers and target market..."
-                    />
-                  </div>
+                    {/* Sender Title */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Users className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Sender Title
+                      </label>
+                      <input
+                        type="text"
+                        value={navviiSettings.sender_title}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, sender_title: e.target.value}))}
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="e.g., CEO, Sales Manager, Account Executive"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Common Pain Points
-                    </label>
-                    <textarea
-                      value={navviiSettings.pain_points}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, pain_points: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Customer problems and challenges you solve..."
-                    />
-                  </div>
+                    {/* Company Website */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <ExternalLink className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Company Website
+                      </label>
+                      <input
+                        type="url"
+                        value={navviiSettings.company_website}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, company_website: e.target.value}))}
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="https://your-website.com"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                      Common Objections & Responses
-                    </label>
-                    <textarea
-                      value={navviiSettings.common_objections}
-                      onChange={(e) => setNavviiSettings(prev => ({...prev, common_objections: e.target.value}))}
-                      rows="3"
-                      className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      style={{
-                        backgroundColor: themeStyles.inputBg,
-                        borderColor: themeStyles.border,
-                        color: '#000000'
-                      }}
-                      placeholder="Common objections from prospects and how you typically address them..."
-                    />
+                    {/* Phone Number */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Phone className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={navviiSettings.phone_number}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, phone_number: e.target.value}))}
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="e.g., +1 (555) 123-4567"
+                      />
+                    </div>
+
+                    {/* Tone of Voice */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <MessageSquare className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Tone of Voice
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={navviiSettings.tone_of_voice}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, tone_of_voice: e.target.value}))}
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md appearance-none"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                        >
+                          <option value="professional">Professional</option>
+                          <option value="friendly">Friendly</option>
+                          <option value="casual">Casual</option>
+                          <option value="authoritative">Authoritative</option>
+                          <option value="consultative">Consultative</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 pointer-events-none" style={{color: themeStyles.textSecondary}} />
+                      </div>
+                    </div>
+
+                    {/* Writing Style Instructions */}
+                    <div className="lg:col-span-2 space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <Edit3 className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Writing Style Instructions
+                      </label>
+                      <textarea
+                        value={navviiSettings.writing_style}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, writing_style: e.target.value}))}
+                        rows="4"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="Specific writing style preferences, sentence structure, preferred phrases, and communication patterns you'd like the AI to use..."
+                      />
+                    </div>
                   </div>
                 </div>
-
-                                 <div>
-                   <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                     Success Stories & Examples
-                   </label>
-                   <textarea
-                     value={navviiSettings.success_stories}
-                     onChange={(e) => setNavviiSettings(prev => ({...prev, success_stories: e.target.value}))}
-                     rows="4"
-                     className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                     style={{
-                       backgroundColor: themeStyles.inputBg,
-                       borderColor: themeStyles.border,
-                       color: '#000000'
-                     }}
-                     placeholder="Brief success stories, case studies, or results you can reference..."
-                   />
-                 </div>
-
-                 <div>
-                   <label className="block text-sm font-medium mb-2" style={{color: themeStyles.textPrimary}}>
-                     Draft Template
-                   </label>
-                   <textarea
-                     value={navviiSettings.draft_template}
-                     onChange={(e) => setNavviiSettings(prev => ({...prev, draft_template: e.target.value}))}
-                     rows="4"
-                     className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                     style={{
-                       backgroundColor: themeStyles.inputBg,
-                       borderColor: themeStyles.border,
-                       color: '#000000'
-                     }}
-                     placeholder="Optional email template structure or format preferences..."
-                   />
-                 </div>
               </div>
 
+              {/* AI Intelligence & Prompting Card */}
+              <div className="rounded-2xl shadow-xl transition-all duration-300 hover:shadow-2xl" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div className="p-8">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="p-3 rounded-xl" style={{backgroundColor: `${themeStyles.accent}15`, color: themeStyles.accent}}>
+                      <Brain className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold" style={{color: themeStyles.textPrimary}}>
+                        AI Intelligence & Strategy
+                      </h2>
+                      <p className="text-sm" style={{color: themeStyles.textSecondary}}>
+                        Advanced settings to fine-tune AI behavior and sales strategy
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Custom Prompt Instructions */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                          <Key className="w-4 h-4" style={{color: themeStyles.accent}} />
+                          Custom Prompt Instructions
+                        </label>
+                        <textarea
+                          value={navviiSettings.custom_prompt_instructions}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, custom_prompt_instructions: e.target.value}))}
+                          rows="5"
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                          placeholder="Additional specific instructions for AI to follow when generating drafts. Include any unique requirements, constraints, or special considerations..."
+                        />
+                      </div>
+
+                      {/* Key Selling Points */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                          <TrendingUp className="w-4 h-4" style={{color: themeStyles.accent}} />
+                          Key Selling Points
+                        </label>
+                        <textarea
+                          value={navviiSettings.key_selling_points}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, key_selling_points: e.target.value}))}
+                          rows="5"
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                          placeholder="Your strongest selling points, main benefits, unique features, and competitive advantages. What makes prospects choose you over competitors?"
+                        />
+                      </div>
+
+                      {/* Target Audience */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                          <Users className="w-4 h-4" style={{color: themeStyles.accent}} />
+                          Target Audience
+                        </label>
+                        <textarea
+                          value={navviiSettings.target_audience}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, target_audience: e.target.value}))}
+                          rows="4"
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                          placeholder="Detailed description of your ideal customers, target market, demographics, company sizes, industries, and decision-maker profiles..."
+                        />
+                      </div>
+
+                      {/* Common Pain Points */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                          <AlertCircle className="w-4 h-4" style={{color: themeStyles.accent}} />
+                          Common Pain Points
+                        </label>
+                        <textarea
+                          value={navviiSettings.pain_points}
+                          onChange={(e) => setNavviiSettings(prev => ({...prev, pain_points: e.target.value}))}
+                          rows="4"
+                          className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                          style={{
+                            backgroundColor: themeStyles.inputBg,
+                            borderColor: themeStyles.border,
+                            color: '#000000',
+                            focusRingColor: `${themeStyles.accent}25`
+                          }}
+                          placeholder="Common problems, challenges, and frustrations your prospects face that your solution addresses..."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Common Objections & Responses - Full Width */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <MessageSquare className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Common Objections & Responses
+                      </label>
+                      <textarea
+                        value={navviiSettings.common_objections}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, common_objections: e.target.value}))}
+                        rows="4"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="Common objections from prospects (price, timing, competition, etc.) and how you typically address them effectively..."
+                      />
+                    </div>
+
+                    {/* Success Stories & Examples - Full Width */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <CheckCircle className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Success Stories & Examples
+                      </label>
+                      <textarea
+                        value={navviiSettings.success_stories}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, success_stories: e.target.value}))}
+                        rows="5"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="Brief success stories, case studies, specific results, metrics, and client testimonials that can be referenced in communications..."
+                      />
+                    </div>
+
+                    {/* Draft Template - Full Width */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-semibold" style={{color: themeStyles.textPrimary}}>
+                        <FileText className="w-4 h-4" style={{color: themeStyles.accent}} />
+                        Draft Template (Optional)
+                      </label>
+                      <textarea
+                        value={navviiSettings.draft_template}
+                        onChange={(e) => setNavviiSettings(prev => ({...prev, draft_template: e.target.value}))}
+                        rows="5"
+                        className="w-full px-4 py-4 rounded-xl border-2 focus:ring-4 focus:border-transparent transition-all duration-300 shadow-sm hover:shadow-md resize-none"
+                        style={{
+                          backgroundColor: themeStyles.inputBg,
+                          borderColor: themeStyles.border,
+                          color: '#000000',
+                          focusRingColor: `${themeStyles.accent}25`
+                        }}
+                        placeholder="Optional email template structure or format preferences. Define the structure, flow, and format you prefer for AI-generated drafts..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loading State */}
               {isLoadingNavviiSettings && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin" style={{color: themeStyles.accent}} />
-                  <span className="ml-2" style={{color: themeStyles.textSecondary}}>Loading settings...</span>
+                <div className="flex flex-col items-center justify-center py-16 space-y-4 rounded-2xl" style={{backgroundColor: themeStyles.secondaryBg}}>
+                  <Loader2 className="w-8 h-8 animate-spin" style={{color: themeStyles.accent}} />
+                  <p className="text-lg font-medium" style={{color: themeStyles.textPrimary}}>Loading your settings...</p>
+                  <p className="text-sm" style={{color: themeStyles.textSecondary}}>Please wait while we retrieve your Navvii AI configuration</p>
                 </div>
-                             )}
-             </div>
-           </div>
-             </div>
-        </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Main Content - Templates */}
@@ -9115,6 +11793,25 @@ Keyboard shortcuts:
           onClose={() => {
             setShowRecentDropdown(false);
             setRecentDropdownPosition(null);
+          }}
+        />
+      )}
+
+      {/* Trial Expired Modal */}
+      {trialStatus && (
+        <TrialExpiredModal
+          isOpen={showTrialModal && !demoMode}
+          trialData={{
+            daysRemaining: trialStatus.days_remaining || 0,
+            trialEndsAt: trialStatus.trial_ends_at,
+            isExpired: trialStatus.status === 'trial_expired'
+          }}
+          onUpgrade={handleTrialUpgrade}
+          onClose={() => {
+            // Only allow closing if trial is not expired
+            if (trialStatus.status !== 'trial_expired') {
+              setShowTrialModal(false);
+            }
           }}
         />
       )}
