@@ -184,22 +184,50 @@ serve(async (req) => {
     
     console.log('💾 Inserting/updating lead in database...')
     
-    // Try to update existing lead first, then insert if not found
+    // Try to update existing lead first, then insert if not found (FIXED: per brand)
     const { data: existingLead } = await supabase
       .from('retention_harbor')
       .select('id')
+      .eq('brand_id', brandId)
       .eq('lead_email', webhookData.sl_lead_email)
       .single()
     
+    // CRITICAL: Check trial expiration before processing lead
+    console.log('🚦 Checking trial status for brand:', brandId);
+    
+    const { data: trialCheck, error: trialError } = await supabase.rpc('is_trial_expired', { 
+      brand_id_param: brandId 
+    });
+    
+    if (trialError) {
+      console.error('❌ Failed to check trial status:', trialError);
+      // Continue processing - don't block on trial check errors
+    } else if (trialCheck) {
+      console.log('❌ TRIAL BLOCKED: Brand has expired trial, skipping lead processing');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          message: 'Trial expired - lead processing blocked',
+          brandId: brandId
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
+    console.log('✅ Trial check passed, processing lead...');
+
     let insertedLead, insertError
     
     if (existingLead) {
-      // Update existing lead
+      // Update existing lead (FIXED: per brand)
       console.log('📝 Updating existing lead:', existingLead.id)
       const { data, error } = await supabase
         .from('retention_harbor')
         .update(leadInsertData)
-        .eq('lead_email', webhookData.sl_lead_email)
+        .eq('id', existingLead.id)
         .select()
         .single()
       insertedLead = data

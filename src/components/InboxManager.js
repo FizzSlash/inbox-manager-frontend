@@ -5088,7 +5088,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
             business_linkedin_url: enrichedData["Business LinkedIn"] || null,
             last_name: enrichedData["Last Name"] || lead.last_name || ''
           })
-          .eq('lead_email', lead.email);
+          .eq('id', lead.id);
 
         if (updateError) {
           console.error('❌ Supabase update error:', updateError);
@@ -6545,18 +6545,20 @@ ${JSON.stringify(parsedConvo)}`;
             // Process each lead in the batch (check duplicates + insert/update)
             for (const leadRecord of batch) {
               try {
-                // Check if lead already exists
+                // Check if lead already exists (FIXED: per brand_id + lead_email)
                 const { data: existingLead } = await supabase
                   .from('retention_harbor')
                   .select('id')
+                  .eq('brand_id', leadRecord.brand_id)
                   .eq('lead_email', leadRecord.lead_email)
                   .single();
                 
                 if (existingLead) {
-                  // Update existing lead
+                  // Update existing lead (FIXED: per brand_id + lead_email) 
                   const { error: updateError } = await supabase
                     .from('retention_harbor')
                     .update(leadRecord)
+                    .eq('brand_id', leadRecord.brand_id)
                     .eq('lead_email', leadRecord.lead_email);
                     
                   if (updateError) {
