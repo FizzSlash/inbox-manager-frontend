@@ -24,6 +24,18 @@ export const leadsService = {
       throw new Error('User not authenticated');
     }
 
+    // CRITICAL: Check trial expiration before allowing lead insertion
+    const brandId = user.user_metadata?.brand_id;
+    if (brandId) {
+      const { data: trialCheck } = await supabase.rpc('is_trial_expired', { 
+        brand_id_param: brandId 
+      });
+      
+      if (trialCheck) {
+        throw new Error('Trial expired! Please upgrade to continue adding leads.');
+      }
+    }
+
     const leadWithBrand = {
       ...leadData,
       brand_id: user.id,

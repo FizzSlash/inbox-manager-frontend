@@ -1,22 +1,24 @@
 import React from 'react';
 import { AlertCircle, Clock, CreditCard, X, Check, Star, Crown, Loader2 } from 'lucide-react';
 
-const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUpgrade, onClose }) => {
+const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUpgrade, onClose, mode = 'trial-expiration' }) => {
   if (!isOpen) return null;
 
-  const { daysRemaining, trialEndsAt, isExpired } = trialData;
+  const { daysRemaining, trialEndsAt, isExpired } = trialData || {};
+  const isUpgradeMode = mode === 'upgrade';
+  const isTrialMode = mode === 'trial-expiration';
 
   // Define pricing tiers
   const pricingTiers = [
     {
-      name: 'Starter',
+      name: 'Core',
       price: 297,
-      leads: 300,
+      leads: 500,
       icon: <Check className="w-5 h-5" />,
       color: 'blue',
-      planKey: 'starter',
+      planKey: 'professional',  // Maps to database 'professional'
       features: [
-        '300 leads per month',
+        '500 leads per month',
         'AI lead categorization',
         'Email draft generation',
         'Basic CRM integration',
@@ -24,15 +26,15 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
       ]
     },
     {
-      name: 'Professional',
-      price: 497,
-      leads: 1000,
+      name: 'Scale',
+      price: 597,
+      leads: 2000,
       icon: <Star className="w-5 h-5" />,
       color: 'purple',
-      planKey: 'professional',
+      planKey: 'enterprise',  // Maps to database 'enterprise'
       popular: true,
       features: [
-        '1,000 leads per month',
+        '2,000 leads per month',
         'Advanced AI categorization',
         'Priority email generation',
         'Full CRM integration',
@@ -41,12 +43,12 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
       ]
     },
     {
-      name: 'Enterprise',
+      name: 'Agency+',
       price: 997,
       leads: 'Unlimited',
       icon: <Crown className="w-5 h-5" />,
       color: 'gold',
-      planKey: 'god',
+      planKey: 'agency',  // Maps to database 'agency'
       features: [
         'Unlimited leads',
         'Custom AI models',
@@ -63,10 +65,22 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
     if (!currentPlan) return null;
     const maxLeads = currentPlan.maxLeadsPerMonth;
     
-    if (maxLeads <= 50) return 'trial';
-    if (maxLeads <= 300) return 'starter';
-    if (maxLeads <= 1000) return 'professional';
-    return 'god';
+    if (maxLeads <= 10000 && currentPlan.subscriptionPlan === 'trial') return 'trial';
+    if (maxLeads <= 500) return 'professional';
+    if (maxLeads <= 2000) return 'enterprise';
+    return 'agency';
+  };
+
+  // Get current plan display name
+  const getCurrentPlanName = () => {
+    const planKey = getCurrentPlan();
+    switch(planKey) {
+      case 'trial': return 'Free Trial';
+      case 'professional': return 'Core';
+      case 'enterprise': return 'Scale';
+      case 'agency': return 'Agency+';
+      default: return 'Current Plan';
+    }
   };
 
   const currentPlanKey = getCurrentPlan();
@@ -99,9 +113,13 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-red-500 to-orange-500 p-6 text-white relative">
-          {/* Only show X button if trial is not expired */}
-          {!isExpired && (
+        <div className={`p-6 text-white relative ${
+          isUpgradeMode 
+            ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
+            : 'bg-gradient-to-r from-red-500 to-orange-500'
+        }`}>
+          {/* Show X button for upgrade mode or non-expired trials */}
+          {(isUpgradeMode || !isExpired) && (
             <button
               onClick={onClose}
               className="absolute top-4 right-4 text-white hover:text-gray-200 transition-colors"
@@ -111,13 +129,22 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
           )}
           
           <div className="flex items-center gap-3 mb-2">
-            <AlertCircle className="w-8 h-8" />
+            {isUpgradeMode ? (
+              <CreditCard className="w-8 h-8" />
+            ) : (
+              <AlertCircle className="w-8 h-8" />
+            )}
             <h2 className="text-2xl font-bold">
-              {isExpired ? 'Trial Expired - Choose Your Plan' : 'Upgrade Your Trial'}
+              {isUpgradeMode ? 'Upgrade Your Plan' : 
+               isExpired ? 'Trial Expired - Choose Your Plan' : 'Upgrade Your Trial'}
             </h2>
           </div>
           
-          {isExpired ? (
+          {isUpgradeMode ? (
+            <p className="text-sm opacity-90">
+              Ready to unlock more leads and advanced features? Choose the plan that fits your needs.
+            </p>
+          ) : isExpired ? (
             <p className="text-sm opacity-90">
               Your 7-day free trial has ended. Choose a plan to continue accessing your leads and AI features.
             </p>
@@ -133,18 +160,30 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
         <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Current Status</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">
+                {isUpgradeMode ? 'Current Plan' : 'Current Status'}
+              </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {currentPlanKey === 'trial' ? 'Free Trial' : 'Active Plan'} • {currentPlan?.maxLeadsPerMonth || 50} leads/month
+                {isUpgradeMode ? (
+                  `${getCurrentPlanName()} • ${currentPlan?.maxLeadsPerMonth || 50} leads/month`
+                ) : (
+                  `${currentPlanKey === 'trial' ? 'Free Trial' : 'Active Plan'} • ${currentPlan?.maxLeadsPerMonth || 50} leads/month`
+                )}
               </p>
             </div>
             <div className="text-right">
-              <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' : 
-                           'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-              }`}>
-                {isExpired ? 'Expired' : `${daysRemaining} days left`}
-              </div>
+              {isUpgradeMode ? (
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                  Active
+                </div>
+              ) : (
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                  isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' : 
+                             'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+                }`}>
+                  {isExpired ? 'Expired' : `${daysRemaining} days left`}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -155,8 +194,19 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
             Choose Your Plan
           </h3>
           
-          <div className="grid md:grid-cols-3 gap-6">
-            {pricingTiers.map((tier) => {
+          <div className={`grid gap-6 ${
+            isUpgradeMode ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-3'
+          }`}>
+            {pricingTiers.filter(tier => {
+              // In upgrade mode, only show plans higher than current
+              if (isUpgradeMode) {
+                const currentPlanOrder = ['trial', 'professional', 'enterprise', 'agency'].indexOf(currentPlanKey);
+                const tierPlanOrder = ['trial', 'professional', 'enterprise', 'agency'].indexOf(tier.planKey);
+                return tierPlanOrder > currentPlanOrder;
+              }
+              // In trial mode, show all plans
+              return true;
+            }).map((tier) => {
               const isCurrentPlan = currentPlanKey === tier.planKey;
               const colors = getColorClasses(tier.color);
               

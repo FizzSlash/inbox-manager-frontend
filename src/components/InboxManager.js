@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import CRMManager from './CRMManager';
 import TemplateManager from './TemplateManager';
 import TrialExpiredModal from './TrialExpiredModal';
+import TrialBanner from './TrialBanner';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -669,6 +670,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // ===== TRIAL MANAGEMENT =====
   const [trialStatus, setTrialStatus] = useState(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
+  const [trialModalMode, setTrialModalMode] = useState('trial-expiration');
   const [upgradingPlan, setUpgradingPlan] = useState(null); // Track which plan is being upgraded to
 
   // Debug: Track apiKeys state changes
@@ -1930,16 +1932,36 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       if (data) {
         setTrialStatus(data);
         
-        // Show modal based on explicit trial_status column
-        if (data.trial_status === 'expired' || (data.trial_status === 'active' && data.days_remaining <= 1)) {
+        // FIXED: Only show trial modal for users actually on trial plans using date-based logic
+        const isOnTrialPlan = data.subscription_plan === 'trial';
+        
+        let isTrialExpiredOrExpiring = false;
+        if (isOnTrialPlan && data.trial_ends_at) {
+          const expiryDate = new Date(data.trial_ends_at);
+          const now = new Date();
+          const msUntilExpiry = expiryDate.getTime() - now.getTime();
+          const daysUntilExpiry = Math.ceil(msUntilExpiry / (1000 * 60 * 60 * 24));
+          
+          // Show modal if expired or expiring within 1 day
+          isTrialExpiredOrExpiring = daysUntilExpiry <= 1;
+        }
+        
+        if (isOnTrialPlan && isTrialExpiredOrExpiring) {
+          setTrialModalMode('trial-expiration');
           setShowTrialModal(true);
+        } else if (!isOnTrialPlan) {
+          // If user is on paid plan, don't show trial modal automatically
+          // They can still manually trigger it from settings
+          setShowTrialModal(false);
         }
         
         console.log('📅 Trial Status:', {
+          subscriptionPlan: data.subscription_plan,
           trialStatus: data.trial_status,
           status: data.status,
           daysRemaining: data.days_remaining,
-          expiresAt: data.trial_ends_at
+          expiresAt: data.trial_ends_at,
+          shouldShowModal: isOnTrialPlan && isTrialExpiredOrExpiring
         });
       }
     } catch (error) {
@@ -1948,8 +1970,22 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   };
 
   // Handle trial expiration - blocks access to main features
+  // FIXED: Use date-based logic for consistency with database function
   const isTrialBlocked = () => {
-    return trialStatus && trialStatus.trial_status === 'expired';
+    if (!trialStatus) return false;
+    
+    // Only trial plans can be blocked
+    if (trialStatus.subscription_plan !== 'trial') return false;
+    
+    // Check if trial has actually expired based on date (source of truth)
+    if (trialStatus.trial_ends_at) {
+      const expiryDate = new Date(trialStatus.trial_ends_at);
+      const now = new Date();
+      return expiryDate < now;
+    }
+    
+    // Fallback to status column if no date available
+    return trialStatus.trial_status === 'expired';
   };
 
   // Handle upgrade redirect - NEVER close modal for expired trials
@@ -1989,6 +2025,21 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
       if (error) throw error;
 
+      // Handle direct subscription updates (for existing customers)
+      if (data?.subscriptionUpdated) {
+        console.log('✅ Subscription updated directly:', data.message);
+        showToast(data.message || 'Plan upgraded successfully!', 'success');
+        
+        // Refresh plan data to show updated subscription
+        await loadPlanData();
+        await checkTrialStatus();
+        
+        // Close the modal since upgrade is complete
+        setShowTrialModal(false);
+        return;
+      }
+
+      // Handle new checkout sessions (for trial/new customers)
       if (data?.checkoutUrl) {
         // Redirect to Stripe Checkout using the proper URL
         window.location.href = data.checkoutUrl;
@@ -2126,10 +2177,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         return;
       }
       
-      // Fetch all leads from retention_harbor  
+      // Fetch leads for current brand only (CRITICAL FIX)
+      const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+      if (!currentBrandId) {
+        throw new Error('No brand ID found - user may need to complete signup');
+      }
+      
       const { data, error } = await supabase
         .from('retention_harbor')
-        .select('*');
+        .select('*')
+        .eq('brand_id', currentBrandId)
+        .order('created_at', { ascending: false })
+        .limit(1000); // Safety limit - prevents massive queries
       if (error) throw error;
       
 
@@ -6111,8 +6170,19 @@ ${JSON.stringify(parsedConvo)}`;
         account_id: accountId
       });
       
-      // Check lead limits before starting backfill
-      console.log('🚦 Checking lead limits before backfill...');
+      // CRITICAL: Check trial expiration before ANY lead processing
+      console.log('🚦 Checking trial status before backfill...');
+      
+      if (isTrialBlocked()) {
+        console.log('❌ TRIAL BLOCKED: User has expired trial');
+        showToast('Your trial has expired! Please upgrade to continue importing leads.', 'error');
+        setTrialModalMode('trial-expiration');
+        setShowTrialModal(true);
+        setIsBackfilling(false);
+        return;
+      }
+      
+      console.log('✅ Trial check passed, checking lead limits...');
       
       // First sync the current lead count to get accurate data
       await syncLeadCounts();
@@ -7257,9 +7327,11 @@ ${JSON.stringify(parsedConvo)}`;
           </a>
         </div>
       )}
+
+
       
-      {/* Main Container - adjust height when demo mode is active */}
-      <div className={`flex ${demoMode ? 'h-[calc(100vh-44px)]' : 'h-screen'} relative overflow-hidden transition-colors duration-300`} style={{backgroundColor: themeStyles.primaryBg}}>
+      {/* Main Container - simplified height calculation */}
+      <div className="flex h-screen relative overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
         {/* Top Navigation Bar - always at top-0 now */}
       <div className="absolute top-0 left-0 right-0 h-12 z-20 flex items-center px-6 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg}}>
         <div className="flex justify-between items-center w-full">
@@ -7468,6 +7540,23 @@ ${JSON.stringify(parsedConvo)}`;
               </div>
             </div>
             
+            {/* Trial Banner in Modal */}
+            {!demoMode && trialStatus && trialStatus.subscription_plan === 'trial' && trialStatus.trial_ends_at && (
+              <div style={{ margin: 0, borderRadius: 0 }}>
+                <TrialBanner
+                  trialData={trialStatus}
+                  onUpgrade={() => {
+                    setShowApiSettings(false); // Close settings modal
+                    setTrialModalMode('upgrade');
+                    setShowTrialModal(true);
+                  }}
+                  onDismiss={() => {
+                    console.log('Trial banner dismissed in modal');
+                  }}
+                />
+              </div>
+            )}
+            
             <div className="p-6 space-y-6">
               {/* Current Plan Section */}
               <div className="rounded-lg p-4 transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.accent}40`}}>
@@ -7507,89 +7596,89 @@ ${JSON.stringify(parsedConvo)}`;
                   </div>
                 </div>
 
-                                                  {/* Upgrade Buttons - Only show public plans */}
-                {currentPlan.name === 'trial' && (
-                  <div className="mt-4 pt-4 border-t" style={{borderColor: themeStyles.border}}>
-                    {/* Compare Plans Link */}
-                    <div className="mb-3 text-center">
+                {/* Smart Upgrade CTA - Show for all upgradeable plans */}
+                {(() => {
+                  const canUpgrade = ['trial', 'professional', 'enterprise'].includes(currentPlan.name);
+                  const isTopTier = ['agency', 'god'].includes(currentPlan.name);
+                  
+                  if (isTopTier) return null; // No upgrade needed for top tier
+                  
+                  const getUpgradeMessage = () => {
+                    switch(currentPlan.name) {
+                      case 'trial': 
+                        return {
+                          title: "Ready to unlock more leads and features?",
+                          cta: "🚀 Start Your Subscription"
+                        };
+                      case 'professional': 
+                        return {
+                          title: "Need more leads? Upgrade to Scale or Agency+",
+                          cta: "📈 Upgrade to Higher Tier"
+                        };
+                      case 'enterprise': 
+                        return {
+                          title: "Go unlimited with Agency+",
+                          cta: "🚀 Upgrade to Agency+"
+                        };
+                      default: 
+                        return {
+                          title: "Upgrade your plan for more features",
+                          cta: "🚀 Upgrade Plan"
+                        };
+                    }
+                  };
+                  
+                  const { title, cta } = getUpgradeMessage();
+                  
+                  return canUpgrade && (
+                    <div className="mt-4 pt-4 border-t text-center" style={{borderColor: themeStyles.border}}>
+                      <div className="mb-3">
+                        <div className="text-sm mb-2" style={{color: themeStyles.textSecondary}}>
+                          {title}
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setShowApiSettings(false); // Close settings modal
+                            setTrialModalMode('upgrade');
+                            setShowTrialModal(true);
+                          }}
+                          className="px-6 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90 hover:scale-105 shadow-lg"
+                          style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}>
+                          {cta}
+                        </button>
+                      </div>
                       <button 
                         onClick={() => setShowPlanComparison(!showPlanComparison)}
                         className="text-xs underline transition-colors hover:opacity-80"
-                        style={{color: themeStyles.accent}}>
+                        style={{color: themeStyles.textMuted}}>
                         {showPlanComparison ? 'Hide' : 'Compare'} Plan Features
                       </button>
-                    </div>
 
-                    {/* Plan Comparison Table */}
-                    {showPlanComparison && (
-                      <div className="mb-4 p-3 rounded-lg" style={{backgroundColor: themeStyles.secondaryBg}}>
-                        <div className="grid grid-cols-4 gap-2 text-xs">
-                          <div className="font-medium" style={{color: themeStyles.textPrimary}}>Feature</div>
-                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Professional</div>
-                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Enterprise</div>
-                          <div className="font-medium text-center" style={{color: themeStyles.textPrimary}}>Agency</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>Monthly Leads</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>500</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>2,000</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>Unlimited</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>ESP Accounts</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>1</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>3</div>
-                          <div className="text-center" style={{color: themeStyles.textPrimary}}>Unlimited</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>Unified Inbox</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>Auto-drafted Replies</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>CRM & Templates</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          
-                          <div style={{color: themeStyles.textSecondary}}>Priority Support</div>
-                          <div className="text-center" style={{color: themeStyles.textSecondary}}>-</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
-                          <div className="text-center" style={{color: themeStyles.success}}>✓</div>
+                      {/* Simple Plan Comparison */}
+                      {showPlanComparison && (
+                        <div className="mt-3 p-3 rounded-lg text-left" style={{backgroundColor: themeStyles.tertiaryBg}}>
+                          <div className="grid grid-cols-3 gap-4 text-xs">
+                            <div className="text-center">
+                              <div className="font-semibold mb-2" style={{color: themeStyles.accent}}>Core</div>
+                              <div style={{color: themeStyles.textPrimary}}>$297/mo</div>
+                              <div style={{color: themeStyles.textSecondary}}>500 leads</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-semibold mb-2" style={{color: themeStyles.accent}}>Scale</div>
+                              <div style={{color: themeStyles.textPrimary}}>$597/mo</div>
+                              <div style={{color: themeStyles.textSecondary}}>2,000 leads</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-semibold mb-2" style={{color: themeStyles.accent}}>Agency+</div>
+                              <div style={{color: themeStyles.textPrimary}}>$997/mo</div>
+                              <div style={{color: themeStyles.textSecondary}}>Unlimited</div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <button 
-                        onClick={() => handleUpgrade('professional')}
-                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm" 
-                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
-                        <div>Professional</div>
-                        <div className="text-lg font-bold">$297<span className="text-xs font-normal">/mo</span></div>
-                        <div className="text-xs opacity-90">500 leads/month + 1 ESP</div>
-                      </button>
-                      <button 
-                        onClick={() => handleUpgrade('enterprise')}
-                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm"
-                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
-                        <div>Enterprise</div>
-                        <div className="text-lg font-bold">$597<span className="text-xs font-normal">/mo</span></div>
-                        <div className="text-xs opacity-90">2,000 leads/month + 3 ESPs</div>
-                      </button>
-                      <button 
-                        onClick={() => handleUpgrade('agency')}
-                        className="px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90 hover:scale-105 border shadow-sm"
-                        style={{backgroundColor: isDarkMode ? themeStyles.secondaryBg : '#FFFFFF', color: themeStyles.textPrimary, borderColor: themeStyles.border}}>
-                        <div>Agency</div>
-                        <div className="text-lg font-bold">$997<span className="text-xs font-normal">/mo</span></div>
-                        <div className="text-xs opacity-90">Unlimited leads + ESPs</div>
-                      </button>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 
                 {currentPlan.name !== 'trial' && (
                   <div className="mt-3 text-xs" style={{color: themeStyles.textMuted}}>
@@ -11816,6 +11905,7 @@ Keyboard shortcuts:
       {trialStatus && (
         <TrialExpiredModal
           isOpen={showTrialModal && !demoMode}
+          mode={trialModalMode}
           trialData={{
             daysRemaining: trialStatus.days_remaining || 0,
             trialEndsAt: trialStatus.trial_ends_at,
@@ -11828,8 +11918,8 @@ Keyboard shortcuts:
           upgradingPlan={upgradingPlan}
           onUpgrade={handleTrialUpgrade}
           onClose={() => {
-            // Only allow closing if trial is not expired
-            if (trialStatus.trial_status !== 'expired') {
+            // Allow closing in upgrade mode, only block for expired trials
+            if (trialModalMode === 'upgrade' || trialStatus.trial_status !== 'expired') {
               setShowTrialModal(false);
             }
           }}
