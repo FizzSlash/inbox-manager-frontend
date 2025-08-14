@@ -669,6 +669,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // ===== TRIAL MANAGEMENT =====
   const [trialStatus, setTrialStatus] = useState(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
+  const [upgradingPlan, setUpgradingPlan] = useState(null); // Track which plan is being upgraded to
 
   // Debug: Track apiKeys state changes
   useEffect(() => {
@@ -1951,19 +1952,28 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return trialStatus && trialStatus.trial_status === 'expired';
   };
 
-  // Handle upgrade redirect
-  const handleTrialUpgrade = (selectedPlan = 'professional') => {
-    // Redirect to pricing page or show upgrade modal
-    setShowTrialModal(false);
-    // You can integrate this with your existing handleUpgrade function
-    handleUpgrade(selectedPlan);
+  // Handle upgrade redirect - DO NOT close modal until success
+  const handleTrialUpgrade = async (selectedPlan = 'professional') => {
+    setUpgradingPlan(selectedPlan); // Show loading state
+    try {
+      await handleUpgrade(selectedPlan);
+      // Only close modal if handleUpgrade completes successfully (redirect happened)
+      setShowTrialModal(false);
+    } catch (error) {
+      // Keep modal open on error, especially if trial is expired
+      console.error('❌ Trial upgrade failed:', error);
+      showToast(`Upgrade failed: ${error.message}. Please try again.`, 'error');
+    } finally {
+      setUpgradingPlan(null); // Clear loading state
+    }
   };
 
   // Handle plan upgrades via Stripe
   const handleUpgrade = async (plan) => {
     if (!brandId) {
-      showToast('Brand ID not found. Please refresh and try again.', 'error');
-      return;
+      const error = new Error('Brand ID not found. Please refresh and try again.');
+      showToast(error.message, 'error');
+      throw error; // Throw so modal can catch and stay open
     }
 
     try {
@@ -11811,6 +11821,7 @@ Keyboard shortcuts:
             maxLeadsPerMonth: trialStatus.max_leads_per_month || currentPlan?.maxLeadsPerMonth || 50,
             subscriptionPlan: trialStatus.subscription_plan || 'trial'
           }}
+          upgradingPlan={upgradingPlan}
           onUpgrade={handleTrialUpgrade}
           onClose={() => {
             // Only allow closing if trial is not expired

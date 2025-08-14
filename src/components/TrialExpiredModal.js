@@ -1,7 +1,7 @@
 import React from 'react';
-import { AlertCircle, Clock, CreditCard, X, Check, Star, Crown } from 'lucide-react';
+import { AlertCircle, Clock, CreditCard, X, Check, Star, Crown, Loader2 } from 'lucide-react';
 
-const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose }) => {
+const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUpgrade, onClose }) => {
   if (!isOpen) return null;
 
   const { daysRemaining, trialEndsAt, isExpired } = trialData;
@@ -160,6 +160,9 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose 
               const isCurrentPlan = currentPlanKey === tier.planKey;
               const colors = getColorClasses(tier.color);
               
+              const isUpgrading = upgradingPlan === tier.planKey;
+              const isDisabled = isCurrentPlan || (upgradingPlan && !isUpgrading);
+              
               return (
                 <div
                   key={tier.name}
@@ -167,7 +170,9 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose 
                     isCurrentPlan 
                       ? `${colors.border} ${colors.bg}` 
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  } ${tier.popular ? 'ring-2 ring-purple-500 ring-opacity-50' : ''}`}
+                  } ${tier.popular ? 'ring-2 ring-purple-500 ring-opacity-50' : ''} ${
+                    upgradingPlan && !isUpgrading ? 'opacity-50' : ''
+                  }`}
                 >
                   {tier.popular && (
                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -181,6 +186,15 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose 
                     <div className="absolute -top-3 right-4">
                       <div className={`${colors.text} px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-800 border ${colors.border}`}>
                         Current Plan
+                      </div>
+                    </div>
+                  )}
+
+                  {isUpgrading && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Processing...
                       </div>
                     </div>
                   )}
@@ -210,15 +224,24 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose 
 
                   <button
                     onClick={() => onUpgrade(tier.planKey)}
-                    disabled={isCurrentPlan}
+                    disabled={isDisabled}
                     className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      isCurrentPlan
+                      isDisabled
                         ? 'bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
                         : `${colors.button} text-white hover:shadow-lg`
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    {isCurrentPlan ? 'Current Plan' : `Upgrade to ${tier.name}`}
+                    {isUpgrading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        {isCurrentPlan ? 'Current Plan' : `Upgrade to ${tier.name}`}
+                      </>
+                    )}
                   </button>
                 </div>
               );
@@ -231,13 +254,24 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, onUpgrade, onClose 
           {!isExpired && (
             <button
               onClick={onClose}
-              className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 text-sm font-medium mb-2"
+              disabled={!!upgradingPlan}
+              className={`text-sm font-medium mb-2 ${
+                upgradingPlan 
+                  ? 'text-gray-400 cursor-not-allowed' 
+                  : 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
             >
               Continue with trial ({daysRemaining} days left)
             </button>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400">
             All plans include a 14-day money-back guarantee. Cancel anytime.
+            {upgradingPlan && (
+              <br />
+              <span className="text-blue-600 dark:text-blue-400">
+                Processing your upgrade to {upgradingPlan}...
+              </span>
+            )}
           </p>
         </div>
       </div>
