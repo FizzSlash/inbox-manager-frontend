@@ -11,15 +11,15 @@ UPDATE brands
 SET 
   trial_started_at = NULL,
   trial_ends_at = NULL,
-  trial_status = 'none'
+  trial_status = 'none'::trial_status_type
 WHERE subscription_plan != 'trial';
 
 -- 4. Set trial_status for existing trial plans
 UPDATE brands 
 SET trial_status = CASE 
-  WHEN trial_ends_at IS NULL THEN 'active'
-  WHEN trial_ends_at > NOW() THEN 'active'
-  ELSE 'expired'
+  WHEN trial_ends_at IS NULL THEN 'active'::trial_status_type
+  WHEN trial_ends_at > NOW() THEN 'active'::trial_status_type
+  ELSE 'expired'::trial_status_type
 END
 WHERE subscription_plan = 'trial';
 
@@ -46,7 +46,7 @@ BEGIN
     'trial',
     NOW(),
     NOW() + INTERVAL '7 days',
-    'active',
+    'active'::trial_status_type,
     0,
     50,
     CURRENT_DATE,
@@ -65,7 +65,7 @@ DECLARE
   updated_count INTEGER;
 BEGIN
   UPDATE brands 
-  SET trial_status = 'expired'
+  SET trial_status = 'expired'::trial_status_type
   WHERE id = ANY(brand_ids) 
     AND subscription_plan = 'trial';
     
@@ -82,7 +82,7 @@ DECLARE
 BEGIN
   UPDATE brands 
   SET 
-    trial_status = 'active',
+    trial_status = 'active'::trial_status_type,
     trial_ends_at = CASE 
       WHEN trial_ends_at IS NULL THEN NOW() + (extra_days || ' days')::INTERVAL
       WHEN trial_ends_at < NOW() THEN NOW() + (extra_days || ' days')::INTERVAL
@@ -102,7 +102,7 @@ RETURNS VOID AS $$
 BEGIN
   UPDATE brands 
   SET 
-    trial_status = 'active',
+    trial_status = 'active'::trial_status_type,
     trial_ends_at = GREATEST(NOW(), trial_ends_at) + (days_to_add || ' days')::INTERVAL
   WHERE id = brand_id_param AND subscription_plan = 'trial';
 END;
@@ -129,30 +129,30 @@ BEGIN
       NEW.price := 0;
       -- Keep existing trial_status if set, otherwise default to 'active'
       IF NEW.trial_status IS NULL THEN
-        NEW.trial_status := 'active';
+        NEW.trial_status := 'active'::trial_status_type;
       END IF;
     WHEN 'starter' THEN
       NEW.max_leads_per_month := 300;
       NEW.price := 50;
-      NEW.trial_status := 'none';
+      NEW.trial_status := 'none'::trial_status_type;
       NEW.trial_started_at := NULL;
       NEW.trial_ends_at := NULL;
     WHEN 'professional' THEN
       NEW.max_leads_per_month := 1000;
       NEW.price := 150;
-      NEW.trial_status := 'none';
+      NEW.trial_status := 'none'::trial_status_type;
       NEW.trial_started_at := NULL;
       NEW.trial_ends_at := NULL;
     WHEN 'god' THEN
       NEW.max_leads_per_month := 999999;
       NEW.price := 500;
-      NEW.trial_status := 'none';
+      NEW.trial_status := 'none'::trial_status_type;
       NEW.trial_started_at := NULL;
       NEW.trial_ends_at := NULL;
     ELSE
       NEW.max_leads_per_month := 50;
       NEW.price := 0;
-      NEW.trial_status := 'none';
+      NEW.trial_status := 'none'::trial_status_type;
   END CASE;
   
   RETURN NEW;
@@ -192,7 +192,7 @@ DECLARE
   expired_count INTEGER;
 BEGIN
   UPDATE brands 
-  SET trial_status = 'expired'
+  SET trial_status = 'expired'::trial_status_type
   WHERE subscription_plan = 'trial' 
     AND trial_status = 'active'
     AND trial_ends_at < NOW();
