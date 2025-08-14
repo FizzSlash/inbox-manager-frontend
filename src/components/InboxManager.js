@@ -1952,11 +1952,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   };
 
   // Handle upgrade redirect
-  const handleTrialUpgrade = () => {
+  const handleTrialUpgrade = (selectedPlan = 'professional') => {
     // Redirect to pricing page or show upgrade modal
     setShowTrialModal(false);
     // You can integrate this with your existing handleUpgrade function
-    handleUpgrade('professional');
+    handleUpgrade(selectedPlan);
   };
 
   // Handle plan upgrades via Stripe
@@ -11806,6 +11806,10 @@ Keyboard shortcuts:
             daysRemaining: trialStatus.days_remaining || 0,
             trialEndsAt: trialStatus.trial_ends_at,
             isExpired: trialStatus.trial_status === 'expired'
+          }}
+          currentPlan={{
+            maxLeadsPerMonth: trialStatus.max_leads_per_month || currentPlan?.maxLeadsPerMonth || 50,
+            subscriptionPlan: trialStatus.subscription_plan || 'trial'
           }}
           onUpgrade={handleTrialUpgrade}
           onClose={() => {
