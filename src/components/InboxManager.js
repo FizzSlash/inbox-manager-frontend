@@ -1952,13 +1952,17 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return trialStatus && trialStatus.trial_status === 'expired';
   };
 
-  // Handle upgrade redirect - DO NOT close modal until success
+  // Handle upgrade redirect - NEVER close modal for expired trials
   const handleTrialUpgrade = async (selectedPlan = 'professional') => {
     setUpgradingPlan(selectedPlan); // Show loading state
     try {
       await handleUpgrade(selectedPlan);
-      // Only close modal if handleUpgrade completes successfully (redirect happened)
-      setShowTrialModal(false);
+      // CRITICAL: NEVER close modal for expired trials - they must complete payment
+      // Only close if trial is still active (warning modal, not expired)
+      if (trialStatus && trialStatus.trial_status !== 'expired') {
+        setShowTrialModal(false);
+      }
+      // For expired trials: modal stays open, redirect to Stripe handles payment
     } catch (error) {
       // Keep modal open on error, especially if trial is expired
       console.error('❌ Trial upgrade failed:', error);
