@@ -4,9 +4,6 @@
 -- 1. Add trial expiration tracking
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days');
-ALTER TABLE brands ADD COLUMN IF NOT EXISTS is_trial_expired BOOLEAN GENERATED ALWAYS AS (
-  subscription_plan = 'trial' AND trial_ends_at < NOW()
-) STORED;
 
 -- 2. Add user-specific brand creation function
 CREATE OR REPLACE FUNCTION create_brand_for_user(user_id UUID, user_email TEXT)
