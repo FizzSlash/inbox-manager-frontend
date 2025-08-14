@@ -153,7 +153,7 @@ SELECT
   b.subscription_plan,
   b.trial_started_at,
   b.trial_ends_at,
-  b.is_trial_expired,
+  (b.subscription_plan = 'trial' AND b.trial_ends_at < NOW()) as is_trial_expired,
   b.leads_used_this_month,
   b.max_leads_per_month,
   CASE 
