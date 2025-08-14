@@ -4,7 +4,10 @@
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days');
 
--- 2. Create the FIXED brand creation function - returns UUID not INTEGER
+-- 2. Drop the old function first, then create the FIXED version
+DROP FUNCTION IF EXISTS create_brand_for_user(UUID, TEXT);
+
+-- Create the FIXED brand creation function - returns UUID not INTEGER
 CREATE OR REPLACE FUNCTION create_brand_for_user(user_id UUID, user_email TEXT)
 RETURNS UUID AS $$
 DECLARE
