@@ -25,7 +25,7 @@ BEGIN
     billing_cycle_start,
     price
   ) VALUES (
-    COALESCE(SPLIT_PART(user_email, '@', 1), 'New Brand'), -- Use email username as brand name
+    'INSERT HERE', -- Placeholder name for new brands
     'trial',
     NOW(),
     NOW() + INTERVAL '7 days',
