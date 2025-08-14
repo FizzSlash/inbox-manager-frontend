@@ -1929,12 +1929,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       if (data) {
         setTrialStatus(data);
         
-        // Show modal if trial is expired or ending soon (1 day left)
-        if (data.status === 'trial_expired' || (data.status === 'trial_active' && data.days_remaining <= 1)) {
+        // Show modal based on explicit trial_status column
+        if (data.trial_status === 'expired' || (data.trial_status === 'active' && data.days_remaining <= 1)) {
           setShowTrialModal(true);
         }
         
         console.log('📅 Trial Status:', {
+          trialStatus: data.trial_status,
           status: data.status,
           daysRemaining: data.days_remaining,
           expiresAt: data.trial_ends_at
@@ -1947,7 +1948,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // Handle trial expiration - blocks access to main features
   const isTrialBlocked = () => {
-    return trialStatus && trialStatus.status === 'trial_expired';
+    return trialStatus && trialStatus.trial_status === 'expired';
   };
 
   // Handle upgrade redirect
@@ -11804,12 +11805,12 @@ Keyboard shortcuts:
           trialData={{
             daysRemaining: trialStatus.days_remaining || 0,
             trialEndsAt: trialStatus.trial_ends_at,
-            isExpired: trialStatus.status === 'trial_expired'
+            isExpired: trialStatus.trial_status === 'expired'
           }}
           onUpgrade={handleTrialUpgrade}
           onClose={() => {
             // Only allow closing if trial is not expired
-            if (trialStatus.status !== 'trial_expired') {
+            if (trialStatus.trial_status !== 'expired') {
               setShowTrialModal(false);
             }
           }}
