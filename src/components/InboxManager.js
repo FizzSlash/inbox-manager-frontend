@@ -229,7 +229,7 @@ const getDisplayName = (lead) => {
 };
 
 const InboxManager = ({ user, onSignOut, demoMode = false }) => {
-  // Demo data for marketing site
+  // Simple demo data - 10 test leads for demo
   const demoLeads = [
     {
       id: 1,
@@ -241,23 +241,20 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       status: "INBOX",
       created_at_lead: "2024-01-15T10:30:00Z",
       conversation: [
-        { type: "SENT", time: "2024-01-15T10:30:00Z", email_body: "Hi Sarah, saw your recent expansion announcement. Our email marketing platform helped companies like yours increase lead conversion by 40%. Worth a quick chat?", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Congrats on the expansion - quick question" },
-        { type: "REPLY", time: "2024-01-15T11:45:00Z", email_body: "This sounds interesting! We're definitely looking to improve our email campaigns. Can you send me more details about pricing and features?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com", subject: "Re: Congrats on the expansion - quick question" },
-        { type: "SENT", time: "2024-01-15T14:20:00Z", email_body: "Absolutely! I've attached our pricing sheet and feature comparison. Based on your team size (~50), our Growth plan would be perfect. It includes advanced automation, A/B testing, and detailed analytics. Would you like to see it in action? I can do a 15-minute demo this week.", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Re: Congrats on the expansion - quick question" },
-        { type: "REPLY", time: "2024-01-15T16:10:00Z", email_body: "The pricing looks reasonable. I'd love to see a demo! I'm free Thursday at 2 PM or Friday at 10 AM. Also, do you have any case studies from other tech startups?", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com", subject: "Re: Congrats on the expansion - quick question" },
-        { type: "SENT", time: "2024-01-15T16:25:00Z", email_body: "Perfect! Let's do Thursday at 2 PM. I'll send a calendar invite shortly. And yes - I'll include a case study from CloudScale (similar stage startup) who saw 65% increase in email engagement after switching to us. See you Thursday!", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Demo confirmed - Thursday 2 PM + CloudScale case study" }
+        { type: "SENT", time: "2024-01-15T10:30:00Z", email_body: "Hi Sarah, interested in our email marketing platform?", from: "demo@emaillink.com", to: "sarah.johnson@techstartup.com", subject: "Quick question about email marketing" },
+        { type: "REPLY", time: "2024-01-15T11:45:00Z", email_body: "Yes, please send me more details!", from: "sarah.johnson@techstartup.com", to: "demo@emaillink.com", subject: "Re: Quick question about email marketing" }
       ],
       website: "techstartup.com",
       phone: "+1-555-0123",
-      subject: "Demo confirmed - Thursday 2 PM + CloudScale case study",
+      subject: "Re: Quick question about email marketing",
       tags: [],
-      notes: "Demo scheduled Thu 2PM. Interested in Growth plan, wants case studies.",
+      notes: "Interested prospect",
       lead_category: "1",
       custom_field: "High Priority",
       role: "Marketing Director",
-      company_data: "50-100 employees, Series B funded",
-      personal_linkedin_url: "https://linkedin.com/in/sarah-johnson-tech",
-      business_linkedin_url: "https://linkedin.com/company/techstartup-inc",
+      company_data: "50-100 employees",
+      personal_linkedin_url: "",
+      business_linkedin_url: "",
       call_booked: false,
       deal_size: 5000,
       closed: false
