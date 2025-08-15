@@ -314,17 +314,11 @@ const TrialExpiredModal = ({ isOpen, trialData, currentPlan, upgradingPlan, onUp
               Continue with trial ({daysRemaining} days left)
             </button>
           )}
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            All plans include a 14-day money-back guarantee. Cancel anytime.
-            {upgradingPlan && (
-              <>
-                <br />
-                <span className="text-blue-600 dark:text-blue-400">
-                  Processing your upgrade to {upgradingPlan}...
-                </span>
-              </>
-            )}
-          </p>
+          {upgradingPlan && (
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              Processing your upgrade to {upgradingPlan}...
+            </p>
+          )}
         </div>
       </div>
     </div>

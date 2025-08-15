@@ -2039,13 +2039,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         return;
       }
 
-      // Handle new checkout sessions (for trial/new customers)
+      // Handle new checkout sessions (for trial/new customers) - open in new tab
       if (data?.checkoutUrl) {
-        // Redirect to Stripe Checkout using the proper URL
-        window.location.href = data.checkoutUrl;
+        // Open Stripe Checkout in new tab using the proper URL
+        window.open(data.checkoutUrl, '_blank');
       } else if (data?.sessionId) {
-        // Fallback to manual URL construction
-        window.location.href = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
+        // Fallback to manual URL construction - open in new tab
+        window.open(`https://checkout.stripe.com/c/pay/${data.sessionId}`, '_blank');
       } else {
         throw new Error('No checkout URL or session ID returned');
       }
@@ -2122,10 +2122,15 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
             if (persistentAIToast) {
               const newProcessedCount = persistentAIToast.processedLeads + result.processed;
               if (newProcessedCount >= persistentAIToast.totalLeads) {
-                // AI processing complete - remove persistent toast and show completion
+                // AI processing complete - remove persistent toast and show BIG completion notification
                 setPersistentAIToast(null);
-                showToast(`🎉 AI processing complete! ${persistentAIToast.totalLeads} leads analyzed with intent scores.`, 'success');
-    } else {
+                showToast(`🎉🤖 AI PROCESSING COMPLETE! 🎉\n\n✅ ${persistentAIToast.totalLeads} leads successfully analyzed with intent scores!\n\n🔄 Page will auto-refresh to show updated results...`, 'success');
+                
+                // Auto-refresh after a short delay to show the updated intent scores
+                setTimeout(() => {
+                  fetchLeads();
+                }, 2000);
+              } else {
                 // Update progress
                 setPersistentAIToast(prev => ({
                   ...prev,
@@ -2660,6 +2665,23 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [activeSorts, setActiveSorts] = useState([{ field: 'last_reply', direction: 'desc' }]);
   const [activeFilters, setActiveFilters] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Outside click handlers for popups
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close filter popup if clicking outside
+      if (showFilterPopup && !event.target.closest('[data-filter-popup]') && !event.target.closest('[data-filter-button]')) {
+        setShowFilterPopup(false);
+      }
+      // Close sort popup if clicking outside  
+      if (showSortPopup && !event.target.closest('[data-sort-popup]') && !event.target.closest('[data-sort-button]')) {
+        setShowSortPopup(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterPopup, showSortPopup]);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
@@ -4205,7 +4227,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         if (response.status === 429) {
           throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
         } else if (response.status === 403) {
-          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+          throw new Error('CORS proxy access denied. Try the demo at https://inbox.navvii.com/demo for testing.');
         } else {
           throw new Error(`Navvii AI error: ${response.status} - ${errorText}`);
         }
@@ -4342,7 +4364,12 @@ CRITICAL RULES:
 ${brandSettings?.sender_name ? `- Sign the email as: ${brandSettings.sender_name}` : '- Do not add a signature unless specified'}
 ${brandSettings?.custom_prompt_instructions ? `- Special instruction: ${brandSettings.custom_prompt_instructions}` : ''}
 
-RESPONSE FORMAT: Only include the email response. No explanations, thoughts, or extra text.
+RESPONSE FORMAT: Only include the EMAIL BODY text. Do not include:
+- Subject lines (Re:, Fwd:, etc.)
+- Email headers or metadata
+- Signatures (unless specifically requested)
+- Explanations, thoughts, or meta commentary
+- Any prefixes like "Subject:" or "From:"
 
 Conversation History:
 ${JSON.stringify(parsedConvo)}`;
@@ -4918,7 +4945,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         if (response.status === 429) {
           throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
         } else if (response.status === 403) {
-          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+          throw new Error('CORS proxy access denied. Try the demo at https://inbox.navvii.com/demo for testing.');
         } else {
           throw new Error(`Navvii AI enrichment error: ${response.status} - ${errorText}`);
         }
@@ -5950,7 +5977,7 @@ ${JSON.stringify(parsedConvo)}`;
     console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${leadsForAnalysis.length} queued for AI analysis)`);
     console.log(`🔄 AI processing will happen in background - check processing_queue table to monitor`);
     
-    // Initialize persistent AI processing toast
+    // Initialize persistent AI processing toast - ALWAYS show when processing
     if (analyzed > 0) {
       setPersistentAIToast({
         id: 'ai_processing_' + Date.now(),
@@ -5959,6 +5986,9 @@ ${JSON.stringify(parsedConvo)}`;
         startTime: new Date()
       });
       console.log(`🍞 Started persistent AI processing toast for ${analyzed} leads`);
+      
+      // Show immediate notification that processing has started
+      showToast(`🤖 AI processing started for ${analyzed} leads! Watch progress in the top-right corner.`, 'info');
     }
     
     if (analyzed < leadsForAnalysis.length) {
@@ -6021,7 +6051,7 @@ ${JSON.stringify(parsedConvo)}`;
         if (response.status === 429) {
           throw new Error('CORS proxy rate limit reached. Please try again in a few minutes.');
         } else if (response.status === 403) {
-          throw new Error('CORS proxy access denied. Go to https://cors-anywhere.herokuapp.com/corsdemo and request access.');
+          throw new Error('CORS proxy access denied. Try the demo at https://inbox.navvii.com/demo for testing.');
         } else {
           throw new Error(`Navvii AI error: ${response.status} - ${errorText}`);
         }
@@ -6706,7 +6736,7 @@ ${JSON.stringify(parsedConvo)}`;
 
       // Show user notification about background processing
       if (relevantLeadsCount > 0) {
-        // Initialize persistent AI processing toast for backfill
+        // Initialize persistent AI processing toast for backfill - ALWAYS visible and prominent
         setPersistentAIToast({
           id: 'ai_backfill_' + Date.now(),
           totalLeads: relevantLeadsCount,
@@ -6715,7 +6745,7 @@ ${JSON.stringify(parsedConvo)}`;
         });
         console.log(`🍞 Started persistent AI processing toast for backfill: ${relevantLeadsCount} leads`);
         
-        showToast(`Backfill complete! ${relevantLeadsCount} leads queued for AI processing - watch progress above.`, 'info');
+        showToast(`🚀 Backfill complete! ${relevantLeadsCount} leads queued for AI processing.\n\n🤖 Watch the BOLD progress indicator in the top-right corner!`, 'info');
       }
 
       // Refresh leads to show the new data
@@ -7103,16 +7133,25 @@ ${JSON.stringify(parsedConvo)}`;
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
         
-        // Calculate position for portal
+        // Calculate position for portal with smart positioning
         const buttonElement = dropdownButtonRefs.current[leadId];
         if (buttonElement) {
           const rect = buttonElement.getBoundingClientRect();
+          const dropdownHeight = CATEGORY_OPTIONS.length * 50 + 20; // Estimate dropdown height
+          const windowHeight = window.innerHeight;
+          const spaceBelow = windowHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          
+          // Position above if not enough space below and there's more space above
+          const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          
           setDropdownPositions(prevPos => ({
             ...prevPos,
             [leadId]: {
-              top: rect.bottom + 8,
+              top: shouldPositionAbove ? rect.top - dropdownHeight - 8 : rect.bottom + 8,
               left: rect.left,
-              width: rect.width
+              width: rect.width,
+              isAbove: shouldPositionAbove
             }
           }));
         }
@@ -7610,22 +7649,22 @@ ${JSON.stringify(parsedConvo)}`;
                       case 'trial': 
                         return {
                           title: "Ready to unlock more leads and features?",
-                          cta: "🚀 Start Your Subscription"
+                          cta: "Start Your Subscription"
                         };
                       case 'professional': 
                         return {
                           title: "Need more leads? Upgrade to Scale or Agency+",
-                          cta: "📈 Upgrade to Higher Tier"
+                          cta: "Upgrade to Higher Tier"
                         };
                       case 'enterprise': 
                         return {
                           title: "Go unlimited with Agency+",
-                          cta: "🚀 Upgrade to Agency+"
+                          cta: "Upgrade to Agency+"
                         };
                       default: 
                         return {
                           title: "Upgrade your plan for more features",
-                          cta: "🚀 Upgrade Plan"
+                          cta: "Upgrade Plan"
                         };
                     }
                   };
@@ -8086,48 +8125,53 @@ ${JSON.stringify(parsedConvo)}`;
       {/* Toast Notifications Container */}
       <div className="fixed top-4 right-4 z-50 flex flex-col-reverse gap-2">
         
-        {/* Persistent AI Processing Toast */}
+        {/* Persistent AI Processing Toast - MORE PROMINENT */}
         {persistentAIToast && (
           <div 
-            className="flex items-center gap-3 px-5 py-4 rounded-lg shadow-lg min-w-[350px] border-2"
+            className="flex items-center gap-4 px-6 py-5 rounded-xl shadow-2xl min-w-[400px] border-4 animate-pulse"
             style={{
-              backgroundColor: `${themeStyles.accent}10`,
-              border: `2px solid ${themeStyles.accent}40`,
-              backdropFilter: 'blur(12px)'
+              backgroundColor: `${themeStyles.accent}20`,
+              border: `4px solid ${themeStyles.accent}`,
+              backdropFilter: 'blur(16px)',
+              boxShadow: `0 0 30px ${themeStyles.accent}40`
             }}
           >
             <div className="relative">
-              <Brain className="w-6 h-6 shrink-0" style={{color: themeStyles.accent}} />
+              <Brain className="w-8 h-8 shrink-0 animate-bounce" style={{color: themeStyles.accent}} />
               <div 
-                className="absolute -top-1 -right-1 w-3 h-3 rounded-full animate-pulse"
+                className="absolute -top-2 -right-2 w-4 h-4 rounded-full animate-ping"
                 style={{backgroundColor: themeStyles.accent}}
               />
             </div>
             <div className="flex-1">
-              <div className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                AI Processing Leads...
+              <div className="text-lg font-bold transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                🤖 AI PROCESSING LEADS...
               </div>
-              <div className="text-xs transition-colors duration-300 mb-2" style={{color: themeStyles.textMuted}}>
+              <div className="text-sm font-semibold transition-colors duration-300 mb-3" style={{color: themeStyles.accent}}>
                 {persistentAIToast.processedLeads} of {persistentAIToast.totalLeads} leads analyzed
               </div>
-              {/* Progress bar */}
-              <div className="w-full bg-gray-200 rounded-full h-1.5" style={{backgroundColor: themeStyles.border}}>
+              {/* Progress bar - MORE PROMINENT */}
+              <div className="w-full bg-gray-200 rounded-full h-3 shadow-inner" style={{backgroundColor: themeStyles.border}}>
                 <div 
-                  className="h-1.5 rounded-full transition-all duration-500" 
+                  className="h-3 rounded-full transition-all duration-500 animate-pulse" 
                   style={{
                     backgroundColor: themeStyles.accent,
-                    width: `${(persistentAIToast.processedLeads / persistentAIToast.totalLeads) * 100}%`
+                    width: `${(persistentAIToast.processedLeads / persistentAIToast.totalLeads) * 100}%`,
+                    boxShadow: `0 0 10px ${themeStyles.accent}`
                   }}
                 />
+              </div>
+              <div className="text-xs mt-2 font-medium transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                Please wait - this will auto-refresh when complete
               </div>
             </div>
             <button 
               onClick={() => setPersistentAIToast(null)}
-              className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300 p-1"
+              className="ml-2 shrink-0 hover:opacity-80 transition-colors duration-300 p-2"
               style={{color: themeStyles.textMuted}}
               title="Dismiss (processing will continue in background)"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         )}
@@ -9261,7 +9305,7 @@ ${JSON.stringify(parsedConvo)}`;
       `}</style>
 
       {/* Add margin-top to main content to account for nav bar */}
-      <div className="flex-1 flex mt-12">
+      <div className="flex-1 flex mt-12 w-full max-w-full overflow-hidden">
         {/* Analytics Dashboard */}
         {activeTab === 'analytics' && (
           <div className="flex-1 p-8 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg}}>
@@ -9732,7 +9776,7 @@ ${JSON.stringify(parsedConvo)}`;
       </div>
 
       {/* Sidebar - Lead List */}
-      <div className="w-1/2 flex flex-col shadow-lg relative z-50 transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
+      <div className="w-1/2 flex flex-col shadow-lg relative z-50 transition-colors duration-300 min-w-0 max-w-[50%]" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginRight: '4px', backdropFilter: 'blur(10px)', border: `1px solid ${themeStyles.border}`}}>
         {/* Header with Metrics */}
         <div className="p-6 relative transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, borderRadius: '12px 12px 0 0', borderBottom: `1px solid ${themeStyles.border}`}}>
           {/* Glowing accent line */}
@@ -9842,6 +9886,7 @@ ${JSON.stringify(parsedConvo)}`;
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="relative">
               <button
+                data-sort-button
                 onClick={() => setShowSortPopup(!showSortPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
                 style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}
@@ -9860,7 +9905,7 @@ ${JSON.stringify(parsedConvo)}`;
 
               {/* Sort Popup */}
               {showSortPopup && (
-                <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+                <div data-sort-popup className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
                   <div className="p-4">
                     <div className="flex justify-between items-center mb-3">
                       <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Sort Options</h4>
@@ -9941,6 +9986,7 @@ ${JSON.stringify(parsedConvo)}`;
 
             <div className="relative">
               <button
+                data-filter-button
                 onClick={() => setShowFilterPopup(!showFilterPopup)}
                 className="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:opacity-80 backdrop-blur-sm transition-all"
                 style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}
@@ -9959,7 +10005,7 @@ ${JSON.stringify(parsedConvo)}`;
 
                               {/* Filter Popup */}
                 {showFilterPopup && (
-                  <div className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+                  <div data-filter-popup className="absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
                     <div className="p-4">
                       <div className="flex justify-between items-center mb-3">
                         <h4 className="font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>Filter Options</h4>
@@ -10175,29 +10221,39 @@ ${JSON.stringify(parsedConvo)}`;
               <div
                 key={lead.id}
                 onClick={() => {
-                  setSelectedLead(lead);
-                  // Clear attachments and scheduling when switching leads
-                  setAttachedFiles([]);
-                  setScheduledTime(null);
-                  setShowScheduler(false);
+                  // Batch state updates to prevent multiple re-renders
+                  React.startTransition(() => {
+                    setSelectedLead(lead);
+                    setAttachedFiles([]);
+                    setScheduledTime(null);
+                    setShowScheduler(false);
+                  });
                   
-                  // Mark lead as opened if not already opened
+                  // Mark lead as opened if not already opened (async operation)
                   if (lead.opened === false) {
+                    // Optimistically update UI immediately to prevent layout shift
+                    setLeads(prevLeads => 
+                      prevLeads.map(l => 
+                        l.id === lead.id ? { ...l, opened: true } : l
+                      )
+                    );
+                    
+                    // Then update database
                     supabase
                       .from('retention_harbor')
                       .update({ opened: true })
                       .eq('id', lead.id)
                       .then(({ error }) => {
-                        if (!error) {
-                          // Update local state to remove blue border immediately
+                        if (error) {
+                          console.error('❌ Failed to mark lead as opened:', error);
+                          // Revert optimistic update on failure
                           setLeads(prevLeads => 
                             prevLeads.map(l => 
-                              l.id === lead.id ? { ...l, opened: true } : l
+                              l.id === lead.id ? { ...l, opened: false } : l
                             )
                           );
-                          console.log('✅ Marked lead as opened:', lead.lead_email);
                         } else {
-                          console.error('❌ Failed to mark lead as opened:', error);
+                          console.log('✅ Marked lead as opened:', lead.lead_email);
                         }
                       });
                   }
@@ -10209,10 +10265,14 @@ ${JSON.stringify(parsedConvo)}`;
                     : lead.opened === false 
                       ? `${themeStyles.accent}10` // Subtle accent tint for unopened leads
                       : themeStyles.tertiaryBg,
-                  borderTop: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
-                  borderRight: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
-                  borderBottom: selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`,
-                  borderLeft: lead.opened === false ? `6px solid ${themeStyles.accent}` : selectedLead?.id === lead.id ? `2px solid ${themeStyles.accent}80` : `1px solid ${themeStyles.border}`, // Accent color for unopened, gray for opened
+                  border: selectedLead?.id === lead.id 
+                    ? `2px solid ${themeStyles.accent}80` 
+                    : `2px solid ${themeStyles.border}`, // Keep consistent 2px border width
+                  borderLeft: lead.opened === false 
+                    ? `6px solid ${themeStyles.accent}` 
+                    : selectedLead?.id === lead.id 
+                      ? `2px solid ${themeStyles.accent}80` 
+                      : `2px solid ${themeStyles.border}`, // Keep consistent 2px border width
                   boxShadow: selectedLead?.id === lead.id ? `0 0 30px ${themeStyles.accent}30` : 'none',
                   animationDelay: `${index * 0.1}s`,
                   backdropFilter: 'blur(5px)'
@@ -10362,7 +10422,7 @@ ${JSON.stringify(parsedConvo)}`;
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
+      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300 min-w-0 max-w-[50%]" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
         {selectedLead ? (
           <>
             {/* Lead Header */}
@@ -10446,7 +10506,7 @@ ${JSON.stringify(parsedConvo)}`;
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-8 transition-colors duration-300" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
               <div className="space-y-8">
                       {/* Unified Lead Information Section */}
                 <div className="rounded-2xl p-6 shadow-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
