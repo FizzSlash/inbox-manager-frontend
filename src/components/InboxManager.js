@@ -1204,13 +1204,12 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
 
       
-      // In demo mode, set a fake brand_id and skip database calls
-      if (demoMode) {
-        console.log('📺 Demo mode: Setting fake brand_id');
-        setBrandId('demo-brand');
-
-        return;
-      }
+        // In demo mode, set a fake brand_id and skip database calls
+  if (demoMode) {
+    console.log('📺 Demo mode: Setting fake brand_id');
+    setBrandId('demo-brand');
+    return;
+  }
       
       // Check if we already have it cached in session (with user validation)
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
@@ -1251,7 +1250,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       }
     };
     fetchBrandId();
-  }, [user?.id]); // Only run when user ID changes
+  }, [user?.id, demoMode]); // Only run when user ID or demo mode changes
+
+  // Simple demo data loading - bypass all fetchLeads complexity
+  useEffect(() => {
+    if (demoMode) {
+      console.log('📺 Demo mode: Loading sample leads immediately');
+      setLeads(demoLeads);
+      setLoading(false);
+    }
+  }, [demoMode]);
 
   // SIMPLE SAVE: Save to both Supabase and localStorage
   const saveApiKeys = async (showSuccessMessage = true) => {
@@ -2078,6 +2086,12 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // Fetch leads when brandId is available (avoid conflicts with backfill)
   useEffect(() => {
+    // Skip all fetchLeads logic in demo mode - demo data is set directly
+    if (demoMode) {
+      console.log('📺 Demo mode: Skipping fetchLeads - demo data already set');
+      return;
+    }
+    
     // Don't fetch leads if backfill is running to avoid conflicts
     if (isBackfilling || progressId) {
       console.log('⏸️ FETCH LEADS: Skipping - backfill in progress');
@@ -2090,7 +2104,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     } else if (user?.id && brandId === null) {
       console.log('⏳ FETCH LEADS: Waiting for brandId to be fetched from database');
     }
-  }, [user?.id, brandId, isBackfilling, progressId]); // Run when brandId changes
+  }, [user?.id, brandId, isBackfilling, progressId, demoMode]); // Run when brandId changes
   
   // Separate effect to fetch leads when API keys first load (but not during backfill)
   useEffect(() => {
