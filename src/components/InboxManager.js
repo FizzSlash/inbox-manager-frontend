@@ -2084,7 +2084,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       return;
     }
     
-    if (brandId && brandId !== 'demo-brand' && user?.id) {
+    if (brandId && user?.id) {
       console.log('📊 FETCH LEADS: ⚡ INSTANT - Triggering fetchLeads with brandId:', brandId);
         fetchLeads();
     } else if (user?.id && brandId === null) {
@@ -2095,11 +2095,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // Separate effect to fetch leads when API keys first load (but not during backfill)
   useEffect(() => {
     // Only trigger on first load of API keys, not during backfill
-    if (brandId && brandId !== 'demo-brand' && apiKeys.accounts.length > 0 && !isBackfilling && !progressId && !isLoadingApiKeys && user?.id) {
+    if (brandId && apiKeys.accounts.length > 0 && !isBackfilling && !progressId && !isLoadingApiKeys && user?.id && !demoMode) {
       console.log('📊 FETCH LEADS: ⚡ INSTANT - API keys loaded, refreshing leads');
       fetchLeads();
     }
-  }, [apiKeys.accounts.length, user?.id, brandId, isBackfilling, progressId, isLoadingApiKeys]); // Run when brandId changes
+  }, [apiKeys.accounts.length, user?.id, brandId, isBackfilling, progressId, isLoadingApiKeys, demoMode]); // Run when brandId changes
 
   // Queue processor polling - THE BEST SOLUTION for reliable AI processing
   useEffect(() => {
