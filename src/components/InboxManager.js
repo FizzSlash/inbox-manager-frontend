@@ -717,16 +717,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return savedTheme ? savedTheme === 'dark' : true; // Default to dark mode
   });
 
-  // Auto-save drafts state
-  const [drafts, setDrafts] = useState(() => {
-    try {
-      const savedDrafts = localStorage.getItem('inbox_manager_drafts');
-      return savedDrafts ? JSON.parse(savedDrafts) : {};
-    } catch (e) {
-      console.warn('Failed to load saved drafts:', e);
-      return {};
-    }
-  });
+  // Drafts are now stored in the database as part of lead data
 
   // Recently viewed leads state
   const [recentlyViewed, setRecentlyViewed] = useState(() => {
@@ -1010,25 +1001,47 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     
     setIsDraftSaving(true);
     
-    draftTimeoutRef.current = setTimeout(() => {
-      const newDrafts = {
-        ...drafts,
-        [leadId]: {
-          content: content.trim(),
-          htmlContent: htmlContent || '',
-          savedAt: new Date().toISOString()
-        }
-      };
-      
-      // Remove empty drafts
-      if (!content.trim()) {
-        delete newDrafts[leadId];
-      }
-      
-      setDrafts(newDrafts);
-      localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
+    draftTimeoutRef.current = setTimeout(async () => {
+      // Save to database with debounce for user typing
+      await saveDraftToDatabase(leadId, content, htmlContent);
       setIsDraftSaving(false);
     }, 2000); // Auto-save after 2 seconds of inactivity
+  };
+
+  // Save draft directly to database
+  const saveDraftToDatabase = async (leadId, content, htmlContent) => {
+    try {
+      const { error } = await supabase
+        .from('retention_harbor')
+        .update({
+          draft_content: content.trim(),
+          draft_html: htmlContent || '',
+          draft_updated_at: new Date().toISOString()
+        })
+        .eq('id', leadId);
+
+      if (error) {
+        console.error('Failed to save draft to database:', error);
+        return false;
+      }
+
+      // Update the lead in our local state
+      setLeads(prevLeads => prevLeads.map(lead => 
+        lead.id === leadId 
+          ? { ...lead, draft_content: content.trim(), draft_html: htmlContent || '', draft_updated_at: new Date().toISOString() }
+          : lead
+      ));
+
+      return true;
+    } catch (error) {
+      console.error('Error saving draft to database:', error);
+      return false;
+    }
+  };
+
+  // Immediate save for AI-generated drafts (no debounce)
+  const saveDraftImmediate = async (leadId, content, htmlContent) => {
+    await saveDraftToDatabase(leadId, content, htmlContent);
   };
 
   // Recently viewed leads management
@@ -1257,13 +1270,6 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       setLoading(false);
     }
   }, [demoMode]);
-
-  // Reset loading states when switching between leads
-  useEffect(() => {
-    setIsGeneratingDraft(false);
-    setEnrichingLeads(new Set());
-    setSearchingPhoneLeads(new Set());
-  }, [selectedLead?.id]);
 
   // SIMPLE SAVE: Save to both Supabase and localStorage
   const saveApiKeys = async (showSuccessMessage = true) => {
@@ -2658,7 +2664,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [draftResponse, setDraftResponse] = useState('');
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [generatingDrafts, setGeneratingDrafts] = useState(new Set());
   const [isSending, setIsSending] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
   
@@ -2700,6 +2706,56 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterPopup, showSortPopup]);
+
+  // Load draft for selected lead from database (stored as part of lead data)
+  useEffect(() => {
+    if (selectedLead?.id) {
+      // Load draft directly from lead data
+      if (selectedLead.draft_content) {
+        setDraftResponse(selectedLead.draft_content || '');
+        setDraftHtml(selectedLead.draft_html || '');
+        
+        // Update the contenteditable editor
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = selectedLead.draft_html || '';
+        }
+      } else {
+        // No draft for this lead - clear the editor
+        setDraftResponse('');
+        setDraftHtml('');
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = '';
+        }
+      }
+    }
+  }, [selectedLead?.id, selectedLead?.draft_content, selectedLead?.draft_html]);
+
+  // Clean up loading states for leads that no longer exist
+  useEffect(() => {
+    if (leads.length > 0) {
+      const existingLeadIds = new Set(leads.map(lead => lead.id));
+      
+      // Clean up draft generation states
+      setGeneratingDrafts(prev => {
+        const filtered = new Set([...prev].filter(id => existingLeadIds.has(id)));
+        return filtered.size === prev.size ? prev : filtered;
+      });
+      
+      // Clean up enrichment states
+      setEnrichingLeads(prev => {
+        const filtered = new Set([...prev].filter(id => existingLeadIds.has(id)));
+        return filtered.size === prev.size ? prev : filtered;
+      });
+      
+      // Clean up phone search states
+      setSearchingPhoneLeads(prev => {
+        const filtered = new Set([...prev].filter(id => existingLeadIds.has(id)));
+        return filtered.size === prev.size ? prev : filtered;
+      });
+    }
+  }, [leads]);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
@@ -3534,27 +3590,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Add to recently viewed
       addToRecentlyViewed(selectedLead);
       
-      // Restore draft if exists
-      const savedDraft = drafts[selectedLead.id];
-      if (savedDraft) {
-        setDraftResponse(savedDraft.content);
-        setDraftHtml(savedDraft.htmlContent || '');
-        const editor = document.querySelector('[contenteditable]');
-        if (editor) {
-          const htmlContent = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
-          // Convert any links in the saved draft to interactive editor format
-          const editorReadyHtml = convertLinksToEditorFormat(htmlContent);
-          editor.innerHTML = editorReadyHtml;
-        }
-      } else {
-        // Clear draft if no saved content
-        setDraftResponse('');
-        setDraftHtml('');
-        const editor = document.querySelector('[contenteditable]');
-        if (editor) {
-          editor.innerHTML = '';
-        }
-      }
+              // Draft loading is now handled by the database-based useEffect
       
       if (selectedLead.conversation.length > 0) {
         const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
@@ -4272,40 +4308,54 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   };
 
-  // Handle draft generation using Navvii AI
+  // Handle draft generation using Navvii AI - clean per-lead approach
   const generateDraft = async () => {
     if (!selectedLead) {
       console.error('No lead selected');
       return;
     }
 
+    const targetLead = selectedLead;
+    const leadId = targetLead.id;
+    
+    // Add this lead to generating set
+    setGeneratingDrafts(prev => new Set([...prev, leadId]));
+    
     // In demo mode, show a simulated AI response
     if (demoMode) {
-      setIsGeneratingDraft(true);
-      console.log('📺 Demo mode: Generating simulated AI draft');
+      console.log('📺 Demo mode: Generating simulated AI draft for', targetLead.email);
       
-      setTimeout(() => {
-        const demoDraft = `Hi ${selectedLead.first_name},\n\nThanks for your interest in our email marketing platform! Based on your conversation, I can see you're looking to improve your email campaigns.\n\nOur platform has helped companies like ${selectedLead.company} increase their email conversion rates by 40% while reducing manual work by 60%.\n\nWould you be available for a quick 15-minute demo this week? I'd love to show you exactly how our AI-powered features can streamline your email marketing process.\n\nBest regards,\nDemo Team`;
-        
-        setDraftContent(demoDraft);
-        setIsGeneratingDraft(false);
-        setShowDraftModal(true);
-      }, 2000);
+              setTimeout(async () => {
+          const demoDraft = `Hi ${targetLead.first_name},\n\nThanks for your interest in our email marketing platform! Based on your conversation, I can see you're looking to improve your email campaigns.\n\nOur platform has helped companies like ${targetLead.company} increase their email conversion rates by 40% while reducing manual work by 60%.\n\nWould you be available for a quick 15-minute demo this week? I'd love to show you exactly how our AI-powered features can streamline your email marketing process.\n\nBest regards,\nDemo Team`;
+          
+          const demoHtml = demoDraft.replace(/\n/g, '<br>');
+          
+          // Save draft to database
+          await saveDraftImmediate(leadId, demoDraft, demoHtml);
+          
+          // Remove from generating set
+          setGeneratingDrafts(prev => {
+            const next = new Set(prev);
+            next.delete(leadId);
+            return next;
+          });
+          
+          showToast('Smart draft generated successfully!', 'success');
+        }, 2000);
       return;
     }
 
-    setIsGeneratingDraft(true);
-    console.log('🤖 Generating draft with Navvii AI for lead:', selectedLead.email);
+    console.log('🤖 Generating draft with Navvii AI for lead:', targetLead.email);
     
     try {
       // Check if we have conversation data
-      if (!selectedLead.email_message_body) {
+      if (!targetLead.email_message_body) {
         console.error('⚠️ No conversation history available for this lead');
         throw new Error('No conversation history available');
       }
       
       // Parse conversation into lightweight format (same as intent analysis)
-      const parsedConvo = parseConversationForIntent(selectedLead.email_message_body);
+      const parsedConvo = parseConversationForIntent(targetLead.email_message_body);
       if (!parsedConvo) {
         console.error('⚠️ Failed to parse conversation history');
         throw new Error('Failed to parse conversation history');
@@ -4426,22 +4476,8 @@ ${JSON.stringify(parsedConvo)}`;
           }
         }
         
-        // Update both states - the HTML is already properly formatted
-        setDraftResponse(cleanResponseText);
-        setDraftHtml(editorHtml);
-
-        // Update the contenteditable div with formatted HTML
-        const editor = document.querySelector('[contenteditable]');
-        if (editor) {
-          editor.innerHTML = editorHtml;
-          // Trigger change to sync states
-          handleTextareaChange({ target: editor });
-        }
-
-        // Auto-save as draft
-        if (selectedLead) {
-          saveDraft(selectedLead.id, cleanResponseText, editorHtml);
-        }
+        // Save draft to database
+        await saveDraftImmediate(leadId, cleanResponseText, editorHtml);
 
         console.log('✅ Draft generated successfully with Navvii AI');
         showToast('Smart draft generated successfully!', 'success');
@@ -4453,30 +4489,27 @@ ${JSON.stringify(parsedConvo)}`;
       console.error('❌ Draft generation failed:', error);
       
       // Provide helpful fallback based on conversation context
-      const lastMessage = selectedLead.conversation?.[selectedLead.conversation.length - 1];
+      const lastMessage = targetLead.conversation?.[targetLead.conversation.length - 1];
       const isFollowUp = lastMessage?.type === 'SENT';
       
       const fallbackDraft = isFollowUp 
-        ? `Hi ${selectedLead.first_name},\n\nJust wanted to follow up on my previous message. Are you still interested in discussing this further?\n\nBest regards`
-        : `Hi ${selectedLead.first_name},\n\nThank you for your message. I'd be happy to help you with this.\n\nBest regards`;
+        ? `Hi ${targetLead.first_name},\n\nJust wanted to follow up on my previous message. Are you still interested in discussing this further?\n\nBest regards`
+        : `Hi ${targetLead.first_name},\n\nThank you for your message. I'd be happy to help you with this.\n\nBest regards`;
       
       // Convert fallback text to simple HTML
       const editorHtml = fallbackDraft.replace(/\n/g, '<br>');
       
-      // Update both states - apply email styles to HTML for sending/preview
-      setDraftResponse(fallbackDraft);
-      setDraftHtml(addEmailStyles(editorHtml));
-
-      // Update the contenteditable div with formatted HTML
-      const editor = document.querySelector('[contenteditable]');
-      if (editor) {
-        editor.innerHTML = editorHtml;
-        handleTextareaChange({ target: editor });
-      }
+      // Save draft to database
+      await saveDraftImmediate(leadId, fallbackDraft, addEmailStyles(editorHtml));
 
       showToast('Used fallback draft - please check your API key', 'warning');
     } finally {
-      setIsGeneratingDraft(false);
+      // Remove from generating set
+      setGeneratingDrafts(prev => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
     }
   };
 
@@ -10309,16 +10342,16 @@ ${JSON.stringify(parsedConvo)}`;
                         style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
                                                   <span>{getDisplayName(lead)}</span>
                       {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
-                      {drafts[lead.id] && (
-                        <span 
-                          className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
-                          style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
-                          title="Has unsaved draft"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          Draft
-                        </span>
-                      )}
+                                             {lead.draft_content && (
+                         <span 
+                           className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
+                           style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
+                           title="Has saved draft"
+                         >
+                           <Edit3 className="w-3 h-3" />
+                           Draft
+                         </span>
+                       )}
                       {lead.status === 'CRM' && (
                         <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
                       )}
@@ -10867,12 +10900,12 @@ ${JSON.stringify(parsedConvo)}`;
                           Saving draft...
                         </span>
                       )}
-                      {selectedLead && drafts[selectedLead.id] && !isDraftSaving && (
-                        <span className="flex items-center gap-1" style={{color: themeStyles.success}}>
-                          <CheckCircle className="w-3 h-3" />
-                          Draft saved {new Date(drafts[selectedLead.id].savedAt).toLocaleTimeString()}
-                        </span>
-                      )}
+                                             {selectedLead && selectedLead.draft_content && !isDraftSaving && (
+                         <span className="flex items-center gap-1" style={{color: themeStyles.success}}>
+                           <CheckCircle className="w-3 h-3" />
+                           Draft saved {selectedLead.draft_updated_at ? new Date(selectedLead.draft_updated_at).toLocaleTimeString() : ''}
+                         </span>
+                       )}
                     </div>
                   </div>
                   
@@ -10925,12 +10958,12 @@ ${JSON.stringify(parsedConvo)}`;
                     <div className="flex gap-3">
                       <button
                         onClick={generateDraft}
-                        disabled={isGeneratingDraft}
+                        disabled={generatingDrafts.has(selectedLead?.id)}
                         className="px-4 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
                         style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                       >
                         <Edit3 className="w-4 h-4" />
-                        {isGeneratingDraft ? 'Generating...' : 'Generate with Navvii AI'}
+                        {generatingDrafts.has(selectedLead?.id) ? 'Generating...' : 'Generate with Navvii AI'}
                       </button>
                       
                       <button
