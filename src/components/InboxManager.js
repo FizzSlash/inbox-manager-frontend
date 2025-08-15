@@ -1258,6 +1258,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   }, [demoMode]);
 
+  // Reset loading states when switching between leads
+  useEffect(() => {
+    setIsGeneratingDraft(false);
+    setEnrichingLeads(new Set());
+    setSearchingPhoneLeads(new Set());
+  }, [selectedLead?.id]);
+
   // SIMPLE SAVE: Save to both Supabase and localStorage
   const saveApiKeys = async (showSuccessMessage = true) => {
     console.log('💾 Saving API keys...');
