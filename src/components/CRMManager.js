@@ -272,7 +272,7 @@ const CRMManager = ({ brandId, onGoToInboxLead = () => {}, demoMode = false, dem
       
       const { data, error } = await supabase
         .from('retention_harbor')
-        .select('*')
+        .select('*, draft_content, draft_html, draft_updated_at')
         .eq('brand_id', brandId)
         .eq('status', 'CRM')
         .order(sort.field, { ascending: sort.dir === 'asc' });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import Joyride from 'react-joyride';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Info, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot, Settings } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
@@ -7,6 +8,7 @@ import CRMManager from './CRMManager';
 import TemplateManager from './TemplateManager';
 import TrialExpiredModal from './TrialExpiredModal';
 import TrialBanner from './TrialBanner';
+import TutorialModal from './TutorialModal';
 
 // Security utilities for API key encryption
 const ENCRYPTION_SALT = 'InboxManager_2024_Salt_Key';
@@ -498,6 +500,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // Intent filter state (default to 'all' to show all leads including those without intent)
   const [intentFilter, setIntentFilter] = useState('all');
   
+
+  
   // Lead backfill states
   const [showBackfillModal, _setShowBackfillModal] = useState(false);
   
@@ -588,7 +592,14 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
               setShowBackfillModal(false), console.log('🎯 MODAL CLOSED');
               setIsBackfilling(false);
               setProgressId(null);
-              fetchLeads(); // Refresh to show intent scores
+              fetchLeads().finally(() => {
+                // 🎯 TOUR: Auto-continue tour if waiting for leads
+                if (runTour && (tourStepIndex === 6 || tourStepIndex === 7)) { // Backfill or campaign selection steps
+                  setTimeout(() => {
+                    setTourStepIndex(8); // Move to lead filters step
+                  }, 1000);
+                }
+              });
             }, 3000);
           }
         }
@@ -717,7 +728,16 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return savedTheme ? savedTheme === 'dark' : true; // Default to dark mode
   });
 
-  // Drafts are now stored in the database as part of lead data
+  // Auto-save drafts state
+  const [drafts, setDrafts] = useState(() => {
+    try {
+      const savedDrafts = localStorage.getItem('inbox_manager_drafts');
+      return savedDrafts ? JSON.parse(savedDrafts) : {};
+    } catch (e) {
+      console.warn('Failed to load saved drafts:', e);
+      return {};
+    }
+  });
 
   // Recently viewed leads state
   const [recentlyViewed, setRecentlyViewed] = useState(() => {
@@ -1001,47 +1021,114 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     
     setIsDraftSaving(true);
     
-    draftTimeoutRef.current = setTimeout(async () => {
-      // Save to database with debounce for user typing
-      await saveDraftToDatabase(leadId, content, htmlContent);
+    draftTimeoutRef.current = setTimeout(() => {
+      const newDrafts = {
+        ...drafts,
+        [leadId]: {
+          content: content.trim(),
+          htmlContent: htmlContent || '',
+          savedAt: new Date().toISOString()
+        }
+      };
+      
+      // Remove empty drafts
+      if (!content.trim()) {
+        delete newDrafts[leadId];
+      }
+      
+      setDrafts(newDrafts);
+      localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
       setIsDraftSaving(false);
     }, 2000); // Auto-save after 2 seconds of inactivity
   };
 
-  // Save draft directly to database
-  const saveDraftToDatabase = async (leadId, content, htmlContent) => {
-    try {
-      const { error } = await supabase
-        .from('retention_harbor')
-        .update({
-          draft_content: content.trim(),
-          draft_html: htmlContent || '',
-          draft_updated_at: new Date().toISOString()
-        })
-        .eq('id', leadId);
-
-      if (error) {
-        console.error('Failed to save draft to database:', error);
-        return false;
+  // Immediate save for AI-generated drafts (no debounce)
+  const saveDraftImmediate = (leadId, content, htmlContent) => {
+    const newDrafts = {
+      ...drafts,
+      [leadId]: {
+        content: content.trim(),
+        htmlContent: htmlContent || '',
+        savedAt: new Date().toISOString()
       }
-
-      // Update the lead in our local state
-      setLeads(prevLeads => prevLeads.map(lead => 
-        lead.id === leadId 
-          ? { ...lead, draft_content: content.trim(), draft_html: htmlContent || '', draft_updated_at: new Date().toISOString() }
-          : lead
-      ));
-
-      return true;
-    } catch (error) {
-      console.error('Error saving draft to database:', error);
-      return false;
+    };
+    
+    // Remove empty drafts
+    if (!content.trim()) {
+      delete newDrafts[leadId];
+    }
+    
+    setDrafts(newDrafts);
+    localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
+    
+    // Update UI only if this draft is for the currently selected lead
+    if (selectedLead?.id === leadId) {
+      setDraftResponse(content.trim());
+      setDraftHtml(htmlContent || '');
+      
+      // Update the contenteditable editor
+      const editor = document.querySelector('[contenteditable]');
+      if (editor) {
+        editor.innerHTML = htmlContent || '';
+      }
     }
   };
 
-  // Immediate save for AI-generated drafts (no debounce)
-  const saveDraftImmediate = async (leadId, content, htmlContent) => {
-    await saveDraftToDatabase(leadId, content, htmlContent);
+  // Handle tutorial completion
+  const handleTutorialComplete = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ has_seen_tutorial: true })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error marking tutorial as complete:', error);
+      } else {
+        console.log('✅ Tutorial marked as complete for user');
+      }
+    } catch (error) {
+      console.error('Failed to update tutorial status:', error);
+    }
+
+    setShowTutorialModal(false);
+  };
+
+  // Handle starting the interactive tour
+  const handleStartTour = () => {
+    setShowTutorialModal(false); // Close welcome modal
+    setTourStepIndex(0);
+    setRunTour(true);
+  };
+
+  // Handle tour callback events with async operations
+  const handleTourCallback = async (data) => {
+    const { action, index, status, type, step } = data;
+
+    if ((status === 'finished' || status === 'skipped') && type === 'tour:end') {
+      setRunTour(false);
+      handleTutorialComplete(); // Mark tutorial as seen
+    } else if (type === 'step:after') {
+      const currentStep = tourSteps[index];
+      
+      // Handle step-specific actions
+      if (currentStep?.target === '[data-tour="backfill-button"]' && action === 'next') {
+        // Wait for backfill to start and leads to load before proceeding
+        if (isBackfilling) {
+          // Tour will continue automatically when leads are loaded
+          return;
+        }
+      } else if (currentStep?.target === '[data-tour="lead-filters"]' && filteredAndSortedLeads.length === 0) {
+        // Skip lead-related steps if no leads available
+        console.log('⏭️ Skipping lead steps - no leads available');
+        setTourStepIndex(tourSteps.length - 1); // Jump to final step
+        return;
+      }
+      
+      setTourStepIndex(index + (action === 'prev' ? -1 : 1));
+    }
   };
 
   // Recently viewed leads management
@@ -1214,12 +1301,12 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
 
       
-        // In demo mode, set a fake brand_id and skip database calls
-  if (demoMode) {
-    console.log('📺 Demo mode: Setting fake brand_id');
-    setBrandId('demo-brand');
-    return;
-  }
+      // In demo mode, set a fake brand_id and skip database calls
+      if (demoMode) {
+        console.log('📺 Demo mode: Setting fake brand_id');
+        setBrandId('demo-brand');
+        return;
+      }
       
       // Check if we already have it cached in session (with user validation)
       const cachedBrandId = sessionStorage.getItem('user_brand_id');
@@ -1842,23 +1929,41 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   };
 
-  // Sync lead counts from actual retention_harbor data
+  // Sync positive response counts using database calculation (scalable)
   const syncLeadCounts = async () => {
     if (!brandId || demoMode) {
+      console.log('⏸️ Skipping sync - no brandId or demo mode');
       return;
     }
 
     try {
-      console.log('📊 Syncing lead counts for brand:', brandId);
+      console.log('📊 Syncing positive response counts for brand:', brandId);
+      
+      // Use database aggregation instead of frontend filtering (much faster at scale)
       const { data, error } = await supabase
-        .rpc('sync_lead_counts_for_brand', { brand_uuid: brandId });
+        .from('retention_harbor')
+        .select('id', { count: 'exact' })
+        .eq('brand_id', brandId)
+        .not('intent', 'is', null) // Has intent (positive)
+        .gte('created_at', new Date(Date.now() - 90*24*60*60*1000).toISOString()); // Last 90 days
 
       if (error) throw error;
       
-      console.log('✅ Lead count synced:', data);
-      return data;
+      const positiveResponses = data.length;
+      console.log('✅ Database calculated positive responses:', positiveResponses);
+      
+      // Update brand count
+      const { error: updateError } = await supabase
+        .from('brands')
+        .update({ leads_used_this_month: positiveResponses })
+        .eq('id', brandId);
+
+      if (updateError) throw updateError;
+      
+      console.log('✅ Positive response count synced to database:', positiveResponses);
+      return positiveResponses;
     } catch (error) {
-      console.error('❌ Failed to sync lead counts:', error);
+      console.error('❌ Failed to sync positive response counts:', error);
     }
   };
 
@@ -1872,9 +1977,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
 
     try {
-      console.log('📊 LoadPlanData: Syncing lead counts first...');
-      // First sync lead counts to ensure accuracy
-      await syncLeadCounts();
+      // Note: We'll sync lead counts after leads are loaded, not here
       
       console.log('🔍 LoadPlanData: Querying brands table for:', brandId);
       const { data, error } = await supabase
@@ -1892,10 +1995,10 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
       if (data) {
         const planConfig = {
-          trial: { displayName: 'Trial', price: 0, maxLeads: 50, backfillDays: 45 },
-          professional: { displayName: 'Professional', price: 297, maxLeads: 500, backfillDays: 45 },
-          enterprise: { displayName: 'Enterprise', price: 597, maxLeads: 2000, backfillDays: 90 },
-          agency: { displayName: 'Agency', price: 997, maxLeads: 99999, backfillDays: 180 },
+          trial: { displayName: 'Trial', price: 0, maxLeads: 10000, backfillDays: 45 },
+          professional: { displayName: 'Professional', price: 297, maxLeads: 300, backfillDays: 45 },
+          enterprise: { displayName: 'Enterprise', price: 597, maxLeads: 600, backfillDays: 90 },
+          agency: { displayName: 'Agency', price: 997, maxLeads: 1000, backfillDays: 180 },
           god: { displayName: 'God Mode', price: 1997, maxLeads: 999999, backfillDays: 365 }
         };
 
@@ -2084,6 +2187,38 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   }, [user?.id, brandId]); // Run when user ID OR brandId changes
 
+  // Check if user has seen tutorial
+  useEffect(() => {
+    const checkTutorialStatus = async () => {
+      if (!user?.id || demoMode) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('has_seen_tutorial')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error checking tutorial status:', error);
+          return;
+        }
+
+        // Show tutorial if user hasn't seen it
+        if (!data?.has_seen_tutorial) {
+          setShowTutorialModal(true);
+        }
+      } catch (error) {
+        console.error('Tutorial check failed:', error);
+      }
+    };
+
+    // Check tutorial status after user is loaded and not in demo mode
+    if (user?.id && !demoMode) {
+      checkTutorialStatus();
+    }
+  }, [user?.id, demoMode]);
+
   // Set current account ID from API keys
   useEffect(() => {
     if (apiKeys.accounts && apiKeys.accounts.length > 0) {
@@ -2154,7 +2289,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
                 setTimeout(() => {
                   fetchLeads();
                 }, 2000);
-              } else {
+    } else {
                 // Update progress
                 setPersistentAIToast(prev => ({
                   ...prev,
@@ -2214,7 +2349,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
       const { data, error } = await supabase
         .from('retention_harbor')
-        .select('*')
+        .select('*, draft_content, draft_html, draft_updated_at')
         .eq('brand_id', currentBrandId)
         .order('created_at', { ascending: false })
         .limit(1000); // Safety limit - prevents massive queries
@@ -2365,6 +2500,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         };
       });
       setLeads(transformedLeads);
+      
+      // Sync positive response count to database now that leads are loaded
+      console.log('🔄 FETCH LEADS: Syncing positive response count...');
+      await syncLeadCounts();
+      
     } catch (err) {
       console.error('Error fetching leads:', err);
       setError(err.message);
@@ -2707,18 +2847,19 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterPopup, showSortPopup]);
 
-  // Load draft for selected lead from database (stored as part of lead data)
+  // Load draft for selected lead when switching leads (not when drafts change)
   useEffect(() => {
+    // Load draft for this specific lead
     if (selectedLead?.id) {
-      // Load draft directly from lead data
-      if (selectedLead.draft_content) {
-        setDraftResponse(selectedLead.draft_content || '');
-        setDraftHtml(selectedLead.draft_html || '');
+      const leadDraft = drafts[selectedLead.id];
+      if (leadDraft) {
+        setDraftResponse(leadDraft.content || '');
+        setDraftHtml(leadDraft.htmlContent || '');
         
         // Update the contenteditable editor
         const editor = document.querySelector('[contenteditable]');
         if (editor) {
-          editor.innerHTML = selectedLead.draft_html || '';
+          editor.innerHTML = leadDraft.htmlContent || '';
         }
       } else {
         // No draft for this lead - clear the editor
@@ -2730,7 +2871,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         }
       }
     }
-  }, [selectedLead?.id, selectedLead?.draft_content, selectedLead?.draft_html]);
+  }, [selectedLead?.id]); // Removed drafts dependency
 
   // Clean up loading states for leads that no longer exist
   useEffect(() => {
@@ -2759,6 +2900,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [showSentConfirm, setShowSentConfirm] = useState(false);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
+  
+  // Tutorial state
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
 
   // Available filter options
   const filterOptions = {
@@ -2830,6 +2976,217 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       ]
     }
   };
+
+  // Interactive tour steps - Action-driven flow
+  const tourSteps = [
+    {
+      target: '[data-tour="settings-tab"]',
+      content: '👋 Welcome! Let\'s get you set up step-by-step. Click the "Settings" button to continue.',
+      placement: 'bottom',
+      disableBeacon: true,
+      hideNextButton: true, // Wait for actual click
+    },
+    {
+      target: '[data-tour="api-keys-section"]',
+      content: '🔑 Step 1: Click the "Add Account" button to create a new SmartLead connection.',
+      placement: 'right',
+      hideNextButton: true, // Wait for account creation
+    },
+    {
+      target: '[data-tour="api-keys-section"]',
+      content: '📝 Step 2: Select "SmartLead" from the provider dropdown, then paste your API key in the input field. Find your API key in SmartLead under Settings → API Keys.',
+      placement: 'right',
+      hideNextButton: true, // Wait for API key entry
+    },
+    {
+      target: '[data-tour="webhook-url"]',
+      content: '🔗 Step 3: Copy this webhook URL and add it to your SmartLead account as an "Email Reply" webhook to receive responses automatically.',
+      placement: 'bottom',
+      // Keep next button for this informational step
+    },
+    {
+      target: '[data-tour="save-api-button"]',
+      content: '💾 Step 4: Click "Save API Keys" to test and save your connection.',
+      placement: 'top',
+      hideNextButton: true, // Wait for save action
+    },
+    {
+      target: '[data-tour="timeframe-selector"]',
+      content: '📅 Step 5: Choose how many days back to import responses. For first setup, 30-45 days works well.',
+      placement: 'bottom',
+      // Keep next button for selection step
+    },
+    {
+      target: '[data-tour="backfill-button"]',
+      content: '🚀 Step 6: Click "Import Leads" to begin importing your email responses.',
+      placement: 'left',
+      hideNextButton: true, // Wait for backfill start
+    },
+    {
+      target: '[data-tour="campaign-selector"]',
+      content: '🎯 Step 7: Select campaigns and click "Start Import" to begin the import process.',
+      placement: 'center',
+      hideNextButton: true, // Wait for import start
+    },
+    {
+      target: '[data-tour="lead-filters"]',
+      content: '🎉 Step 8: Perfect! Your leads are imported. Click "Positive Intent" to filter for interested prospects.',
+      placement: 'bottom',
+      skipStep: () => filteredAndSortedLeads.length === 0,
+      hideNextButton: true, // Wait for filter click
+    },
+    {
+      target: '[data-tour="lead-list"]',
+      content: '📋 Step 9: Great! These are your positive intent leads. Click on any lead card to see their details.',
+      placement: 'right',
+      skipStep: () => filteredAndSortedLeads.length === 0,
+      hideNextButton: true, // Wait for lead selection
+    },
+    {
+      target: '[data-tour="lead-detail"]',
+      content: '💬 Step 10: Perfect! Now you can see the full conversation history and lead details.',
+      placement: 'left',
+      skipStep: () => !selectedLead,
+      // Keep next button for informational step
+    },
+    {
+      target: '[data-tour="enrich-button"]',
+      content: '🔍 Step 11: Try clicking "Enrich" to automatically find phone numbers and company data for this lead.',
+      placement: 'top',
+      skipStep: () => !selectedLead,
+      // Keep next button - enrichment is optional
+    },
+    {
+      target: '[data-tour="smart-draft"]',
+      content: '🤖 Step 12: Click "Generate with Navvii AI" to create a personalized response based on this conversation.',
+      placement: 'top',
+      skipStep: () => !selectedLead,
+      hideNextButton: true, // Wait for draft generation
+    },
+    {
+      target: '[data-tour="template-button"]',
+      content: '📝 Step 13: You can also use "Use Template" for pre-written responses, but let\'s continue with the AI draft.',
+      placement: 'top',
+      skipStep: () => !selectedLead,
+      // Keep next button for informational step
+    },
+    {
+      target: '[data-tour="send-email"]',
+      content: '📧 Step 14: Your draft is ready! You can edit it or click "Send Message" to reply (optional for tutorial).',
+      placement: 'top',
+      skipStep: () => !selectedLead,
+      // Keep next button - sending is optional
+    },
+    {
+      target: '[data-tour="move-to-crm"]',
+      content: '📈 Step 15: Click "Add to CRM" to move this qualified lead to your sales pipeline.',
+      placement: 'top',
+      skipStep: () => !selectedLead,
+      hideNextButton: true, // Wait for CRM action
+    },
+    {
+      target: '[data-tour="crm-tab"]',
+      content: '🎯 Step 16: Click the "CRM" tab to see your deals and sales pipeline.',
+      placement: 'bottom',
+      hideNextButton: true, // Wait for tab click
+    },
+    {
+      target: '[data-tour="settings-tab"]',
+      content: '🎉 Congratulations! You\'ve completed the onboarding. You can now manage leads, generate responses, and track deals. Welcome to Inbox Manager!',
+      placement: 'bottom',
+      // Keep next button for final step
+    },
+  ];
+
+  // Action detection for tour auto-advancement
+  useEffect(() => {
+    if (!runTour) return;
+
+    const currentStep = tourSteps[tourStepIndex];
+    if (!currentStep?.hideNextButton) return; // Only for action-waiting steps
+
+    // Step 1: Settings modal opened
+    if (currentStep.target === '[data-tour="settings-tab"]' && showApiSettings) {
+      setTimeout(() => setTourStepIndex(1), 500);
+    }
+    
+    // Step 2: Account added (check for new accounts)
+    else if (currentStep.target === '[data-tour="api-keys-section"]' && tourStepIndex === 1 && apiKeys.accounts.length > 0) {
+      setTimeout(() => setTourStepIndex(2), 500);
+    }
+    
+    // Step 3: API key entered (check for SmartLead account with key)
+    else if (currentStep.target === '[data-tour="api-keys-section"]' && tourStepIndex === 2) {
+      const smartleadAccount = apiKeys.accounts.find(acc => 
+        acc.esp.provider === 'smartlead' && acc.esp.key && acc.esp.key.length > 10
+      );
+      if (smartleadAccount) {
+        setTimeout(() => setTourStepIndex(3), 500);
+      }
+    }
+    
+  }, [runTour, tourStepIndex, showApiSettings, apiKeys.accounts]);
+
+  // Track API saving completion
+  const prevSavingRef = useRef(isSavingApi);
+  useEffect(() => {
+    if (!runTour) return;
+    
+    const currentStep = tourSteps[tourStepIndex];
+    if (currentStep?.target === '[data-tour="save-api-button"]' && currentStep?.hideNextButton) {
+      // If we just finished saving (was saving, now not saving)
+      if (prevSavingRef.current && !isSavingApi) {
+        setTimeout(() => setTourStepIndex(5), 1000);
+      }
+    }
+    prevSavingRef.current = isSavingApi;
+  }, [isSavingApi, runTour, tourStepIndex]);
+
+  // Track other action completions
+  useEffect(() => {
+    if (!runTour) return;
+    
+    const currentStep = tourSteps[tourStepIndex];
+    if (!currentStep?.hideNextButton) return;
+
+    // Action detection for tour auto-advancement
+
+    // Step 6: Backfill started
+    if (currentStep.target === '[data-tour="backfill-button"]' && isBackfilling) {
+      setTimeout(() => setTourStepIndex(7), 500);
+    }
+    
+    // Step 7: Campaign selection and import started (backfill modal closes)
+    else if (currentStep.target === '[data-tour="campaign-selector"]' && !showCampaignSelection && isBackfilling) {
+      // Tour will auto-continue when leads load (existing logic handles this)
+    }
+    
+    // Step 8: Filter clicked (positive intent)
+    else if (currentStep.target === '[data-tour="lead-filters"]' && intentFilter === 'positive') {
+      setTimeout(() => setTourStepIndex(9), 500);
+    }
+    
+    // Step 9: Lead selected
+    else if (currentStep.target === '[data-tour="lead-list"]' && selectedLead) {
+      setTimeout(() => setTourStepIndex(10), 500);
+    }
+    
+    // Step 12: Smart draft generated
+    else if (currentStep.target === '[data-tour="smart-draft"]' && draftResponse && draftResponse.length > 10) {
+      setTimeout(() => setTourStepIndex(13), 1000);
+    }
+    
+    // Step 15: Lead moved to CRM
+    else if (currentStep.target === '[data-tour="move-to-crm"]' && selectedLead?.status === 'CRM') {
+      setTimeout(() => setTourStepIndex(16), 500);
+    }
+    
+    // Step 16: CRM tab clicked
+    else if (currentStep.target === '[data-tour="crm-tab"]' && activeTab === 'crm') {
+      setTimeout(() => setTourStepIndex(17), 500);
+    }
+
+  }, [runTour, tourStepIndex, isBackfilling, showCampaignSelection, intentFilter, selectedLead, draftResponse, activeTab]);
 
   // Handle adding sort
   const handleAddSort = (field, direction = 'desc') => {
@@ -3590,7 +3947,27 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Add to recently viewed
       addToRecentlyViewed(selectedLead);
       
-              // Draft loading is now handled by the database-based useEffect
+      // Restore draft if exists
+      const savedDraft = drafts[selectedLead.id];
+      if (savedDraft) {
+        setDraftResponse(savedDraft.content);
+        setDraftHtml(savedDraft.htmlContent || '');
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          const htmlContent = savedDraft.htmlContent || savedDraft.content.replace(/\n/g, '<br>');
+          // Convert any links in the saved draft to interactive editor format
+          const editorReadyHtml = convertLinksToEditorFormat(htmlContent);
+          editor.innerHTML = editorReadyHtml;
+        }
+      } else {
+        // Clear draft if no saved content
+        setDraftResponse('');
+        setDraftHtml('');
+        const editor = document.querySelector('[contenteditable]');
+        if (editor) {
+          editor.innerHTML = '';
+        }
+      }
       
       if (selectedLead.conversation.length > 0) {
         const lastMessage = selectedLead.conversation[selectedLead.conversation.length - 1];
@@ -4320,28 +4697,28 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     
     // Add this lead to generating set
     setGeneratingDrafts(prev => new Set([...prev, leadId]));
-    
+
     // In demo mode, show a simulated AI response
     if (demoMode) {
       console.log('📺 Demo mode: Generating simulated AI draft for', targetLead.email);
       
-              setTimeout(async () => {
-          const demoDraft = `Hi ${targetLead.first_name},\n\nThanks for your interest in our email marketing platform! Based on your conversation, I can see you're looking to improve your email campaigns.\n\nOur platform has helped companies like ${targetLead.company} increase their email conversion rates by 40% while reducing manual work by 60%.\n\nWould you be available for a quick 15-minute demo this week? I'd love to show you exactly how our AI-powered features can streamline your email marketing process.\n\nBest regards,\nDemo Team`;
-          
-          const demoHtml = demoDraft.replace(/\n/g, '<br>');
-          
-          // Save draft to database
-          await saveDraftImmediate(leadId, demoDraft, demoHtml);
-          
-          // Remove from generating set
-          setGeneratingDrafts(prev => {
-            const next = new Set(prev);
-            next.delete(leadId);
-            return next;
-          });
-          
-          showToast('Smart draft generated successfully!', 'success');
-        }, 2000);
+      setTimeout(() => {
+        const demoDraft = `Hi ${targetLead.first_name},\n\nThanks for your interest in our email marketing platform! Based on your conversation, I can see you're looking to improve your email campaigns.\n\nOur platform has helped companies like ${targetLead.company} increase their email conversion rates by 40% while reducing manual work by 60%.\n\nWould you be available for a quick 15-minute demo this week? I'd love to show you exactly how our AI-powered features can streamline your email marketing process.\n\nBest regards,\nDemo Team`;
+        
+        const demoHtml = demoDraft.replace(/\n/g, '<br>');
+        
+        // Save draft immediately - the useEffect will handle UI updates
+        saveDraftImmediate(leadId, demoDraft, demoHtml);
+        
+        // Remove from generating set
+        setGeneratingDrafts(prev => {
+          const next = new Set(prev);
+          next.delete(leadId);
+          return next;
+        });
+        
+        showToast('Smart draft generated successfully!', 'success');
+      }, 2000);
       return;
     }
 
@@ -4476,8 +4853,8 @@ ${JSON.stringify(parsedConvo)}`;
           }
         }
         
-        // Save draft to database
-        await saveDraftImmediate(leadId, cleanResponseText, editorHtml);
+        // Save draft immediately - the useEffect will handle UI updates
+        saveDraftImmediate(leadId, cleanResponseText, editorHtml);
 
         console.log('✅ Draft generated successfully with Navvii AI');
         showToast('Smart draft generated successfully!', 'success');
@@ -4499,8 +4876,8 @@ ${JSON.stringify(parsedConvo)}`;
       // Convert fallback text to simple HTML
       const editorHtml = fallbackDraft.replace(/\n/g, '<br>');
       
-      // Save draft to database
-      await saveDraftImmediate(leadId, fallbackDraft, addEmailStyles(editorHtml));
+      // Save draft immediately - the useEffect will handle UI updates
+      saveDraftImmediate(leadId, fallbackDraft, addEmailStyles(editorHtml));
 
       showToast('Used fallback draft - please check your API key', 'warning');
     } finally {
@@ -7419,7 +7796,7 @@ ${JSON.stringify(parsedConvo)}`;
           </a>
         </div>
       )}
-
+      
 
       
       {/* Main Container - simplified height calculation */}
@@ -7503,6 +7880,7 @@ ${JSON.stringify(parsedConvo)}`;
                 backgroundColor: activeTab === 'crm' ? `${themeStyles.accent}20` : 'transparent',
                 color: activeTab === 'crm' ? themeStyles.accent : themeStyles.textPrimary
               }}
+              data-tour="crm-tab"
             >
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
@@ -7556,6 +7934,7 @@ ${JSON.stringify(parsedConvo)}`;
                 backgroundColor: showApiSettings ? `${themeStyles.accent}20` : 'transparent',
                 color: showApiSettings ? themeStyles.accent : themeStyles.textPrimary
               }}
+              data-tour="settings-tab"
             >
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
@@ -7672,7 +8051,7 @@ ${JSON.stringify(parsedConvo)}`;
                 {/* Lead Usage */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span style={{color: themeStyles.textMuted}}>Responding Leads This Month</span>
+                    <span style={{color: themeStyles.textMuted}}>Active Conversations This Month</span>
                     <span style={{color: themeStyles.textPrimary}}>
                       {currentPlan.leadsUsed} / {currentPlan.maxLeads === 99999 ? '∞' : currentPlan.maxLeads}
                     </span>
@@ -7682,7 +8061,11 @@ ${JSON.stringify(parsedConvo)}`;
                       className="h-2 rounded-full transition-all duration-300" 
                       style={{
                         backgroundColor: themeStyles.accent,
-                        width: currentPlan.maxLeads === 99999 ? '20%' : `${Math.min((currentPlan.leadsUsed / currentPlan.maxLeads) * 100, 100)}%`
+                        width: currentPlan.maxLeads === 99999 ? '20%' : `${Math.min((leads.filter(lead => {
+                          const hasIntent = lead.intent !== null && lead.intent !== undefined;
+                          const isRecent = new Date(lead.created_at) > new Date(Date.now() - 90*24*60*60*1000);
+                          return hasIntent && isRecent;
+                        }).length / currentPlan.maxLeads) * 100, 100)}%`
                       }}
                     />
                   </div>
@@ -7728,7 +8111,7 @@ ${JSON.stringify(parsedConvo)}`;
                         <div className="text-sm mb-2" style={{color: themeStyles.textSecondary}}>
                           {title}
                         </div>
-                        <button 
+                      <button 
                           onClick={() => {
                             setShowApiSettings(false); // Close settings modal
                             setTrialModalMode('upgrade');
@@ -7737,7 +8120,7 @@ ${JSON.stringify(parsedConvo)}`;
                           className="px-6 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90 hover:scale-105 shadow-lg"
                           style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}>
                           {cta}
-                        </button>
+                      </button>
                       </div>
                       <button 
                         onClick={() => setShowPlanComparison(!showPlanComparison)}
@@ -7765,9 +8148,9 @@ ${JSON.stringify(parsedConvo)}`;
                               <div style={{color: themeStyles.textPrimary}}>$997/mo</div>
                               <div style={{color: themeStyles.textSecondary}}>Unlimited</div>
                             </div>
-                          </div>
-                        </div>
-                      )}
+                    </div>
+                  </div>
+                )}
                     </div>
                   );
                 })()}
@@ -7789,7 +8172,7 @@ ${JSON.stringify(parsedConvo)}`;
               </div>
 
               {/* Multiple Email Accounts Section */}
-              <div className="space-y-4">
+              <div className="space-y-4" data-tour="api-keys-section">
                 <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4" style={{color: themeStyles.accent}} />
@@ -7957,7 +8340,7 @@ ${JSON.stringify(parsedConvo)}`;
                 )}
 
                       {/* Webhook URL Display */}
-                      <div className="space-y-2 pt-3 mt-3 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}}>
+                      <div className="space-y-2 pt-3 mt-3 border-t transition-colors duration-300" style={{borderColor: themeStyles.border}} data-tour="webhook-url">
                         <label className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
                           Webhook URL for this account
                         </label>
@@ -8134,6 +8517,7 @@ ${JSON.stringify(parsedConvo)}`;
                 disabled={isSavingApi}
                   className="px-4 py-2 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90"
                   style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                  data-tour="save-api-button"
               >
                 {isSavingApi ? (
                   <>
@@ -8354,7 +8738,7 @@ ${JSON.stringify(parsedConvo)}`;
                     </p>
                   </div>
                   
-                  <div className="mb-4">
+                  <div className="mb-4" data-tour="timeframe-selector">
                     <label className="text-sm font-medium mb-2 block transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
                       How many days back should we import?
                       {currentPlan?.name === 'god' && (
@@ -8438,6 +8822,7 @@ ${JSON.stringify(parsedConvo)}`;
                     <button
                       type="button"
                       disabled={isBackfilling}
+                      data-tour="backfill-button"
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -8905,7 +9290,7 @@ ${JSON.stringify(parsedConvo)}`;
       {/* 🆕 CAMPAIGN SELECTION MODAL */}
       {showCampaignSelection && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[20002] p-4">
-          <div className="rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}}>
+          <div className="rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden transition-colors duration-300" style={{backgroundColor: themeStyles.primaryBg, border: `1px solid ${themeStyles.border}`}} data-tour="campaign-selector">
             <div className="p-6 border-b transition-colors duration-300" style={{borderColor: themeStyles.border}}>
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold flex items-center gap-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
@@ -10159,7 +10544,7 @@ ${JSON.stringify(parsedConvo)}`;
 
 
           {/* Intent Filter Tabs */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4" data-tour="lead-filters">
             <button
               onClick={() => setIntentFilter('positive')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
@@ -10225,7 +10610,7 @@ ${JSON.stringify(parsedConvo)}`;
         </div>
 
         {/* Lead List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{scrollbarWidth: 'thin', scrollbarColor: '#54FCFF rgba(26, 28, 26, 0.5)', minHeight: 0}} data-tour="lead-list">
           <div className="pb-4">
             {filteredAndSortedLeads.length === 0 ? (
               <div className="text-center p-8 text-white">
@@ -10274,10 +10659,10 @@ ${JSON.stringify(parsedConvo)}`;
                 onClick={() => {
                   // Batch state updates to prevent multiple re-renders
                   React.startTransition(() => {
-                    setSelectedLead(lead);
-                    setAttachedFiles([]);
-                    setScheduledTime(null);
-                    setShowScheduler(false);
+                  setSelectedLead(lead);
+                  setAttachedFiles([]);
+                  setScheduledTime(null);
+                  setShowScheduler(false);
                   });
                   
                   // Mark lead as opened if not already opened (async operation)
@@ -10342,16 +10727,16 @@ ${JSON.stringify(parsedConvo)}`;
                         style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
                                                   <span>{getDisplayName(lead)}</span>
                       {urgency !== 'none' && <span className="text-sm animate-pulse" style={{color: themeStyles.error}}>●</span>}
-                                             {lead.draft_content && (
-                         <span 
-                           className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
-                           style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
-                           title="Has saved draft"
-                         >
-                           <Edit3 className="w-3 h-3" />
-                           Draft
-                         </span>
-                       )}
+                      {drafts[lead.id] && (
+                        <span 
+                          className="px-2 py-1 text-xs rounded-full transition-all duration-300 flex items-center gap-1"
+                          style={{backgroundColor: `${themeStyles.warning}20`, border: `1px solid ${themeStyles.warning}`, color: themeStyles.warning}}
+                          title="Has unsaved draft"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          Draft
+                        </span>
+                      )}
                       {lead.status === 'CRM' && (
                         <span className="ml-2 px-2 py-1 rounded-full text-xs bg-blue-900 text-blue-300">CRM</span>
                       )}
@@ -10473,7 +10858,7 @@ ${JSON.stringify(parsedConvo)}`;
       </div>
 
       {/* Main Content - Lead Details */}
-      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300 min-w-0 max-w-[50%]" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}}>
+      <div className="flex-1 flex flex-col shadow-lg transition-colors duration-300 min-w-0 max-w-[50%]" style={{backgroundColor: themeStyles.secondaryBg, borderRadius: '12px', margin: '8px', marginLeft: '4px', border: `1px solid ${themeStyles.border}`}} data-tour="lead-detail">
         {selectedLead ? (
           <>
             {/* Lead Header */}
@@ -10522,6 +10907,8 @@ ${JSON.stringify(parsedConvo)}`;
                     <X className="w-4 h-4" />
                     Delete
                   </button>
+
+                  
                   <button
                     onClick={() => setSelectedLead(null)}
                     className="p-2 rounded-lg transition-colors duration-300 hover:opacity-80"
@@ -10535,6 +10922,7 @@ ${JSON.stringify(parsedConvo)}`;
                       className="px-3 py-2 rounded-lg transition-colors duration-300 flex items-center gap-2 text-sm bg-blue-600 text-white hover:bg-blue-700"
                       style={{marginRight: '8px'}}
                       title="Move to CRM"
+                      data-tour="move-to-crm"
                     >
                       Add to CRM
                     </button>
@@ -10590,6 +10978,7 @@ ${JSON.stringify(parsedConvo)}`;
                               disabled={enrichingLeads.has(selectedLead.id)}
                               className="px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
                               style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
+                              data-tour="enrich-button"
                             >
                               {enrichingLeads.has(selectedLead.id) ? (
                                 <>
@@ -10900,12 +11289,12 @@ ${JSON.stringify(parsedConvo)}`;
                           Saving draft...
                         </span>
                       )}
-                                             {selectedLead && selectedLead.draft_content && !isDraftSaving && (
-                         <span className="flex items-center gap-1" style={{color: themeStyles.success}}>
-                           <CheckCircle className="w-3 h-3" />
-                           Draft saved {selectedLead.draft_updated_at ? new Date(selectedLead.draft_updated_at).toLocaleTimeString() : ''}
-                         </span>
-                       )}
+                      {selectedLead && drafts[selectedLead.id] && !isDraftSaving && (
+                        <span className="flex items-center gap-1" style={{color: themeStyles.success}}>
+                          <CheckCircle className="w-3 h-3" />
+                          Draft saved {new Date(drafts[selectedLead.id].savedAt).toLocaleTimeString()}
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -10961,6 +11350,7 @@ ${JSON.stringify(parsedConvo)}`;
                         disabled={generatingDrafts.has(selectedLead?.id)}
                         className="px-4 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
                         style={{backgroundColor: themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
+                        data-tour="smart-draft"
                       >
                         <Edit3 className="w-4 h-4" />
                         {generatingDrafts.has(selectedLead?.id) ? 'Generating...' : 'Generate with Navvii AI'}
@@ -10970,6 +11360,7 @@ ${JSON.stringify(parsedConvo)}`;
                         onClick={() => setShowTemplateSelector(true)}
                         className="px-4 py-2 rounded-lg hover:opacity-80 flex items-center gap-2 transition-all duration-300"
                         style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent, border: `1px solid ${themeStyles.accent}30`}}
+                        data-tour="template-button"
                       >
                         <FileText className="w-4 h-4" />
                         Use Template
@@ -11338,6 +11729,7 @@ Keyboard shortcuts:
                         disabled={!draftResponse.trim() || isSending}
                         className="px-6 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-300"
                         style={{backgroundColor: themeStyles.success, color: '#FFFFFF'}}
+                        data-tour="send-email"
                       >
                         <Send className="w-4 h-4" />
                           {isSending ? 'Sending...' : scheduledTime ? 'Schedule Message' : 'Send Message'}
@@ -12038,6 +12430,73 @@ Keyboard shortcuts:
           }}
         />
       )}
+
+      {/* Tutorial Modal */}
+      <TutorialModal
+        isOpen={showTutorialModal}
+        onClose={handleTutorialComplete}
+        onStartTour={handleStartTour}
+        currentPlan={currentPlan}
+      />
+
+      {/* Interactive Tour */}
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        showProgress={true}
+        showSkipButton={true}
+        stepIndex={tourStepIndex}
+        callback={handleTourCallback}
+        disableOverlay={true}
+        disableOverlayClose={false}
+        disableScrolling={false}
+        spotlightClicks={true}
+        hideCloseButton={false}
+        hideBackButton={false}
+        styles={{
+          options: {
+            primaryColor: '#3b82f6',
+            backgroundColor: '#ffffff',
+            borderRadius: 8,
+            zIndex: 25000, // Higher than modal z-index (20000)
+          },
+          tooltip: {
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 25001,
+          },
+          overlay: {
+            zIndex: 24999,
+          },
+          spotlight: {
+            zIndex: 25000,
+          },
+          buttonNext: {
+            backgroundColor: '#3b82f6',
+            borderRadius: 6,
+            fontSize: 14,
+            padding: '8px 16px',
+            display: tourSteps[tourStepIndex]?.hideNextButton ? 'none' : 'block',
+          },
+          buttonBack: {
+            color: '#6b7280',
+            fontSize: 14,
+            padding: '8px 16px',
+          },
+          buttonSkip: {
+            color: '#6b7280',
+            fontSize: 14,
+          },
+        }}
+        locale={{
+          back: 'Previous',
+          close: 'Close',
+          last: 'Finish Tour',
+          next: 'Next',
+          skip: 'Skip Tour',
+        }}
+      />
     </div>
     </>
   );

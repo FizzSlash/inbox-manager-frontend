@@ -1,0 +1,14 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Outer ring -->
+  <circle cx="50" cy="50" r="48" fill="none" stroke="url(#logoGradient)" stroke-width="4"/>
+  <!-- Inner circle with Q shape -->
+  <circle cx="50" cy="50" r="35" fill="url(#logoGradient)"/>
+  <!-- Q shape -->
+  <path d="M35 40 Q35 30 45 30 L55 30 Q65 30 65 40 L65 55 Q65 65 55 65 L50 65 L58 73 L50 73 L45 65 Q35 65 35 55 Z M45 40 L45 55 L55 55 L55 40 Z" fill="white"/>
+</svg>
