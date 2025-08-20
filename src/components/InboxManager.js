@@ -538,11 +538,122 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // 🆕 Account Selection States
   const [showAccountSelection, setShowAccountSelection] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
-  const [intentFilters, setIntentFilters] = useState(['high', 'medium']);
+  const [intentFilters, setIntentFilters] = useState(['high', 'medium', 'low']); // Always import all intent levels
   const [campaignSelectionLoading, setCampaignSelectionLoading] = useState(false);
   const [pendingBackfillConfig, setPendingBackfillConfig] = useState(null);
   
 
+
+
+
+  // Fetch category definitions from SmartLead using proper API (moved up for hoisting)
+  const fetchSmartleadCategories = async (apiKey) => {
+    try {
+      console.log('📋 Fetching SmartLead category definitions from API...');
+      
+      // Use the proper SmartLead categories API endpoint
+      const response = await fetch(`https://server.smartlead.ai/api/v1/leads/fetch-categories?api_key=${apiKey}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch categories: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('📂 Raw SmartLead categories API response:', result);
+      console.log('📂 Response type:', typeof result, 'Keys:', Object.keys(result || {}));
+      console.log('📂 Data field:', result.data, 'Data type:', typeof result.data);
+      
+      // Transform SmartLead response to our format with smart suggestions
+      const rawCategories = result.data || result || [];
+      console.log('📂 Raw categories array:', rawCategories, 'Length:', rawCategories.length);
+      
+      const categories = rawCategories.map(category => {
+        const id = String(category.id || category.category_id);
+        const name = category.name || category.category_name || `Category ${id}`;
+        
+        // Smart suggestions based on category names
+        const nameKey = name.toLowerCase();
+        const suggested = nameKey.includes('interested') || 
+                         nameKey.includes('meeting') || 
+                         nameKey.includes('information') || 
+                         nameKey.includes('request') ||
+                         nameKey.includes('uncategorizable') ||
+                         (!nameKey.includes('not') && !nameKey.includes('do not') && 
+                          !nameKey.includes('office') && !nameKey.includes('bounce') && 
+                          !nameKey.includes('wrong'));
+        
+        return {
+          id,
+          name,
+          suggested
+        };
+      });
+      
+      console.log(`✅ Processed ${categories.length} categories from SmartLead API:`, categories.map(c => `${c.id}:${c.name} (${c.suggested ? 'suggested' : 'optional'})`));
+      return categories;
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch categories from SmartLead API:', error);
+      console.log('🔄 Falling back to standard category detection method...');
+      console.log('🔍 This means either: 1) API endpoint failed, 2) Network error, or 3) Response parsing issue');
+      
+      // Fallback: Use the old method if the API fails
+      try {
+        const campaigns = await fetchSmartleadCampaigns(apiKey);
+        if (campaigns.length === 0) {
+          throw new Error('No campaigns found to determine categories');
+        }
+        
+        const sampleCampaign = campaigns[0];
+        const categoriesInUse = new Set();
+        
+        const standardCategories = [
+          { id: '1', name: 'Interested', suggested: true },
+          { id: '2', name: 'Meeting Request', suggested: true },
+          { id: '3', name: 'Not Interested', suggested: false },
+          { id: '4', name: 'Do Not Contact', suggested: false },
+          { id: '5', name: 'Information Request', suggested: true },
+          { id: '6', name: 'Out Of Office', suggested: false },
+          { id: '7', name: 'Wrong Person', suggested: false },
+          { id: '8', name: 'Uncategorizable by AI', suggested: true },
+          { id: '9', name: 'Sender Originated Bounce', suggested: false }
+        ];
+        
+        for (const category of standardCategories) {
+          try {
+            const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${sampleCampaign.id}/leads?api_key=${apiKey}&lead_category_id=${category.id}`);
+            if (response.ok) {
+              const result = await response.json();
+              if (result.data && result.data.length > 0) {
+                categoriesInUse.add(category.id);
+              }
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (error) {
+            console.warn(`Category ${category.id} check failed:`, error);
+          }
+        }
+        
+        const availableCategories = standardCategories.filter(cat => 
+          categoriesInUse.has(cat.id)
+        );
+        
+        console.log(`✅ FALLBACK METHOD found ${availableCategories.length} categories:`, availableCategories.map(c => `${c.id}:${c.name}`));
+        console.log('🔍 FALLBACK: This explains why you only see certain categories - they\'re the only ones with leads in the sample campaign');
+        return availableCategories;
+        
+      } catch (fallbackError) {
+        console.error('❌ Fallback category detection also failed:', fallbackError);
+        // Ultimate fallback to current defaults
+        return [
+          { id: '1', name: 'Interested', suggested: true },
+          { id: '2', name: 'Meeting Request', suggested: true },
+          { id: '5', name: 'Information Request', suggested: true },
+          { id: '8', name: 'Uncategorizable by AI', suggested: true }
+        ];
+      }
+    }
+  };
 
   // Progress polling functions
   const pollProgress = async (progressId) => {
@@ -2316,9 +2427,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Process immediately on start
       processQueue();
       
-      // Set up 30-second interval
-      queueProcessorIntervalRef.current = setInterval(processQueue, 30000);
-      console.log('✅ Queue processor started - running every 30 seconds');
+      // Set up 1-minute interval for optimal batch processing (100 leads per batch)
+      queueProcessorIntervalRef.current = setInterval(processQueue, 60000);
+      console.log('✅ Queue processor started - running every 1 minute for optimal batch processing');
     }
 
     return () => {
@@ -2354,7 +2465,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
       const { data, error } = await supabase
         .from('retention_harbor')
-        .select('*, draft_content, draft_html, draft_updated_at')
+        .select('*')
         .eq('brand_id', currentBrandId)
         .order('created_at', { ascending: false })
         .limit(2000); // Increased limit to show all leads - can switch to pagination later
@@ -2476,6 +2587,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         return {
           id: lead.id,
           campaign_id: lead.campaign_ID || null,
+          campaign_ID: lead.campaign_ID || null,
+          campaign_name: lead.campaign_name || null,
           lead_id: lead.lead_ID || null,
           email_stats_id: emailStatsId,
           created_at: lead.created_at,
@@ -2644,18 +2757,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const CATEGORY_OPTIONS = useMemo(() => {
     // Use dynamic categories from SmartLead API if available
     if (availableCategories.length > 0) {
-      // Define typical/main categories by name patterns
-      const isMainCategory = (name) => {
-        const nameKey = name.toLowerCase();
-        return nameKey.includes('interested') ||
-               nameKey.includes('meeting') ||
-               nameKey.includes('not interested') ||
-               nameKey.includes('do not contact') ||
-               nameKey.includes('information') ||
-               nameKey.includes('out of office') ||
-               nameKey.includes('wrong person') ||
-               nameKey.includes('uncategorizable') ||
-               nameKey.includes('bounce');
+      // Define main categories as the core SmartLead 8 (IDs 1-8)
+      const isMainCategory = (cat) => {
+        const id = parseInt(cat.id);
+        // Core SmartLead categories 1-8 are always main
+        return id >= 1 && id <= 8;
       };
       
       const mainCategories = [];
@@ -2664,10 +2770,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       availableCategories.forEach(cat => {
         const nameKey = cat.name.toLowerCase();
         let color = '#6B7280'; // Default
-        let isMain = isMainCategory(cat.name);
+        let isMain = isMainCategory(cat);
         
-        if (isMain) {
-          // Smart colors for main categories
+        // Smart colors for ALL categories
           if (nameKey.includes('interested') && !nameKey.includes('not')) {
             color = '#10B981'; // Green for positive
           } else if (nameKey.includes('meeting')) {
@@ -2680,8 +2785,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
             color = '#F59E0B'; // Orange for neutral
           } else if (nameKey.includes('wrong') || nameKey.includes('uncategorizable')) {
             color = '#6B7280'; // Gray for uncertain
+        } else {
+          color = '#8B5CF6'; // Purple for custom/unknown categories
           }
           
+        if (isMain) {
           mainCategories.push({
             value: parseInt(cat.id),
             label: cat.name,
@@ -2689,17 +2797,22 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
             isMain: true
           });
         } else {
-          // All custom categories get the same color
           customCategories.push({
             value: parseInt(cat.id),
             label: cat.name,
-            color: '#8B5CF6', // Purple for all custom categories
+            color: color,
             isMain: false
           });
         }
       });
       
       console.log(`📂 Split categories: ${mainCategories.length} main, ${customCategories.length} custom`);
+      console.log('📂 Main categories:', mainCategories.map(c => c.label));
+      console.log('📂 Custom categories:', customCategories.map(c => c.label));
+      
+      // Keep the 8 main SmartLead categories separate from custom ones
+      console.log(`📂 SmartLead split: ${mainCategories.length} core categories, ${customCategories.length} custom categories`);
+      
       return { mainCategories, customCategories };
     }
     
@@ -2744,26 +2857,32 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const PortalDropdown = ({ leadId, lead, position, onClose, onSelect }) => {
     if (!position) return null;
 
+
+
     return createPortal(
       <div
         data-portal-dropdown
-        className="fixed rounded-xl shadow-2xl overflow-hidden z-[10000]"
+        className="fixed rounded-xl shadow-2xl z-[10000]"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,
-          minWidth: '220px',
-          maxWidth: '300px',
-          width: 'auto',
+          width: `${position.width}px`,
+          maxHeight: `${position.maxHeight}px`,
           backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
           border: `2px solid ${themeStyles.borderStrong}`,
           boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
           boxSizing: 'border-box',
           borderRadius: '12px',
-          overflow: 'hidden'
+          overflow: 'auto', // Always allow scrolling
+          overflowX: 'hidden', // Prevent horizontal scroll
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${themeStyles.accent} transparent`
         }}
       >
+
+        
         {/* Main Categories */}
-        {(CATEGORY_OPTIONS.mainCategories || CATEGORY_OPTIONS).map((option, optionIndex) => (
+        {(CATEGORY_OPTIONS.mainCategories || CATEGORY_OPTIONS || []).map((option, optionIndex) => (
           <button
             key={option.value}
             onClick={(e) => {
@@ -2771,7 +2890,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
               onSelect(leadId, option.value);
               onClose();
             }}
-            className="w-full px-5 py-4 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+            className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
             style={{
               backgroundColor: lead.lead_category === option.value 
                 ? `${option.color}30` 
@@ -2779,7 +2898,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
               borderBottom: `1px solid ${themeStyles.border}`,
               color: isDarkMode ? '#ffffff' : '#000000',
               boxSizing: 'border-box',
-              minHeight: '50px',
+              minHeight: '42px',
               display: 'flex',
               alignItems: 'center'
             }}
@@ -2811,7 +2930,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
                 e.stopPropagation();
                 setShowCustomCategories(!showCustomCategories);
               }}
-              className="w-full px-5 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+              className="w-full px-4 py-2 text-left transition-all duration-200 hover:opacity-90 text-xs font-medium"
               style={{
                 backgroundColor: isDarkMode ? '#2A2C2A' : '#F8F9FA',
                 borderBottom: showCustomCategories ? `1px solid ${themeStyles.border}` : 'none',
@@ -2819,59 +2938,120 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
                 boxSizing: 'border-box',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                minHeight: '32px'
               }}
             >
-              <span>Custom Categories ({CATEGORY_OPTIONS.customCategories.length})</span>
-              <ChevronDown 
-                className={`w-4 h-4 transition-transform duration-200 ${showCustomCategories ? 'rotate-180' : ''}`}
+              <span className="text-xs">+ {CATEGORY_OPTIONS.customCategories.length} Custom</span>
+              <ChevronRight 
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${showCustomCategories ? 'rotate-90' : ''}`}
                 style={{color: isDarkMode ? '#ffffff' : '#000000'}}
               />
             </button>
             
-            {showCustomCategories && CATEGORY_OPTIONS.customCategories.map((option, optionIndex) => (
-              <button
-                key={option.value}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(leadId, option.value);
-                  onClose();
-                  setShowCustomCategories(false); // Close custom section after selection
-                }}
-                className="w-full px-7 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm"
-                style={{
-                  backgroundColor: lead.lead_category === option.value 
-                    ? `${option.color}30` 
-                    : isDarkMode ? '#242624' : '#F1F2F1',
-                  borderBottom: optionIndex < CATEGORY_OPTIONS.customCategories.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
-                  color: isDarkMode ? '#D0D0D0' : '#404040',
-                  boxSizing: 'border-box',
-                  minHeight: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginLeft: '8px' // Slight indent for custom categories
-                }}
-                onMouseEnter={(e) => {
-                  if (lead.lead_category !== option.value) {
-                    e.target.style.backgroundColor = `${option.color}15`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (lead.lead_category !== option.value) {
-                    e.target.style.backgroundColor = isDarkMode ? '#242624' : '#F1F2F1';
-                  }
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className="whitespace-nowrap">{option.label}</span>
-                  {lead.lead_category === option.value && (
-                    <CheckCircle className="w-4 h-4 ml-3 flex-shrink-0" style={{color: isDarkMode ? '#D0D0D0' : '#404040'}} />
-                  )}
-                </div>
-              </button>
-            ))}
+
           </>
         )}
+      </div>,
+      document.body
+    );
+  };
+
+  // Custom Categories Portal Component (appears to the right)
+  const CustomCategoriesPortal = ({ leadId, lead, mainDropdownPosition, onClose, onSelect }) => {
+    if (!mainDropdownPosition || !showCustomCategories) return null;
+
+    // Position to the right of the main dropdown
+    const customPosition = {
+      top: mainDropdownPosition.top,
+      left: mainDropdownPosition.left + mainDropdownPosition.width + 8,
+      width: 280,
+      maxHeight: mainDropdownPosition.maxHeight
+    };
+
+    return createPortal(
+      <div
+        data-portal-dropdown
+        className="fixed rounded-xl shadow-2xl z-[10001]"
+        style={{
+          top: `${customPosition.top}px`,
+          left: `${customPosition.left}px`,
+          width: `${customPosition.width}px`,
+          maxHeight: `${customPosition.maxHeight}px`,
+          backgroundColor: isDarkMode ? '#1A1C1A' : '#FFFFFF',
+          border: `2px solid ${themeStyles.borderStrong}`,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.9)',
+          boxSizing: 'border-box',
+          borderRadius: '12px',
+          overflow: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${themeStyles.accent} transparent`
+        }}
+      >
+        {/* Header */}
+        <div className="px-4 py-3 border-b" style={{ 
+          borderColor: themeStyles.border,
+          backgroundColor: themeStyles.tertiaryBg
+        }}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium" style={{ color: themeStyles.textPrimary }}>
+              Custom Categories
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCustomCategories(false);
+              }}
+              className="p-1 rounded hover:opacity-80"
+              style={{ color: themeStyles.textMuted }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Custom Categories List */}
+        {CATEGORY_OPTIONS.customCategories?.map((option, optionIndex) => (
+          <button
+            key={option.value}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(leadId, option.value);
+              onClose();
+              setShowCustomCategories(false);
+            }}
+            className="w-full px-4 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+            style={{
+              backgroundColor: lead.lead_category === option.value 
+                ? `${option.color}30` 
+                : isDarkMode ? '#2A2C2A' : '#F8F9FA',
+              borderBottom: optionIndex < CATEGORY_OPTIONS.customCategories.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
+              color: isDarkMode ? '#ffffff' : '#000000',
+              boxSizing: 'border-box',
+              minHeight: '42px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            onMouseEnter={(e) => {
+              if (lead.lead_category !== option.value) {
+                e.target.style.backgroundColor = `${option.color}15`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (lead.lead_category !== option.value) {
+                e.target.style.backgroundColor = isDarkMode ? '#2A2C2A' : '#F8F9FA';
+              }
+            }}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="font-semibold text-sm whitespace-nowrap">{option.label}</span>
+              {lead.lead_category === option.value && (
+                <CheckCircle className="w-5 h-5 ml-3 flex-shrink-0" style={{color: isDarkMode ? '#ffffff' : '#000000'}} />
+              )}
+            </div>
+          </button>
+        ))}
       </div>,
       document.body
     );
@@ -3371,8 +3551,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Tour will auto-continue when leads load (existing logic handles this)
     }
     
-    // Step 8: Filter clicked (positive intent)
-    else if (currentStep.target === '[data-tour="lead-filters"]' && intentFilter === 'positive') {
+    // Step 8: Filter clicked (high intent)
+    else if (currentStep.target === '[data-tour="lead-filters"]' && intentFilter === 'high') {
       setTimeout(() => setTourStepIndex(9), 500);
     }
     
@@ -3929,13 +4109,13 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
       let filtered = leads.slice(); // Create a copy
 
-      // Apply intent filter
-      if (intentFilter === 'positive') {
-        // Show only leads with non-null intent (positive intent)
-        filtered = filtered.filter(lead => !isIntentNull(lead.intent));
-      } else if (intentFilter === 'negative') {
-        // Show only leads with null intent (negative/no intent)
-        filtered = filtered.filter(lead => isIntentNull(lead.intent));
+      // Apply intent filter based on score ranges
+      if (intentFilter === 'high') {
+        // Show high + medium intent leads (5-10)
+        filtered = filtered.filter(lead => lead.intent >= 5);
+      } else if (intentFilter === 'low') {
+        // Show low intent leads (1-4)
+        filtered = filtered.filter(lead => lead.intent < 5);
       }
       // If intentFilter === 'all', show all leads (no additional filtering)
 
@@ -6096,115 +6276,6 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return await response.json();
   };
 
-  // Fetch category definitions from SmartLead using proper API
-  const fetchSmartleadCategories = async (apiKey) => {
-    try {
-      console.log('📋 Fetching SmartLead category definitions from API...');
-      
-      // Use the proper SmartLead categories API endpoint
-      const response = await fetch(`https://server.smartlead.ai/api/v1/leads/fetch-categories?api_key=${apiKey}`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch categories: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('📂 Raw SmartLead categories API response:', result);
-      console.log('📂 Response type:', typeof result, 'Keys:', Object.keys(result || {}));
-      console.log('📂 Data field:', result.data, 'Data type:', typeof result.data);
-      
-      // Transform SmartLead response to our format with smart suggestions
-      const rawCategories = result.data || result || [];
-      console.log('📂 Raw categories array:', rawCategories, 'Length:', rawCategories.length);
-      
-      const categories = rawCategories.map(category => {
-        const id = String(category.id || category.category_id);
-        const name = category.name || category.category_name || `Category ${id}`;
-        
-        // Smart suggestions based on category names
-        const nameKey = name.toLowerCase();
-        const suggested = nameKey.includes('interested') || 
-                         nameKey.includes('meeting') || 
-                         nameKey.includes('information') || 
-                         nameKey.includes('request') ||
-                         nameKey.includes('uncategorizable') ||
-                         (!nameKey.includes('not') && !nameKey.includes('do not') && 
-                          !nameKey.includes('office') && !nameKey.includes('bounce') && 
-                          !nameKey.includes('wrong'));
-        
-        return {
-          id,
-          name,
-          suggested
-        };
-      });
-      
-      console.log(`✅ Processed ${categories.length} categories from SmartLead API:`, categories.map(c => `${c.id}:${c.name} (${c.suggested ? 'suggested' : 'optional'})`));
-      return categories;
-      
-    } catch (error) {
-      console.error('❌ Failed to fetch categories from SmartLead API:', error);
-      console.log('🔄 Falling back to standard category detection method...');
-      console.log('🔍 This means either: 1) API endpoint failed, 2) Network error, or 3) Response parsing issue');
-      
-      // Fallback: Use the old method if the API fails
-      try {
-        const campaigns = await fetchSmartleadCampaigns(apiKey);
-        if (campaigns.length === 0) {
-          throw new Error('No campaigns found to determine categories');
-        }
-        
-        const sampleCampaign = campaigns[0];
-        const categoriesInUse = new Set();
-        
-        const standardCategories = [
-          { id: '1', name: 'Interested', suggested: true },
-          { id: '2', name: 'Meeting Request', suggested: true },
-          { id: '3', name: 'Not Interested', suggested: false },
-          { id: '4', name: 'Do Not Contact', suggested: false },
-          { id: '5', name: 'Information Request', suggested: true },
-          { id: '6', name: 'Out Of Office', suggested: false },
-          { id: '7', name: 'Wrong Person', suggested: false },
-          { id: '8', name: 'Uncategorizable by AI', suggested: true },
-          { id: '9', name: 'Sender Originated Bounce', suggested: false }
-        ];
-        
-        for (const category of standardCategories) {
-          try {
-            const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${sampleCampaign.id}/leads?api_key=${apiKey}&lead_category_id=${category.id}`);
-            if (response.ok) {
-              const result = await response.json();
-              if (result.data && result.data.length > 0) {
-                categoriesInUse.add(category.id);
-              }
-            }
-            await new Promise(resolve => setTimeout(resolve, 100));
-          } catch (error) {
-            console.warn(`Category ${category.id} check failed:`, error);
-          }
-        }
-        
-        const availableCategories = standardCategories.filter(cat => 
-          categoriesInUse.has(cat.id)
-        );
-        
-        console.log(`✅ FALLBACK METHOD found ${availableCategories.length} categories:`, availableCategories.map(c => `${c.id}:${c.name}`));
-        console.log('🔍 FALLBACK: This explains why you only see certain categories - they\'re the only ones with leads in the sample campaign');
-        return availableCategories;
-        
-      } catch (fallbackError) {
-        console.error('❌ Fallback category detection also failed:', fallbackError);
-        // Ultimate fallback to current defaults
-        return [
-          { id: '1', name: 'Interested', suggested: true },
-          { id: '2', name: 'Meeting Request', suggested: true },
-          { id: '5', name: 'Information Request', suggested: true },
-          { id: '8', name: 'Uncategorizable by AI', suggested: true }
-        ];
-      }
-    }
-  };
-
   // Fetch leads for a campaign from selected categories only
   const fetchLeadsForCampaign = async (apiKey, campaignId, selectedCategoryIds = null) => {
     // Use selected categories if provided, otherwise fetch all categories
@@ -6549,6 +6620,54 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return shouldAnalyze;
   };
 
+  // Requeue ALL leads with null intent to the processing queue
+  const requeueAllLeads = async () => {
+    try {
+      console.log('🔄 Requeuing ALL leads with null intent to processing queue...');
+      
+      // Get current brand ID
+      const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+      if (!currentBrandId) {
+        showToast('No brand ID found', 'error');
+        return 0;
+      }
+      
+      // Fetch ALL leads with null intent from database
+      const { data: nullIntentLeads, error } = await supabase
+        .from('retention_harbor')
+        .select('*')
+        .eq('brand_id', currentBrandId)
+        .is('intent', null);
+      
+      if (error) {
+        console.error('❌ Error fetching leads:', error);
+        showToast('Error fetching leads for requeue', 'error');
+        return 0;
+      }
+      
+      if (!nullIntentLeads || nullIntentLeads.length === 0) {
+        console.log('✅ No leads with null intent found');
+        showToast('No leads need requeuing - all have intent scores!', 'success');
+        return 0;
+      }
+      
+      console.log(`🎯 Found ${nullIntentLeads.length} leads with null intent to requeue`);
+      
+      // Use the existing analyzeLeadIntents function to queue them
+      const queuedCount = await analyzeLeadIntents(nullIntentLeads, null);
+      
+      showToast(`🚀 Successfully requeued ${queuedCount} leads for AI processing!`, 'success');
+      console.log(`✅ Requeued ${queuedCount}/${nullIntentLeads.length} leads to processing queue`);
+      
+      return queuedCount;
+      
+    } catch (error) {
+      console.error('❌ Error in requeueAllLeads:', error);
+      showToast('Error requeuing leads', 'error');
+      return 0;
+    }
+  };
+
   // AI Intent Analysis Function (optimized with smart filtering)
   // Analyze missed leads with null intent that should have been processed
   const analyzeMissedLeads = async () => {
@@ -6664,14 +6783,29 @@ ${JSON.stringify(parsedConvo)}`;
         }
 
         // Create the optimized prompt using parsed conversation
-        const prompt = `I run an email marketing agency and want to you classify intent based on history. Just respond with a number.
+        const prompt = `Analyze the LEAD'S intent based on their responses. ONLY analyze messages where "type": "REPLY" - ignore all "SENT" messages completely.
 
-Read the whole transcript - 
-If the intent is low give it a 1-3
-If the intent is medium give it 4-7 
-If the intent is high give 7-10.
+HIGH INTENT (8-10):
+- Asking for pricing, costs, or rates
+- Wanting to schedule calls or meetings  
+- Asking qualifying questions about your service
+- Requesting more information or materials
+- Examples: "Let's schedule a call", "What are your rates?", "Send me info", "How does this work?", "Have you done this before?"
 
-Here is the message history. AGAIN, just respond with a number. NOTHING else. If anything is in the output, besides one number, the entire prompt is a failure.
+MEDIUM INTENT (4-7):
+- Polite interest but non-committal
+- "Maybe", "Possibly", "Sounds interesting"
+- Asked to be contacted later
+- Initial positive response but then went quiet
+
+LOW INTENT (1-3):
+- Clear rejections: "Not interested", "Remove me", "Delete"
+- Negative responses or complaints
+- GDPR requests or unsubscribe requests
+
+CRITICAL: Only look at messages with "type": "REPLY". Ignore all "type": "SENT" messages.
+
+Respond with only a number 1-10.
 
 ${JSON.stringify(parsedConvo)}`;
 
@@ -7290,6 +7424,7 @@ ${JSON.stringify(parsedConvo)}`;
               intent: null, // Will be updated by AI analysis
               stage: null,
               campaign_ID: campaign.id, // numeric
+              campaign_name: campaign.name || `Campaign ${campaign.id}`, // Store campaign name
               lead_ID: leadData.lead.id, // numeric
               role: null,
               company_data: null,
@@ -7441,12 +7576,13 @@ ${JSON.stringify(parsedConvo)}`;
       }
 
       // Step 5: Analyze intent for relevant leads using Navvii AI
-      // Get leads that were just inserted for this brand to queue AI processing
+      // Get ALL leads that were just inserted for this brand during this backfill session
       const { data: insertedLeads } = await supabase
         .from('retention_harbor')
         .select('*')
         .eq('brand_id', brandId)
-        .is('intent', null); // Only leads without intent scores
+        .is('intent', null) // Only leads without intent scores
+        .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Only leads created in last hour (more generous timeframe)
 
       relevantLeadsCount = insertedLeads ? insertedLeads.length : 0; // All imported leads get analyzed
       
@@ -7912,32 +8048,72 @@ ${JSON.stringify(parsedConvo)}`;
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
         
-        // Calculate position for portal with scroll-aware positioning
+        // Calculate position for portal with intelligent positioning
         const buttonElement = dropdownButtonRefs.current[leadId];
         if (buttonElement) {
           const rect = buttonElement.getBoundingClientRect();
           const scrollY = window.pageYOffset || document.documentElement.scrollTop;
           const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
           
-          const totalCategories = (CATEGORY_OPTIONS.mainCategories?.length || 0) + (CATEGORY_OPTIONS.customCategories?.length || 0) || CATEGORY_OPTIONS.length || 0;
-          const dropdownHeight = Math.min(totalCategories * 50 + 100, 400); // Cap height for better UX
+          const mainCategories = CATEGORY_OPTIONS.mainCategories?.length || CATEGORY_OPTIONS.length || 0;
+          const customCategories = CATEGORY_OPTIONS.customCategories?.length || 0;
+          
+          // Calculate natural content height for main dropdown only (custom categories are separate)
+          const mainHeight = mainCategories * 42; // Main categories
+          const customHeaderHeight = customCategories > 0 ? 32 : 0; // Just the header, not expanded content
+          const padding = 16;
+          const naturalHeight = mainHeight + customHeaderHeight + padding;
+          
+          // Get viewport dimensions first
           const windowHeight = window.innerHeight;
+          const windowWidth = window.innerWidth;
           const spaceBelow = windowHeight - rect.bottom;
           const spaceAbove = rect.top;
+          const spaceRight = windowWidth - rect.right;
+          const spaceLeft = rect.left;
           
-          // Position above if not enough space below and there's more space above
-          const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          // Use available space intelligently
+          const availableHeight = Math.min(windowHeight - 40, naturalHeight); // Leave 40px margin from edges
+          const dropdownWidth = 280;
+          
+          let position = { width: dropdownWidth };
+          
+          // Simple positioning: try below first, then above, use available space
+          if (spaceBelow >= Math.min(naturalHeight, 300)) {
+            // Position below (preferred)
+            position.top = rect.bottom + scrollY + 8;
+            position.placement = 'below';
+            position.maxHeight = Math.min(naturalHeight, spaceBelow - 20);
+          } else if (spaceAbove >= Math.min(naturalHeight, 300)) {
+            // Position above
+            position.top = rect.top + scrollY - Math.min(naturalHeight, spaceAbove - 20) - 8;
+            position.placement = 'above';
+            position.maxHeight = Math.min(naturalHeight, spaceAbove - 20);
+          } else {
+            // Use the larger available space and scroll if needed
+            if (spaceBelow > spaceAbove) {
+              position.top = rect.bottom + scrollY + 8;
+              position.placement = 'below';
+              position.maxHeight = Math.max(spaceBelow - 20, 200);
+            } else {
+              position.top = rect.top + scrollY - Math.max(spaceAbove - 20, 200) - 8;
+              position.placement = 'above';
+              position.maxHeight = Math.max(spaceAbove - 20, 200);
+            }
+          }
+          
+          // Simple horizontal positioning
+          if (rect.left + dropdownWidth > windowWidth - 20) {
+            // Align right edge to prevent overflow
+            position.left = windowWidth - dropdownWidth - 20 + scrollX;
+          } else {
+            // Default left alignment
+            position.left = rect.left + scrollX;
+          }
           
           setDropdownPositions(prevPos => ({
             ...prevPos,
-            [leadId]: {
-              top: shouldPositionAbove 
-                ? rect.top + scrollY - dropdownHeight - 8 
-                : rect.bottom + scrollY + 8,
-              left: rect.left + scrollX,
-              width: Math.max(rect.width, 250), // Minimum width for better UX
-              isAbove: shouldPositionAbove
-            }
+            [leadId]: position
           }));
         }
       }
@@ -9464,12 +9640,7 @@ ${JSON.stringify(parsedConvo)}`;
                             ` and ${resumeModalData.candidate.selectedConfig.campaignNames.length - 3} more`}
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span style={{color: themeStyles.textMuted}}>Intent Filters:</span>
-                        <span style={{color: themeStyles.textPrimary}}>
-                          {resumeModalData.candidate.selectedConfig.intentFilters?.join(', ') || 'All levels'}
-                        </span>
-                      </div>
+
                       <div className="flex justify-between">
                         <span style={{color: themeStyles.textMuted}}>Backfill Days:</span>
                         <span style={{color: themeStyles.textPrimary}}>
@@ -9778,43 +9949,7 @@ ${JSON.stringify(parsedConvo)}`;
                     </div>
                   </div>
 
-                  {/* Intent Filters */}
-                  <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
-                    <h3 className="text-sm font-medium mb-3 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                      🧠 AI Intent Analysis Levels
-                    </h3>
-                    <div className="flex gap-3">
-                      {[
-                        { id: 'high', label: 'High Intent', description: 'Ready to buy' },
-                        { id: 'medium', label: 'Medium Intent', description: 'Interested/engaged' },
-                        { id: 'low', label: 'Low Intent', description: 'Early stage' }
-                      ].map(filter => (
-                        <label key={filter.id} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={intentFilters.includes(filter.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setIntentFilters(prev => [...prev, filter.id]);
-                              } else {
-                                setIntentFilters(prev => prev.filter(f => f !== filter.id));
-                              }
-                            }}
-                            className="rounded"
-                            style={{accentColor: themeStyles.accent}}
-                          />
-                          <div>
-                            <span className="text-xs font-medium" style={{color: themeStyles.textPrimary}}>
-                              {filter.label}
-                            </span>
-                            <p className="text-xs" style={{color: themeStyles.textMuted}}>
-                              {filter.description}
-                            </p>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+
 
                   {/* 🆕 CATEGORY SELECTION */}
                   <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
@@ -11059,43 +11194,43 @@ ${JSON.stringify(parsedConvo)}`;
 
           {/* Intent Filter Tabs */}
           <div className="flex gap-2 mb-4" data-tour="lead-filters">
-            <button
-              onClick={() => setIntentFilter('positive')}
+                        <button
+              onClick={() => setIntentFilter('high')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                intentFilter === 'positive'
+                intentFilter === 'high'
                   ? 'opacity-100' 
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{
-                backgroundColor: intentFilter === 'positive' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: intentFilter === 'positive' ? themeStyles.accent : themeStyles.textPrimary, 
+                backgroundColor: intentFilter === 'high' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: intentFilter === 'high' ? themeStyles.accent : themeStyles.textPrimary, 
                 border: `1px solid ${themeStyles.border}`
               }}
               disabled={loading}
             >
-              Positive Intent
+              High Intent
               <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                {leads.filter(lead => !isIntentNull(lead.intent)).length}
+                {leads.filter(lead => lead.intent >= 5).length}
               </span>
             </button>
             <button
-              onClick={() => setIntentFilter('negative')}
+              onClick={() => setIntentFilter('low')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all backdrop-blur-sm ${
-                intentFilter === 'negative'
+                intentFilter === 'low'
                   ? 'opacity-100'
                   : 'opacity-80 hover:opacity-90'
               }`}
               style={{
-                backgroundColor: intentFilter === 'negative' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
-                color: intentFilter === 'negative' ? themeStyles.accent : themeStyles.textPrimary, 
+                backgroundColor: intentFilter === 'low' ? `${themeStyles.accent}20` : themeStyles.tertiaryBg, 
+                color: intentFilter === 'low' ? themeStyles.accent : themeStyles.textPrimary, 
                 border: `1px solid ${themeStyles.border}`
               }}
               disabled={loading}
             >
-              Negative Intent
-                    <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                {leads.filter(lead => isIntentNull(lead.intent)).length}
-                    </span>
+              Low Intent
+              <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
+                {leads.filter(lead => lead.intent < 5).length}
+              </span>
             </button>
             <button
               onClick={() => setIntentFilter('all')}
@@ -11266,7 +11401,7 @@ ${JSON.stringify(parsedConvo)}`;
                   <p className="text-sm mb-1 transition-colors duration-300" style={{color: themeStyles.textSecondary}}>{lead.email}</p>
                   <p className={`text-sm mb-2 transition-all duration-300 ${urgency !== 'none' ? 'font-bold' : 'font-medium'}`}
                      style={{color: selectedLead?.id === lead.id ? themeStyles.accent : themeStyles.textPrimary}}>
-                    {lead.subject}
+{lead.campaign_name || `Campaign ${lead.campaign_ID}` || 'No Campaign'}
                   </p>
                   
 
@@ -12898,14 +13033,25 @@ Keyboard shortcuts:
         const position = dropdownPositions[lead.id];
         
         return isDropdownOpen ? (
-          <PortalDropdown
-            key={`dropdown-${lead.id}`}
-            leadId={lead.id}
-            lead={lead}
-            position={position}
-            onClose={() => setCategoryDropdowns(new Set())}
-            onSelect={updateLeadCategory}
-          />
+          <>
+            <PortalDropdown
+              key={`dropdown-${lead.id}`}
+              leadId={lead.id}
+              lead={lead}
+              position={position}
+              onClose={() => setCategoryDropdowns(new Set())}
+              onSelect={updateLeadCategory}
+            />
+            {/* Custom Categories Portal - appears to the right */}
+            <CustomCategoriesPortal
+              key={`custom-dropdown-${lead.id}`}
+              leadId={lead.id}
+              lead={lead}
+              mainDropdownPosition={position}
+              onClose={() => setCategoryDropdowns(new Set())}
+              onSelect={updateLeadCategory}
+            />
+          </>
         ) : null;
       })}
 

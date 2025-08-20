@@ -305,14 +305,21 @@ async function processIntentWithAI(conversationHistory: any[]): Promise<number> 
       }
     })
     
-    const prompt = `I run an email marketing agency and want to you classify intent based on history. Just respond with a number.
+    const prompt = `I run an email marketing agency and want to you classify intent based on conversation history. Just respond with a number.
 
-Read the whole transcript - 
-If the intent is low give it a 1-3
-If the intent is medium give it 4-7 
-If the intent is high give 7-10.
+Read the whole transcript and consider BOTH current engagement AND previous engagement patterns:
 
-Here is the message history. AGAIN, just respond with a number. NOTHING else. If anything is in the output, besides one number, the entire prompt is a failure.
+- If they had multiple replies but went quiet recently: Still consider HIGH intent (they were engaged)
+- If they're currently active and engaged: HIGH intent  
+- If they had some engagement but minimal: MEDIUM intent
+- If they never engaged or clearly not interested: LOW intent
+
+Scoring:
+- Low intent: 1-3 (never engaged, clearly not interested)
+- Medium intent: 4-7 (some engagement, lukewarm)  
+- High intent: 7-10 (currently engaged OR was previously engaged with multiple replies)
+
+Here is the message history. RESPOND WITH ONLY A NUMBER. If anything else is in the output, the entire prompt fails.
 
 ${JSON.stringify(conversationSummary)}`
     
