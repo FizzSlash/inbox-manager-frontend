@@ -530,6 +530,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
   const [selectedCampaigns, setSelectedCampaigns] = useState([]);
   
+  // 🆕 Category Selection States  
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  
   // 🆕 Account Selection States
   const [showAccountSelection, setShowAccountSelection] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -2352,7 +2357,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         .select('*, draft_content, draft_html, draft_updated_at')
         .eq('brand_id', currentBrandId)
         .order('created_at', { ascending: false })
-        .limit(1000); // Safety limit - prevents massive queries
+        .limit(2000); // Increased limit to show all leads - can switch to pagination later
       if (error) throw error;
       
 
@@ -2606,8 +2611,19 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return result || text; // Fallback to original if extraction fails
   };
 
-  // Lead category mapping
-  const leadCategoryMap = {
+  // Dynamic lead category mapping (uses SmartLead API categories when available)
+  const leadCategoryMap = useMemo(() => {
+    const map = {};
+    
+    // Use dynamic categories from SmartLead API if available
+    if (availableCategories.length > 0) {
+      availableCategories.forEach(cat => {
+        map[parseInt(cat.id)] = cat.name;
+      });
+      console.log('📂 Using DYNAMIC category labels from SmartLead API:', map);
+    } else {
+      // Fallback to defaults if no dynamic categories loaded
+      Object.assign(map, {
     1: 'Interested',
     2: 'Meeting Request', 
     3: 'Not Interested',
@@ -2617,10 +2633,78 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     7: 'Wrong Person',
     8: 'Uncategorizable by AI',
     9: 'Sender Originated Bounce'
-  };
+      });
+      console.log('📂 Using DEFAULT category labels (SmartLead API not loaded)');
+    }
+    
+    return map;
+  }, [availableCategories]);
 
-  // Category options for dropdown
-  const CATEGORY_OPTIONS = [
+  // Dynamic category options for dropdown with main/custom separation
+  const CATEGORY_OPTIONS = useMemo(() => {
+    // Use dynamic categories from SmartLead API if available
+    if (availableCategories.length > 0) {
+      // Define typical/main categories by name patterns
+      const isMainCategory = (name) => {
+        const nameKey = name.toLowerCase();
+        return nameKey.includes('interested') ||
+               nameKey.includes('meeting') ||
+               nameKey.includes('not interested') ||
+               nameKey.includes('do not contact') ||
+               nameKey.includes('information') ||
+               nameKey.includes('out of office') ||
+               nameKey.includes('wrong person') ||
+               nameKey.includes('uncategorizable') ||
+               nameKey.includes('bounce');
+      };
+      
+      const mainCategories = [];
+      const customCategories = [];
+      
+      availableCategories.forEach(cat => {
+        const nameKey = cat.name.toLowerCase();
+        let color = '#6B7280'; // Default
+        let isMain = isMainCategory(cat.name);
+        
+        if (isMain) {
+          // Smart colors for main categories
+          if (nameKey.includes('interested') && !nameKey.includes('not')) {
+            color = '#10B981'; // Green for positive
+          } else if (nameKey.includes('meeting')) {
+            color = '#8B5CF6'; // Purple for meetings
+          } else if (nameKey.includes('information') || nameKey.includes('request')) {
+            color = '#3B82F6'; // Blue for informational
+          } else if (nameKey.includes('not') || nameKey.includes('bounce')) {
+            color = '#EF4444'; // Red for negative
+          } else if (nameKey.includes('office') || nameKey.includes('contact')) {
+            color = '#F59E0B'; // Orange for neutral
+          } else if (nameKey.includes('wrong') || nameKey.includes('uncategorizable')) {
+            color = '#6B7280'; // Gray for uncertain
+          }
+          
+          mainCategories.push({
+            value: parseInt(cat.id),
+            label: cat.name,
+            color: color,
+            isMain: true
+          });
+        } else {
+          // All custom categories get the same color
+          customCategories.push({
+            value: parseInt(cat.id),
+            label: cat.name,
+            color: '#8B5CF6', // Purple for all custom categories
+            isMain: false
+          });
+        }
+      });
+      
+      console.log(`📂 Split categories: ${mainCategories.length} main, ${customCategories.length} custom`);
+      return { mainCategories, customCategories };
+    }
+    
+    // Fallback to defaults if no dynamic categories loaded
+    const defaultOptions = [
     { value: 1, label: 'Interested', color: '#10B981' },
     { value: 2, label: 'Meeting Request', color: '#8B5CF6' },
     { value: 3, label: 'Not Interested', color: '#EF4444' },
@@ -2631,6 +2715,30 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     { value: 8, label: 'Uncategorizable by AI', color: '#9CA3AF' },
     { value: 9, label: 'Sender Originated Bounce', color: '#EF4444' }
   ];
+    console.log('📂 Using DEFAULT category dropdown (SmartLead API not loaded)');
+    return { mainCategories: defaultOptions, customCategories: [] };
+  }, [availableCategories]);
+
+  // State for custom category section
+  const [showCustomCategories, setShowCustomCategories] = useState(false);
+
+  // Helper function to find category from new structure
+  const findCategoryOption = (categoryValue) => {
+    if (CATEGORY_OPTIONS.mainCategories) {
+      // New structure with main/custom split
+      const mainCategory = CATEGORY_OPTIONS.mainCategories.find(opt => opt.value === categoryValue);
+      if (mainCategory) return mainCategory;
+      
+      const customCategory = CATEGORY_OPTIONS.customCategories?.find(opt => opt.value === categoryValue);
+      if (customCategory) return customCategory;
+      
+      // Fallback
+      return { value: categoryValue, label: `Category ${categoryValue}`, color: '#6B7280' };
+    } else {
+      // Old structure (array)
+      return CATEGORY_OPTIONS.find(opt => opt.value === categoryValue) || { value: categoryValue, label: `Category ${categoryValue}`, color: '#6B7280' };
+    }
+  };
 
   // Portal Dropdown Component
   const PortalDropdown = ({ leadId, lead, position, onClose, onSelect }) => {
@@ -2654,7 +2762,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           overflow: 'hidden'
         }}
       >
-        {CATEGORY_OPTIONS.map((option, optionIndex) => (
+        {/* Main Categories */}
+        {(CATEGORY_OPTIONS.mainCategories || CATEGORY_OPTIONS).map((option, optionIndex) => (
           <button
             key={option.value}
             onClick={(e) => {
@@ -2667,7 +2776,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
               backgroundColor: lead.lead_category === option.value 
                 ? `${option.color}30` 
                 : isDarkMode ? '#2A2C2A' : '#F8F9FA',
-              borderBottom: optionIndex < CATEGORY_OPTIONS.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
+              borderBottom: `1px solid ${themeStyles.border}`,
               color: isDarkMode ? '#ffffff' : '#000000',
               boxSizing: 'border-box',
               minHeight: '50px',
@@ -2693,6 +2802,76 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
             </div>
           </button>
         ))}
+        
+        {/* Custom Categories Section */}
+        {CATEGORY_OPTIONS.customCategories && CATEGORY_OPTIONS.customCategories.length > 0 && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCustomCategories(!showCustomCategories);
+              }}
+              className="w-full px-5 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm font-medium"
+              style={{
+                backgroundColor: isDarkMode ? '#2A2C2A' : '#F8F9FA',
+                borderBottom: showCustomCategories ? `1px solid ${themeStyles.border}` : 'none',
+                color: isDarkMode ? '#ffffff' : '#000000',
+                boxSizing: 'border-box',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <span>Custom Categories ({CATEGORY_OPTIONS.customCategories.length})</span>
+              <ChevronDown 
+                className={`w-4 h-4 transition-transform duration-200 ${showCustomCategories ? 'rotate-180' : ''}`}
+                style={{color: isDarkMode ? '#ffffff' : '#000000'}}
+              />
+            </button>
+            
+            {showCustomCategories && CATEGORY_OPTIONS.customCategories.map((option, optionIndex) => (
+              <button
+                key={option.value}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(leadId, option.value);
+                  onClose();
+                  setShowCustomCategories(false); // Close custom section after selection
+                }}
+                className="w-full px-7 py-3 text-left transition-all duration-200 hover:opacity-90 text-sm"
+                style={{
+                  backgroundColor: lead.lead_category === option.value 
+                    ? `${option.color}30` 
+                    : isDarkMode ? '#242624' : '#F1F2F1',
+                  borderBottom: optionIndex < CATEGORY_OPTIONS.customCategories.length - 1 ? `1px solid ${themeStyles.border}` : 'none',
+                  color: isDarkMode ? '#D0D0D0' : '#404040',
+                  boxSizing: 'border-box',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginLeft: '8px' // Slight indent for custom categories
+                }}
+                onMouseEnter={(e) => {
+                  if (lead.lead_category !== option.value) {
+                    e.target.style.backgroundColor = `${option.color}15`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (lead.lead_category !== option.value) {
+                    e.target.style.backgroundColor = isDarkMode ? '#242624' : '#F1F2F1';
+                  }
+                }}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="whitespace-nowrap">{option.label}</span>
+                  {lead.lead_category === option.value && (
+                    <CheckCircle className="w-4 h-4 ml-3 flex-shrink-0" style={{color: isDarkMode ? '#D0D0D0' : '#404040'}} />
+                  )}
+                </div>
+              </button>
+            ))}
+          </>
+        )}
       </div>,
       document.body
     );
@@ -3141,6 +3320,37 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
     prevSavingRef.current = isSavingApi;
   }, [isSavingApi, runTour, tourStepIndex]);
+
+  // Load categories when SmartLead API keys are available (for lead card dropdowns)
+  useEffect(() => {
+    const loadCategoriesForApp = async () => {
+      // Load categories when we have SmartLead accounts and no categories loaded yet
+      if (availableCategories.length === 0 && !categoriesLoading && apiKeys.accounts.length > 0) {
+        const smartleadAccount = apiKeys.accounts.find(acc => 
+          acc.esp.provider === 'smartlead' && acc.esp.key
+        );
+        
+        if (smartleadAccount) {
+          try {
+            setCategoriesLoading(true);
+            console.log('📂 Loading categories for lead card dropdowns...');
+            
+            const categories = await fetchSmartleadCategories(smartleadAccount.esp.key);
+            setAvailableCategories(categories);
+            setSelectedCategories(categories.filter(cat => cat.suggested).map(cat => cat.id));
+            
+            console.log(`✅ Loaded ${categories.length} categories for lead cards and backfill`);
+          } catch (error) {
+            console.error('❌ Failed to load categories for lead cards:', error);
+          } finally {
+            setCategoriesLoading(false);
+          }
+        }
+      }
+    };
+    
+    loadCategoriesForApp();
+  }, [availableCategories.length, categoriesLoading, apiKeys.accounts]);
 
   // Track other action completions
   useEffect(() => {
@@ -5886,10 +6096,122 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return await response.json();
   };
 
-  // Fetch leads for a campaign from all categories (1-8) + uncategorized leads
-  const fetchLeadsForCampaign = async (apiKey, campaignId) => {
-    const categories = [1, 2, 3, 4, 5, 6, 7, 8];
+  // Fetch category definitions from SmartLead using proper API
+  const fetchSmartleadCategories = async (apiKey) => {
+    try {
+      console.log('📋 Fetching SmartLead category definitions from API...');
+      
+      // Use the proper SmartLead categories API endpoint
+      const response = await fetch(`https://server.smartlead.ai/api/v1/leads/fetch-categories?api_key=${apiKey}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch categories: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('📂 Raw SmartLead categories API response:', result);
+      console.log('📂 Response type:', typeof result, 'Keys:', Object.keys(result || {}));
+      console.log('📂 Data field:', result.data, 'Data type:', typeof result.data);
+      
+      // Transform SmartLead response to our format with smart suggestions
+      const rawCategories = result.data || result || [];
+      console.log('📂 Raw categories array:', rawCategories, 'Length:', rawCategories.length);
+      
+      const categories = rawCategories.map(category => {
+        const id = String(category.id || category.category_id);
+        const name = category.name || category.category_name || `Category ${id}`;
+        
+        // Smart suggestions based on category names
+        const nameKey = name.toLowerCase();
+        const suggested = nameKey.includes('interested') || 
+                         nameKey.includes('meeting') || 
+                         nameKey.includes('information') || 
+                         nameKey.includes('request') ||
+                         nameKey.includes('uncategorizable') ||
+                         (!nameKey.includes('not') && !nameKey.includes('do not') && 
+                          !nameKey.includes('office') && !nameKey.includes('bounce') && 
+                          !nameKey.includes('wrong'));
+        
+        return {
+          id,
+          name,
+          suggested
+        };
+      });
+      
+      console.log(`✅ Processed ${categories.length} categories from SmartLead API:`, categories.map(c => `${c.id}:${c.name} (${c.suggested ? 'suggested' : 'optional'})`));
+      return categories;
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch categories from SmartLead API:', error);
+      console.log('🔄 Falling back to standard category detection method...');
+      console.log('🔍 This means either: 1) API endpoint failed, 2) Network error, or 3) Response parsing issue');
+      
+      // Fallback: Use the old method if the API fails
+      try {
+        const campaigns = await fetchSmartleadCampaigns(apiKey);
+        if (campaigns.length === 0) {
+          throw new Error('No campaigns found to determine categories');
+        }
+        
+        const sampleCampaign = campaigns[0];
+        const categoriesInUse = new Set();
+        
+        const standardCategories = [
+          { id: '1', name: 'Interested', suggested: true },
+          { id: '2', name: 'Meeting Request', suggested: true },
+          { id: '3', name: 'Not Interested', suggested: false },
+          { id: '4', name: 'Do Not Contact', suggested: false },
+          { id: '5', name: 'Information Request', suggested: true },
+          { id: '6', name: 'Out Of Office', suggested: false },
+          { id: '7', name: 'Wrong Person', suggested: false },
+          { id: '8', name: 'Uncategorizable by AI', suggested: true },
+          { id: '9', name: 'Sender Originated Bounce', suggested: false }
+        ];
+        
+        for (const category of standardCategories) {
+          try {
+            const response = await fetch(`https://server.smartlead.ai/api/v1/campaigns/${sampleCampaign.id}/leads?api_key=${apiKey}&lead_category_id=${category.id}`);
+            if (response.ok) {
+              const result = await response.json();
+              if (result.data && result.data.length > 0) {
+                categoriesInUse.add(category.id);
+              }
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (error) {
+            console.warn(`Category ${category.id} check failed:`, error);
+          }
+        }
+        
+        const availableCategories = standardCategories.filter(cat => 
+          categoriesInUse.has(cat.id)
+        );
+        
+        console.log(`✅ FALLBACK METHOD found ${availableCategories.length} categories:`, availableCategories.map(c => `${c.id}:${c.name}`));
+        console.log('🔍 FALLBACK: This explains why you only see certain categories - they\'re the only ones with leads in the sample campaign');
+        return availableCategories;
+        
+      } catch (fallbackError) {
+        console.error('❌ Fallback category detection also failed:', fallbackError);
+        // Ultimate fallback to current defaults
+        return [
+          { id: '1', name: 'Interested', suggested: true },
+          { id: '2', name: 'Meeting Request', suggested: true },
+          { id: '5', name: 'Information Request', suggested: true },
+          { id: '8', name: 'Uncategorizable by AI', suggested: true }
+        ];
+      }
+    }
+  };
+
+  // Fetch leads for a campaign from selected categories only
+  const fetchLeadsForCampaign = async (apiKey, campaignId, selectedCategoryIds = null) => {
+    // Use selected categories if provided, otherwise fetch all categories
+    const categories = selectedCategoryIds || [1, 2, 3, 4, 5, 6, 7, 8];
     const results = [];
+    
+    console.log(`📂 Fetching leads for campaign ${campaignId} from categories:`, categories);
     
     // Fetch categories sequentially with delays to avoid rate limiting
     for (const categoryId of categories) {
@@ -5967,8 +6289,8 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     }
   };
 
-  // Conservative message history fetch with proper 3-second delays on failures and timeout
-  const fetchMessageHistoryWithRetry = async (apiKey, campaignId, leadId, maxRetries = 2) => {
+  // Robust message history fetch with exponential backoff for throttling
+  const fetchMessageHistoryWithRetry = async (apiKey, campaignId, leadId, maxRetries = 5) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`📞 Fetching message history for lead ${leadId} (attempt ${attempt}/${maxRetries})`);
@@ -5984,14 +6306,15 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         clearTimeout(timeoutId);
         
         if (response.status === 429) {
-          // Rate limited - wait 3 seconds as requested
-          console.warn(`⚠️ Rate limited on lead ${leadId}, waiting 3 seconds (attempt ${attempt}/${maxRetries})`);
+          // Rate limited - use exponential backoff
+          const backoffDelay = 3000 * Math.pow(2, attempt - 1); // 3s, 6s, 12s, 24s, 48s
+          console.warn(`⚠️ Rate limited on lead ${leadId}, waiting ${backoffDelay/1000}s (attempt ${attempt}/${maxRetries})`);
           
           if (attempt < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 3000)); // Fixed 3-second delay
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
             continue;
           } else {
-            throw new Error(`Rate limited after ${maxRetries} attempts: 429`);
+            throw new Error(`Rate limited after ${maxRetries} attempts with exponential backoff: 429`);
           }
         }
         
@@ -6012,24 +6335,25 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
         }
         
         if (attempt === maxRetries) {
-          console.warn(`Giving up on lead ${leadId} after ${maxRetries} attempts`);
+          console.warn(`Giving up on lead ${leadId} after ${maxRetries} attempts with exponential backoff`);
           return { history: [] };
         }
         
-        // Wait 3 seconds on ANY failure as requested
-        console.warn(`⚠️ API call failed for lead ${leadId}, waiting 3 seconds before retry`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Exponential backoff on ANY failure for better API resilience
+        const backoffDelay = 3000 * Math.pow(2, attempt - 1); // 3s, 6s, 12s, 24s, 48s
+        console.warn(`⚠️ API call failed for lead ${leadId}, waiting ${backoffDelay/1000}s before retry (attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
       }
     }
   };
 
   // 🐌 CONSERVATIVE: Follow SmartLead's rate limits exactly (100 calls in intervals of 10, then 3s break)
-  const exportCampaignData = async (apiKey, campaignId) => {
+  const exportCampaignData = async (apiKey, campaignId, selectedCategories = null) => {
     try {
       console.log(`🐌 Conservative processing campaign ${campaignId} following SmartLead rate limits...`);
       
-      // Get all leads for campaign (this works and is fast)
-      const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId);
+      // Get leads for campaign from selected categories only
+      const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId, selectedCategories);
       console.log(`📧 Campaign ${campaignId}: ${campaignLeads.length} leads found`);
       
       const leadsWithHistory = [];
@@ -6100,10 +6424,10 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
   };
 
   // Fallback function if export fails
-  const fallbackToIndividualCalls = async (apiKey, campaignId) => {
+  const fallbackToIndividualCalls = async (apiKey, campaignId, selectedCategories = null) => {
     console.log(`🔄 Using fallback individual calls for campaign ${campaignId}`);
     
-    const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId);
+    const campaignLeads = await fetchLeadsForCampaign(apiKey, campaignId, selectedCategories);
     const leadsWithHistory = [];
     
     for (const lead of campaignLeads) {
@@ -6209,17 +6533,20 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     return null;
   };
 
-  // Check if lead category should be analyzed for intent
-  // Only analyze leads where intent scoring makes sense
-  const shouldAnalyzeIntent = (leadCategory) => {
-    const categoriesToAnalyze = [
+  // Check if lead category should be analyzed for intent (now dynamic based on user selection)
+  const shouldAnalyzeIntent = (leadCategory, selectedAnalysisCategories = null) => {
+    // Use dynamic categories if provided, otherwise fall back to current defaults
+    const categoriesToAnalyze = selectedAnalysisCategories || [
       '1', // Interested - measure level of interest
       '2', // Meeting Request - assess urgency/intent
       '5', // Information Request - gauge seriousness
       '8', // Uncategorizable by AI - need human insight
       // Skip: Not Interested (3), Do Not Contact (4), Out Of Office (6), Wrong Person (7), Bounce (9)
     ];
-    return categoriesToAnalyze.includes(String(leadCategory));
+    
+    const shouldAnalyze = categoriesToAnalyze.includes(String(leadCategory));
+    console.log(`🤖 Category ${leadCategory} analysis: ${shouldAnalyze ? 'YES' : 'NO'} (using ${selectedAnalysisCategories ? 'user selection' : 'defaults'})`);
+    return shouldAnalyze;
   };
 
   // AI Intent Analysis Function (optimized with smart filtering)
@@ -6314,12 +6641,11 @@ ${JSON.stringify(parsedConvo)}`;
   };
 
   const analyzeLeadIntents = async (leadsToAnalyze, progressId = null) => {
-    // Filter leads that need intent analysis
-    const leadsForAnalysis = leadsToAnalyze.filter(lead => shouldAnalyzeIntent(lead.lead_category));
+    // Analyze ALL imported leads since they were pre-filtered during import
+    const leadsForAnalysis = leadsToAnalyze; // No filtering needed - already filtered at import
     
-    console.log(`🧠 Starting AI intent analysis for ${leadsForAnalysis.length} relevant leads out of ${leadsToAnalyze.length} total...`);
-    console.log(`📊 Analyzing categories: Interested (1), Meeting Request (2), Information Request (5), Uncategorizable by AI (8)`);
-    console.log(`⏭️ Skipping ${leadsToAnalyze.length - leadsForAnalysis.length} leads (not interested, do not contact, out of office, wrong person, bounce)`);
+    console.log(`🧠 Starting AI intent analysis for ALL ${leadsForAnalysis.length} imported leads...`);
+    console.log(`📊 All imported categories will get AI analysis (filtered during import process)`);
     
     let analyzed = 0;
     
@@ -6895,8 +7221,9 @@ ${JSON.stringify(parsedConvo)}`;
         try {
           console.log(`📞 Calling exportCampaignData for campaign ${campaign.id}...`);
           
-          // 🚀 OPTIMIZED: Export entire campaign data with conversations in ONE call
-          campaignExport = await exportCampaignData(apiKey, campaign.id);
+          // 🚀 OPTIMIZED: Export entire campaign data with conversations from selected categories only
+          const selectedCategoryIds = selectedConfig?.importCategories; 
+          campaignExport = await exportCampaignData(apiKey, campaign.id, selectedCategoryIds);
           console.log(`📧 Campaign ${campaign.id}: ${campaignExport.leads?.length || 0} leads exported`);
           
         } catch (campaignError) {
@@ -7121,14 +7448,14 @@ ${JSON.stringify(parsedConvo)}`;
         .eq('brand_id', brandId)
         .is('intent', null); // Only leads without intent scores
 
-      relevantLeadsCount = insertedLeads ? insertedLeads.filter(lead => shouldAnalyzeIntent(lead.lead_category)).length : 0;
+      relevantLeadsCount = insertedLeads ? insertedLeads.length : 0; // All imported leads get analyzed
       
       if (relevantLeadsCount > 0) {
         // 🔧 FIX: Queue leads directly to processing_queue (NO backfill_progress for AI)
         console.log(`🧪 Queuing ${relevantLeadsCount} leads directly to processing_queue for background AI processing...`);
         
-        // Queue leads for AI analysis (goes directly to processing_queue)
-        const analyzedCount = await analyzeLeadIntents(insertedLeads, null); // No progress tracking!
+        // Queue ALL imported leads for AI analysis (already filtered during import)
+        const analyzedCount = await analyzeLeadIntents(insertedLeads, null); // Analyze all imported leads
         
         // Show immediate completion (AI happens in background)
         setBackfillProgress({ 
@@ -7250,12 +7577,16 @@ ${JSON.stringify(parsedConvo)}`;
   const showCampaignSelectionModal = async (apiKey, accountId, accountName) => {
     try {
       setCampaignSelectionLoading(true);
+      setCategoriesLoading(true);
       setShowCampaignSelection(true);
       
-      console.log('🎯 Fetching campaigns for selection...', { accountId, accountName });
+      console.log('🎯 Fetching campaigns and categories for selection...', { accountId, accountName });
       
-      // Fetch campaigns from Smartlead
-      const campaigns = await fetchSmartleadCampaigns(apiKey);
+      // Fetch both campaigns and categories in parallel
+      const [campaigns, categories] = await Promise.all([
+        fetchSmartleadCampaigns(apiKey),
+        fetchSmartleadCategories(apiKey)
+      ]);
       
       // Calculate date filter for display
       const cutoffDate = new Date();
@@ -7271,9 +7602,21 @@ ${JSON.stringify(parsedConvo)}`;
         }));
       
       console.log(`📋 Found ${filteredCampaigns.length} campaigns for selection`);
+      console.log(`📂 Found ${categories.length} categories available`);
       
       setAvailableCampaigns(filteredCampaigns);
       setSelectedCampaigns([]); // Reset selections
+      
+      // Set up categories with smart defaults (preserve existing selections if available)
+      setAvailableCategories(categories);
+      
+      // Only reset selections if no categories are currently selected
+      if (selectedCategories.length === 0) {
+        setSelectedCategories(categories.filter(cat => cat.suggested).map(cat => cat.id));
+        console.log('📂 Set default category selections based on suggestions');
+      } else {
+        console.log('📂 Preserving existing category selections from original modal');
+      }
       
       // Store pending backfill config
       setPendingBackfillConfig({
@@ -7284,11 +7627,12 @@ ${JSON.stringify(parsedConvo)}`;
       });
       
     } catch (error) {
-      console.error('❌ Failed to fetch campaigns:', error);
-      showToast('Failed to load campaigns. Please try again.', 'error');
+      console.error('❌ Failed to fetch campaigns and categories:', error);
+      showToast('Failed to load campaigns and categories. Please try again.', 'error');
       setShowCampaignSelection(false);
     } finally {
       setCampaignSelectionLoading(false);
+      setCategoriesLoading(false);
     }
   };
   
@@ -7304,13 +7648,20 @@ ${JSON.stringify(parsedConvo)}`;
       return;
     }
     
+    if (selectedCategories.length === 0) {
+      showToast('Please select at least one category to import.', 'warning');
+      return;
+    }
+    
     console.log(`🎯 User selected ${selectedCampaigns.length} campaigns:`, selectedCampaigns);
+    console.log(`📂 User selected ${selectedCategories.length} categories to import:`, selectedCategories);
     
     // Create selected config for enhanced resume
     const selectedConfig = {
       campaigns: selectedCampaigns.map(c => c.id),
       campaignNames: selectedCampaigns.map(c => c.name),
       intentFilters: intentFilters,
+      importCategories: selectedCategories, // 🆕 Pass selected categories for import filtering
       days: backfillDays,
       estimatedLeads: selectedCampaigns.reduce((sum, c) => sum + (c.estimatedLeads || 0), 0),
       selectionTimestamp: Date.now()
@@ -7561,11 +7912,15 @@ ${JSON.stringify(parsedConvo)}`;
         newSet.clear(); // Close all other dropdowns
         newSet.add(leadId);
         
-        // Calculate position for portal with smart positioning
+        // Calculate position for portal with scroll-aware positioning
         const buttonElement = dropdownButtonRefs.current[leadId];
         if (buttonElement) {
           const rect = buttonElement.getBoundingClientRect();
-          const dropdownHeight = CATEGORY_OPTIONS.length * 50 + 20; // Estimate dropdown height
+          const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+          const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+          
+          const totalCategories = (CATEGORY_OPTIONS.mainCategories?.length || 0) + (CATEGORY_OPTIONS.customCategories?.length || 0) || CATEGORY_OPTIONS.length || 0;
+          const dropdownHeight = Math.min(totalCategories * 50 + 100, 400); // Cap height for better UX
           const windowHeight = window.innerHeight;
           const spaceBelow = windowHeight - rect.bottom;
           const spaceAbove = rect.top;
@@ -7576,9 +7931,11 @@ ${JSON.stringify(parsedConvo)}`;
           setDropdownPositions(prevPos => ({
             ...prevPos,
             [leadId]: {
-              top: shouldPositionAbove ? rect.top - dropdownHeight - 8 : rect.bottom + 8,
-              left: rect.left,
-              width: rect.width,
+              top: shouldPositionAbove 
+                ? rect.top + scrollY - dropdownHeight - 8 
+                : rect.bottom + scrollY + 8,
+              left: rect.left + scrollX,
+              width: Math.max(rect.width, 250), // Minimum width for better UX
               isAbove: shouldPositionAbove
             }
           }));
@@ -8723,19 +9080,74 @@ ${JSON.stringify(parsedConvo)}`;
                     )}
                   </div>
                   
+                  {/* 🆕 CATEGORY SELECTION for Original Modal */}
                   <div className="mb-4 p-3 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
                     <p className="text-xs font-medium mb-2 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
-                      🧠 AI Intent Analysis will be applied to:
+                      📂 Which Categories Should We Import?
                     </p>
-                    <div className="text-xs transition-colors duration-300 space-y-1" style={{color: themeStyles.textMuted}}>
-                      <div>• Meeting Request leads (to assess urgency)</div>
-                      <div>• Interested leads (to measure engagement level)</div>
-                      <div>• Information Request leads (to gauge seriousness)</div>
-                      <div>• Uncategorizable leads (need human insight)</div>
+                    
+                    {categoriesLoading ? (
+                      <div className="text-center py-2">
+                        <div className="w-6 h-6 mx-auto mb-1 rounded-full flex items-center justify-center animate-pulse" style={{backgroundColor: `${themeStyles.accent}20`}}>
+                          <Bot className="w-3 h-3 animate-spin" style={{color: themeStyles.accent}} />
                     </div>
-                    <p className="text-xs mt-2 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
-                      Skipping: Not Interested, Do Not Contact, Out of Office, Wrong Person, Bounces
-                    </p>
+                        <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Loading categories...
+                        </p>
+                      </div>
+                    ) : availableCategories.length > 0 ? (
+                      <>
+                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                          {availableCategories.map(category => (
+                            <label key={category.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                              <input
+                                type="checkbox"
+                                checked={selectedCategories.includes(category.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCategories(prev => [...prev, category.id]);
+                                  } else {
+                                    setSelectedCategories(prev => prev.filter(id => id !== category.id));
+                                  }
+                                }}
+                                className="rounded text-xs"
+                                style={{accentColor: themeStyles.accent}}
+                              />
+                              <span className="transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                {category.name} ({category.id})
+                              </span>
+                              {category.suggested && (
+                                <span className="text-xs px-1 py-0.5 rounded" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
+                                  ✓
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex gap-1">
+                          <button
+                            onClick={() => setSelectedCategories(availableCategories.filter(cat => cat.suggested).map(cat => cat.id))}
+                            className="text-xs px-2 py-1 rounded transition-all"
+                            style={{color: themeStyles.accent, backgroundColor: `${themeStyles.accent}15`}}
+                          >
+                            Suggested
+                          </button>
+                          <button
+                            onClick={() => setSelectedCategories([])}
+                            className="text-xs px-2 py-1 rounded transition-all"
+                            style={{color: themeStyles.textMuted, backgroundColor: themeStyles.tertiaryBg}}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-xs transition-colors duration-300 space-y-1" style={{color: themeStyles.textMuted}}>
+                        <div>• Will import: Interested, Meeting Request, Information Request, Uncategorizable</div>
+                        <div>• Will skip: Not Interested, Do Not Contact, Out of Office, Wrong Person, Bounces</div>
+                        <div>• All imported categories get AI analysis automatically</div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="mb-4" data-tour="timeframe-selector">
@@ -8821,7 +9233,7 @@ ${JSON.stringify(parsedConvo)}`;
                     </button>
                     <button
                       type="button"
-                      disabled={isBackfilling}
+                      disabled={isBackfilling || categoriesLoading || (availableCategories.length > 0 && selectedCategories.length === 0)}
                       data-tour="backfill-button"
                       onClick={async (e) => {
                         e.preventDefault();
@@ -8870,12 +9282,23 @@ ${JSON.stringify(parsedConvo)}`;
                           if (smartleadAccounts.length > 1) {
                             showAccountSelectionModal();
                           } else {
-                            // Single account - go directly to campaign selection
+                            // Single account - go directly to campaign selection with category loading
                             const account = smartleadAccounts[0];
                             // Reset backfill days to default when starting a new backfill (respect plan limits)
                             const defaultDays = Math.min(30, currentPlan?.backfillMaxDays || 45);
                             setBackfillDays(defaultDays);
                             console.log(`🔄 [Backfill] Reset backfill days to ${defaultDays} (plan: ${currentPlan?.name}, max: ${currentPlan?.backfillMaxDays})`);
+                            
+                            // Close original modal before showing campaign selection
+                            setShowBackfillModal(false);
+                            
+                            // Validate category selection before proceeding
+                            if (selectedCategories.length === 0) {
+                              showToast('Please select at least one category to import before proceeding.', 'warning');
+                              setShowBackfillModal(true); // Reopen modal
+                              return;
+                            }
+                            
                             showCampaignSelectionModal(
                               account.esp.key, 
                               account.account_id,
@@ -8888,7 +9311,9 @@ ${JSON.stringify(parsedConvo)}`;
                       style={{backgroundColor: isBackfilling ? themeStyles.border : themeStyles.accent, color: isDarkMode ? '#1A1C1A' : '#FFFFFF'}}
                     >
                       <Database className="w-4 h-4" />
-                      Import Leads
+                      {categoriesLoading ? 'Loading Categories...' : 
+                       (availableCategories.length > 0 && selectedCategories.length === 0) ? 'Select Categories to Import' :
+                       'Import Selected Categories'}
                     </button>
                   </div>
                 </>
@@ -9389,6 +9814,95 @@ ${JSON.stringify(parsedConvo)}`;
                         </label>
                       ))}
                     </div>
+                  </div>
+
+                  {/* 🆕 CATEGORY SELECTION */}
+                  <div className="mb-6 p-4 rounded-lg transition-colors duration-300" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+                    <h3 className="text-sm font-medium mb-3 transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                      📂 Which Categories Should We Import?
+                    </h3>
+                    
+                    {categoriesLoading ? (
+                      <div className="text-center py-4">
+                        <div className="w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center animate-pulse" style={{backgroundColor: `${themeStyles.accent}20`}}>
+                          <Bot className="w-4 h-4 animate-spin" style={{color: themeStyles.accent}} />
+                        </div>
+                        <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Loading categories...
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs mb-4 transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                          Select which response types to import and save to your inbox. All imported categories will automatically get AI intent analysis.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {availableCategories.map(category => (
+                            <label key={category.id} className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all hover:opacity-90" style={{backgroundColor: themeStyles.secondaryBg, border: `1px solid ${themeStyles.border}`}}>
+                              <input
+                                type="checkbox"
+                                checked={selectedCategories.includes(category.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCategories(prev => [...prev, category.id]);
+                                  } else {
+                                    setSelectedCategories(prev => prev.filter(id => id !== category.id));
+                                  }
+                                }}
+                                className="rounded"
+                                style={{accentColor: themeStyles.accent}}
+                              />
+                              <div className="flex-1">
+                                <span className="text-sm font-medium transition-colors duration-300" style={{color: themeStyles.textPrimary}}>
+                                  {category.name}
+                                </span>
+                                <p className="text-xs transition-colors duration-300" style={{color: themeStyles.textMuted}}>
+                                  Category {category.id} • {category.suggested ? 'Recommended' : 'Optional'}
+                                </p>
+                              </div>
+                              {category.suggested && (
+                                <span className="text-xs px-2 py-1 rounded-full font-medium" style={{backgroundColor: `${themeStyles.accent}20`, color: themeStyles.accent}}>
+                                  Suggested
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                        
+                        <div className="mt-4 flex gap-2">
+                          <button
+                            onClick={() => setSelectedCategories(availableCategories.filter(cat => cat.suggested).map(cat => cat.id))}
+                            className="text-xs px-3 py-1 rounded transition-all"
+                            style={{color: themeStyles.accent, backgroundColor: `${themeStyles.accent}20`}}
+                          >
+                            Select Suggested
+                          </button>
+                          <button
+                            onClick={() => setSelectedCategories(availableCategories.map(cat => cat.id))}
+                            className="text-xs px-3 py-1 rounded transition-all"
+                            style={{color: themeStyles.accent, backgroundColor: `${themeStyles.accent}20`}}
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={() => setSelectedCategories([])}
+                            className="text-xs px-3 py-1 rounded transition-all"
+                            style={{color: themeStyles.textMuted, backgroundColor: themeStyles.tertiaryBg}}
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                        
+                        {selectedCategories.length > 0 && (
+                          <div className="mt-3 p-3 rounded-lg" style={{backgroundColor: `${themeStyles.accent}10`, border: `1px solid ${themeStyles.accent}30`}}>
+                            <p className="text-xs transition-colors duration-300" style={{color: themeStyles.accent}}>
+                              ✅ {selectedCategories.length} categories selected for import (all will get AI analysis)
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Days Selection */}
@@ -10761,7 +11275,7 @@ ${JSON.stringify(parsedConvo)}`;
                   <div className="flex flex-wrap gap-2 mb-3">
                     <div className="relative category-dropdown" style={{zIndex: 10000}}>
                       {(() => {
-                        const currentCategory = CATEGORY_OPTIONS.find(opt => opt.value === lead.lead_category) || CATEGORY_OPTIONS.find(opt => opt.value === 8);
+                        const currentCategory = findCategoryOption(lead.lead_category) || findCategoryOption(8);
                         const isDropdownOpen = categoryDropdowns.has(lead.id);
                         
                         return (
