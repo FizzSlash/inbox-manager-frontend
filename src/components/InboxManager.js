@@ -3737,7 +3737,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
     const totalLeads = leads.length;
-    const highIntentLeads = leads.filter(lead => lead.intent >= 7).length;
+    const highIntentLeads = leads.filter(lead => lead.intent >= 8).length;
     const avgResponseTime = leads.reduce((sum, lead) => sum + lead.response_time_avg, 0) / totalLeads;
     const avgEngagement = leads.reduce((sum, lead) => sum + lead.engagement_score, 0) / totalLeads;
     
@@ -3986,24 +3986,24 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
     // Intent vs Engagement correlation (more meaningful than response rate)
     const intentCorrelation = [
-      { intent: 'High (7-10)', 
-        avgReplies: filteredLeads.filter(l => l.intent >= 7).length > 0
-          ? filteredLeads.filter(l => l.intent >= 7)
+      { intent: 'High (8-10)', 
+        avgReplies: filteredLeads.filter(l => l.intent >= 8).length > 0
+          ? filteredLeads.filter(l => l.intent >= 8)
               .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
-            filteredLeads.filter(l => l.intent >= 7).length : 0,
-        count: filteredLeads.filter(l => l.intent >= 7).length },
-      { intent: 'Medium (4-6)', 
-        avgReplies: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length > 0
-          ? filteredLeads.filter(l => l.intent >= 4 && l.intent < 7)
+            filteredLeads.filter(l => l.intent >= 8).length : 0,
+        count: filteredLeads.filter(l => l.intent >= 8).length },
+      { intent: 'Medium (4-7)', 
+        avgReplies: filteredLeads.filter(l => l.intent >= 4 && l.intent <= 7).length > 0
+          ? filteredLeads.filter(l => l.intent >= 4 && l.intent <= 7)
               .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
-            filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length : 0,
-        count: filteredLeads.filter(l => l.intent >= 4 && l.intent < 7).length },
+            filteredLeads.filter(l => l.intent >= 4 && l.intent <= 7).length : 0,
+        count: filteredLeads.filter(l => l.intent >= 4 && l.intent <= 7).length },
       { intent: 'Low (1-3)', 
-        avgReplies: filteredLeads.filter(l => l.intent < 4).length > 0
-          ? filteredLeads.filter(l => l.intent < 4)
+        avgReplies: filteredLeads.filter(l => l.intent >= 1 && l.intent <= 3).length > 0
+          ? filteredLeads.filter(l => l.intent >= 1 && l.intent <= 3)
               .reduce((sum, l) => sum + l.conversation.filter(m => m.type === 'REPLY').length, 0) / 
-            filteredLeads.filter(l => l.intent < 4).length : 0,
-        count: filteredLeads.filter(l => l.intent < 4).length }
+            filteredLeads.filter(l => l.intent >= 1 && l.intent <= 3).length : 0,
+        count: filteredLeads.filter(l => l.intent >= 1 && l.intent <= 3).length }
     ];
 
     // Time/Day heatmap analysis
@@ -4111,11 +4111,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
       // Apply intent filter based on score ranges
       if (intentFilter === 'high') {
-        // Show high + medium intent leads (5-10)
-        filtered = filtered.filter(lead => lead.intent >= 5);
+        // Show high + medium intent leads (4-10)
+        filtered = filtered.filter(lead => lead.intent >= 4);
       } else if (intentFilter === 'low') {
-        // Show low intent leads (1-4)
-        filtered = filtered.filter(lead => lead.intent < 5);
+        // Show low intent leads (1-3)
+        filtered = filtered.filter(lead => lead.intent <= 3);
       }
       // If intentFilter === 'all', show all leads (no additional filtering)
 
@@ -6569,8 +6569,8 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     const numScore = parseInt(score);
     
     if (numScore >= 1 && numScore <= 3) return 'Low Intent';
-    if (numScore >= 4 && numScore <= 6) return 'Medium Intent';
-    if (numScore >= 7 && numScore <= 10) return 'High Intent';
+    if (numScore >= 4 && numScore <= 7) return 'Medium Intent';
+    if (numScore >= 8 && numScore <= 10) return 'High Intent';
     return 'Not Classified';
   };
 
@@ -6591,12 +6591,12 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
       color: textColor || '#d97706',
       border: '1px solid #fbbf24'
     };
-    if (numScore >= 4 && numScore <= 6) return { 
+    if (numScore >= 4 && numScore <= 7) return { 
       backgroundColor: '#dbeafe', 
       color: textColor || '#2563eb',
       border: '1px solid #60a5fa'
     };
-    if (numScore >= 7 && numScore <= 10) return { 
+    if (numScore >= 8 && numScore <= 10) return { 
       backgroundColor: '#dcfce7', 
       color: textColor || '#16a34a',
       border: '1px solid #4ade80'
@@ -11210,7 +11210,7 @@ ${JSON.stringify(parsedConvo)}`;
             >
               High Intent
               <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                {leads.filter(lead => lead.intent >= 5).length}
+                {leads.filter(lead => lead.intent >= 4).length}
               </span>
             </button>
             <button
@@ -11229,7 +11229,7 @@ ${JSON.stringify(parsedConvo)}`;
             >
               Low Intent
               <span className="ml-2 px-2 py-1 rounded-full text-xs" style={{backgroundColor: themeStyles.tertiaryBg, color: themeStyles.textMuted}}>
-                {leads.filter(lead => lead.intent < 5).length}
+                {leads.filter(lead => lead.intent <= 3).length}
               </span>
             </button>
             <button
