@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import InboxManager from './components/InboxManager';
 import CRMManager from './components/CRMManager';
 import Auth from './components/Auth';
+import ErrorBoundary from './components/ErrorBoundary';
 import { getCurrentUser, onAuthStateChange, supabase } from './lib/supabase';
 
 function App() {
@@ -143,22 +144,24 @@ function App() {
   }
 
   return (
-    <div className="App min-h-screen bg-gray-50 dark:bg-gray-900">
-      {isDemoMode ? (
-        // Demo mode - show InboxManager with sample data, no auth required
-        <InboxManager 
-          user={{ email: "demo@emaillink.com", id: "demo-user" }} 
-          onSignOut={() => window.location.href = '/'}
-          demoMode={true}
-        />
-      ) : user ? (
-        // Normal mode - authenticated user
-        <InboxManager user={user} onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }} />
-      ) : (
-        // Login screen
-        <Auth onAuthSuccess={setUser} />
-      )}
-    </div>
+    <ErrorBoundary>
+      <div className="App min-h-screen bg-gray-50 dark:bg-gray-900">
+        {isDemoMode ? (
+          // Demo mode - show InboxManager with sample data, no auth required
+          <InboxManager 
+            user={{ email: "demo@emaillink.com", id: "demo-user" }} 
+            onSignOut={() => window.location.href = '/'}
+            demoMode={true}
+          />
+        ) : user ? (
+          // Normal mode - authenticated user
+          <InboxManager user={user} onSignOut={async () => { await supabase.auth.signOut(); setUser(null); setBrandId(null); }} />
+        ) : (
+          // Login screen
+          <Auth onAuthSuccess={setUser} />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 

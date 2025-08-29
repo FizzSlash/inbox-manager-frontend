@@ -4,7 +4,6 @@ import Joyride from 'react-joyride';
 import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Info, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot, Settings } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
-import { reportError, reportWarning, reportInfo, trackAPICall, setUser } from '../lib/errorReporting';
 import CRMManager from './CRMManager';
 import TemplateManager from './TemplateManager';
 import TrialExpiredModal from './TrialExpiredModal';
@@ -232,18 +231,6 @@ const getDisplayName = (lead) => {
 };
 
 const InboxManager = ({ user, onSignOut, demoMode = false }) => {
-  // Initialize error reporting with user context
-  useEffect(() => {
-    if (user?.id) {
-      setUser(user.id, user.user_metadata?.brand_id);
-      reportInfo('User session started', {
-        userId: user.id,
-        email: user.email,
-        demoMode: demoMode
-      });
-    }
-  }, [user?.id, demoMode]);
-
   // Simple demo data - 10 test leads for demo
   const demoLeads = [
     {
@@ -521,24 +508,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     // No complex batch tracking needed
   };
   
-  // Persistent AI processing toast state with localStorage persistence
-  const [persistentAIToast, setPersistentAIToast] = useState(() => {
-    try {
-      const saved = localStorage.getItem('persistentAIToast');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  }); // { id, totalLeads, processedLeads, startTime }
-  
-  // Persist AI toast to localStorage whenever it changes
-  useEffect(() => {
-    if (persistentAIToast) {
-      localStorage.setItem('persistentAIToast', JSON.stringify(persistentAIToast));
-    } else {
-      localStorage.removeItem('persistentAIToast');
-    }
-  }, [persistentAIToast]);
+  // Persistent AI processing toast state
+  const [persistentAIToast, setPersistentAIToast] = useState(null); // { id, totalLeads, processedLeads, startTime }
   const [currentAccountId, setCurrentAccountId] = useState(null);
   
   // Intent filter state (default to 'all' to show all leads including those without intent)
@@ -1068,7 +1039,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       clearTimeout(resumeTimer);
       console.log('🚫 RESUME: Resume check cancelled');
     };
-  }, [user?.id]); // Only run once when user changes, not on every state update
+  }, [user?.id, apiKeys.accounts.length, loading, isBackfilling, progressId]);
   
   // 🔧 CRITICAL: Cleanup on component unmount
   useEffect(() => {
@@ -1202,8 +1173,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }, 2000); // Auto-save after 2 seconds of inactivity
   };
 
-  // Immediate save for AI-generated drafts (no debounce) - includes Supabase save
-  const saveDraftImmediate = async (leadId, content, htmlContent) => {
+  // Immediate save for AI-generated drafts (no debounce)
+  const saveDraftImmediate = (leadId, content, htmlContent) => {
     const newDrafts = {
       ...drafts,
       [leadId]: {
@@ -1220,29 +1191,6 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     
     setDrafts(newDrafts);
     localStorage.setItem('inbox_manager_drafts', JSON.stringify(newDrafts));
-    
-    // Save to Supabase for persistence
-    try {
-      const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
-      if (currentBrandId && content.trim()) {
-        await supabase
-          .from('draft_responses')
-          .upsert({
-            brand_id: currentBrandId,
-            lead_id: leadId,
-            draft_content: content.trim(),
-            draft_html: htmlContent || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'brand_id,lead_id'
-          });
-        console.log('✅ Draft saved to Supabase');
-      }
-    } catch (error) {
-      console.error('❌ Failed to save draft to Supabase:', error);
-      // Don't fail the entire operation if Supabase save fails
-    }
     
     // Update UI only if this draft is for the currently selected lead
     if (selectedLead?.id === leadId) {
@@ -1814,8 +1762,6 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           
         if (error) {
           console.error('❌ Supabase query error:', error);
-          // Don't immediately fail - try sessionStorage backup first
-          console.log('🔄 Supabase failed, trying sessionStorage backup...');
         } else if (!data || data.length === 0) {
           console.log('💬 No API settings found in database for brand:', currentBrandId);
         } else {
@@ -1855,14 +1801,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           });
           setApiKeys(newState);
           
-          // Enhanced sessionStorage with timestamp and user validation
-          const sessionData = {
-            ...newState,
-            timestamp: Date.now(),
-            userId: user?.id,
-            brandId: currentBrandId
-          };
-          sessionStorage.setItem('apiKeys_session', JSON.stringify(sessionData));
+          // Sync to sessionStorage as backup
+          sessionStorage.setItem('apiKeys_session', JSON.stringify(newState));
           console.log('✅ Loaded from Supabase successfully');
           return;
         }
@@ -1920,27 +1860,14 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         }
       }
       
-      // STEP 3: Fallback to sessionStorage with validation
+      // STEP 3: Fallback to sessionStorage
       console.log('📱 Trying sessionStorage...');
       const backup = sessionStorage.getItem('apiKeys_session');
       if (backup) {
         const parsed = JSON.parse(backup);
-        
-        // Validate session data is still fresh and for correct user
-        const isValidSession = parsed.userId === user?.id && 
-                             parsed.brandId === currentBrandId &&
-                             (Date.now() - parsed.timestamp) < (2 * 60 * 60 * 1000); // 2 hours
-        
-        if (isValidSession) {
-          // Remove metadata before setting state
-          const { timestamp, userId, brandId, ...apiKeysData } = parsed;
-          setApiKeys(apiKeysData);
-          console.log('✅ Loaded from sessionStorage backup (validated)');
-          return;
-        } else {
-          console.log('⚠️ SessionStorage data is stale or invalid, clearing...');
-          sessionStorage.removeItem('apiKeys_session');
-        }
+        setApiKeys(parsed);
+        console.log('✅ Loaded from sessionStorage backup');
+        return;
       }
       
       console.log('ℹ️ No API keys found anywhere - will show empty state');
@@ -1963,51 +1890,36 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   };
 
-  // Clear session storage only when user actually changes (not on token refresh)
+  // Clear session storage when brandId changes (ensures fresh sessions per brand)
   useEffect(() => {
-    const currentUserId = sessionStorage.getItem('cached_user_id');
-    if (user?.id && currentUserId && currentUserId !== user.id) {
-      // Only clear when switching between different users, not on token refresh
+    // Only clear if we have a valid brandId (avoid initialization issues)
+    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
+    if (currentBrandId && currentBrandId !== 'demo-brand') {
       sessionStorage.removeItem('apiKeys_session');
-      sessionStorage.removeItem('user_brand_id');
-      console.log('🧹 User changed - cleared sessionStorage for fresh session');
+      console.log('🧹 Cleared sessionStorage for fresh session');
     }
   }, [user?.id]); // Only run when user ID changes
 
-  // Keep session storage on unmount for better user experience
-  // Only clear on actual logout, not component unmount
-
-
-
-  // Periodic refresh for long-running sessions (every 30 minutes)
+  // Clear session storage on component unmount (extra security)
   useEffect(() => {
-    if (!user?.id || demoMode) return;
-    
-    const refreshInterval = setInterval(() => {
-      console.log('🔄 Periodic refresh - reloading API keys and brand data...');
-      if (brandId && user?.id) {
-        loadApiKeys();
-      }
-    }, 30 * 60 * 1000); // 30 minutes
-    
-    return () => clearInterval(refreshInterval);
-  }, [user?.id, brandId, demoMode]);
+    return () => {
+      sessionStorage.removeItem('apiKeys_session');
+      console.log('🧹 Cleared sessionStorage on unmount');
+    };
+  }, []);
+
+
 
   // Load API keys when brandId and user are available
   useEffect(() => {
-    // Small delay to ensure brandId state is properly set from cache
-    const timeoutId = setTimeout(() => {
-      // Always load API keys when user/brand available (resume needs them!)
-      if (brandId && brandId !== 'demo-brand' && user?.id) {
-        console.log('🔑 ⚡ INSTANT: Loading API keys for user and brand:', { user: user.id, brand: brandId });
-        loadApiKeys();
-      } else if (user?.id && brandId === null) {
-        console.log('⏳ API KEYS: Waiting for brandId to be fetched from database');
-      }
-    }, 100); // 100ms delay to allow brandId state to settle
-    
-    return () => clearTimeout(timeoutId);
-  }, [user?.id, brandId]); // Run when user ID OR brandId changes ONLY
+    // Always load API keys when user/brand available (resume needs them!)
+    if (brandId && brandId !== 'demo-brand' && user?.id) {
+      console.log('🔑 ⚡ INSTANT: Loading API keys for user and brand:', { user: user.id, brand: brandId });
+      loadApiKeys();
+    } else if (user?.id && brandId === null) {
+      console.log('⏳ API KEYS: Waiting for brandId to be fetched from database');
+    }
+  }, [user?.id, brandId]); // Run when user ID OR brandId changes
 
   // Also load API keys when API settings modal opens (ensuring always available)
   useEffect(() => {
@@ -2448,7 +2360,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   }, [apiKeys.accounts]);
 
-  // Debounced fetchLeads to prevent rapid calls
+  // Fetch leads when brandId is available (avoid conflicts with backfill)
   useEffect(() => {
     // Skip all fetchLeads logic in demo mode - demo data is set directly
     if (demoMode) {
@@ -2462,26 +2374,22 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       return;
     }
     
-    // Only fetch when ALL conditions are met (prevent race conditions)
-    if (brandId && user?.id && !isLoadingApiKeys && apiKeys.accounts.length > 0) {
-      console.log('📊 FETCH LEADS: ⚡ All conditions met - scheduling fetchLeads');
-      
-      // Debounce to prevent rapid calls
-      const timeoutId = setTimeout(() => {
-        console.log('📊 FETCH LEADS: Executing debounced fetchLeads');
+    if (brandId && user?.id) {
+      console.log('📊 FETCH LEADS: ⚡ INSTANT - Triggering fetchLeads with brandId:', brandId);
         fetchLeads();
-      }, 500); // 500ms delay
-      
-      return () => clearTimeout(timeoutId);
-    } else {
-      console.log('⏳ FETCH LEADS: Waiting for conditions:', {
-        hasBrandId: !!brandId,
-        hasUserId: !!user?.id,
-        isLoadingApiKeys,
-        apiKeyCount: apiKeys.accounts.length
-      });
+    } else if (user?.id && brandId === null) {
+      console.log('⏳ FETCH LEADS: Waiting for brandId to be fetched from database');
     }
-  }, [user?.id, brandId, isBackfilling, progressId, demoMode, isLoadingApiKeys, apiKeys.accounts.length]);
+  }, [user?.id, brandId, isBackfilling, progressId, demoMode]); // Run when brandId changes
+  
+  // Separate effect to fetch leads when API keys first load (but not during backfill)
+  useEffect(() => {
+    // Only trigger on first load of API keys, not during backfill
+    if (brandId && apiKeys.accounts.length > 0 && !isBackfilling && !progressId && !isLoadingApiKeys && user?.id && !demoMode) {
+      console.log('📊 FETCH LEADS: ⚡ INSTANT - API keys loaded, refreshing leads');
+      fetchLeads();
+    }
+  }, [apiKeys.accounts.length, user?.id, brandId, isBackfilling, progressId, isLoadingApiKeys, demoMode]); // Run when brandId changes
 
   // Queue processor polling - THE BEST SOLUTION for reliable AI processing
   useEffect(() => {
@@ -2534,11 +2442,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Process immediately on start
       processQueue();
       
-      // ✅ REMOVED: Frontend timer - GitHub Actions handles queue processing
-      // queueProcessorIntervalRef.current = setInterval(() => {
-      //   processQueue();
-      // }, 60000);
-      console.log('✅ Queue processor: GitHub Actions handles processing every minute');
+      // Set up 1-minute interval for optimal batch processing (100 leads per batch)
+      queueProcessorIntervalRef.current = setInterval(() => {
+        processQueue();
+      }, 60000);
+      console.log('✅ Queue processor started - running every 1 minute for optimal batch processing');
     }
 
     return () => {
@@ -2549,223 +2457,44 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     };
   }, [queueProcessorActive, user?.id]);
 
-  // Manual-only polling system for new leads
-  const [pollingActive, setPollingActive] = useState(false);
-
   // Simplified: No complex queue status polling needed
 
-  // Manual polling system for truly NEW leads only
-  const pollForNewLeads = async (isManual = true) => {
+  // Timestamp-based polling for new leads
+  const pollForNewLeads = async () => {
     try {
-      console.log(`🔄 POLLING: Manual check for NEW replies only...`);
-      setPollingActive(true);
+      console.log('🔄 POLLING: Checking for new leads...');
       
       const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
-      if (!currentBrandId) {
-        setPollingActive(false);
-        return;
-      }
+      if (!currentBrandId) return;
       
-      // Get SmartLead accounts
-      const smartleadAccounts = apiKeys.accounts.filter(acc => 
-        acc.esp.provider === 'smartlead' && acc.esp.key
-      );
-      
-      if (smartleadAccounts.length === 0) {
-        console.log('⚠️ POLLING: No SmartLead API keys configured');
-        if (isManual) showToast('No SmartLead API keys configured', 'warning');
-        setPollingActive(false);
-        return;
-      }
-      
-      // Get the timestamp of the most recent lead's LAST_REPLY_TIME (not created_at)
-      // This ensures we only get leads with replies AFTER our last known reply
+      // Get the timestamp of the most recent lead
       const { data: recentLead } = await supabase
         .from('retention_harbor')
-        .select('last_reply_time, created_at_lead, created_at')
+        .select('created_at')
         .eq('brand_id', currentBrandId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
         
-      // Use the most recent reply time, or fall back to created times
-      const lastKnownReplyTime = recentLead?.last_reply_time || recentLead?.created_at_lead || recentLead?.created_at;
-      const cutoffTime = lastKnownReplyTime || new Date(Date.now() - 60*60*1000).toISOString(); // Default to 1h ago if no existing leads
+      const lastTimestamp = recentLead?.created_at || new Date(0).toISOString();
       
-      console.log(`🔍 POLLING: Looking for leads with replies AFTER: ${cutoffTime}`);
+      // Check SmartLead API for new leads since last timestamp
+      // This would integrate with your new API that only returns leads with replies
+      console.log(`🔍 POLLING: Last lead timestamp: ${lastTimestamp}`);
       
-      let totalNewLeads = 0;
-      let totalUpdatedLeads = 0;
-      
-      // Check each SmartLead account for new leads
-      for (const account of smartleadAccounts) {
-        const decryptedApiKey = decryptApiKey(account.esp.key);
-        
-        try {
-          // Fetch recent leads from Master Inbox API with pagination
-          const inboxData = await fetchMasterInboxRepliesWithPagination(decryptedApiKey, cutoffTime);
-          const transformedLeads = transformMasterInboxToLeads(inboxData);
-          
-          // Filter for leads with replies AFTER our cutoff time (truly new replies)
-          const newLeads = transformedLeads.filter(lead => {
-            // Only consider leads with actual reply times
-            if (!lead.last_reply_time) {
-              console.log(`⚠️ POLLING: Lead ${lead.lead_email} has no last_reply_time, skipping`);
-              return false;
-            }
-            
-            const leadReplyTime = new Date(lead.last_reply_time);
-            const cutoffTimeDate = new Date(cutoffTime);
-            const isNew = leadReplyTime > cutoffTimeDate;
-            
-            if (isNew) {
-              console.log(`🆕 POLLING: NEW reply from ${lead.lead_email} at ${lead.last_reply_time}`);
-            }
-            
-            return isNew;
-          });
-          
-          console.log(`📊 POLLING: Found ${newLeads.length} new leads from account ${account.name}`);
-          
-          if (newLeads.length === 0) continue;
-          
-          // Process each new lead (insert or update)
-          for (const lead of newLeads) {
-            try {
-              // Check if lead already exists
-              const { data: existingLead } = await supabase
-                .from('retention_harbor')
-                .select('id, intent, parsed_convo')
-                .eq('brand_id', currentBrandId)
-                .eq('lead_email', lead.lead_email)
-                .single();
-              
-              // Match EXACT backfill structure for consistency
-              const leadData = {
-                lead_email: lead.lead_email,
-                lead_category: lead.lead_category?.toString() || '1',
-                first_name: lead.first_name || '',
-                last_name: lead.last_name || '',
-                website: lead.website || null,
-                custom_field: null,
-                subject: lead.subject || null,
-                email_message_body: lead.email_message_body,
-                created_at_lead: lead.created_at || lead.last_reply_time || new Date().toISOString(),
-                intent: null, // Will be set by AI
-                stage: null,
-                campaign_ID: lead.campaign_id, // numeric
-                campaign_name: lead.campaign_name || `Campaign ${lead.campaign_id}`,
-                lead_ID: lead.lead_ID, // numeric
-                role: null,
-                company_data: null,
-                personal_linkedin_url: null,
-                business_linkedin_url: null,
-                phone: lead.phone || null,
-                brand_id: currentBrandId,
-                status: 'INBOX',
-                notes: null,
-                call_booked: false, // boolean default false
-                deal_size: 0, // numeric default 0
-                closed: false, // boolean default false
-                email_account_id: account.account_id, // uuid
-                source_api_key: null,
-                parsed_convo: lead.parsed_convo ? JSON.stringify(lead.parsed_convo) : null,
-                opened: true, // New leads are marked as opened
-                last_reply_time: lead.last_reply_time || null
-              };
-              
-              if (existingLead) {
-                // Update existing lead (FIXED: per brand_id + lead_email) 
-                const { error: updateError } = await supabase
-                  .from('retention_harbor')
-                  .update(leadData)
-                  .eq('brand_id', leadData.brand_id)
-                  .eq('lead_email', leadData.lead_email);
-                  
-                if (updateError) {
-                  console.error(`❌ POLLING: Failed to update lead ${leadData.lead_email}:`, updateError);
-                } else {
-                  console.log(`🔄 POLLING: Updated existing lead: ${lead.lead_email}`);
-                  totalUpdatedLeads++;
-                  
-                  // Queue for AI analysis if conversation changed and no intent yet
-                  if (!existingLead.intent && leadData.parsed_convo !== existingLead.parsed_convo) {
-                    await analyzeLeadIntents([{ ...leadData, id: existingLead.id }]);
-                  }
-                }
-              } else {
-                // Insert new lead
-                const { error: insertError } = await supabase
-                  .from('retention_harbor')
-                  .insert(leadData);
-                  
-                if (insertError) {
-                  console.error(`❌ POLLING: Failed to insert lead ${leadData.lead_email}:`, insertError);
-                } else {
-                  console.log(`✅ POLLING: Added new lead: ${lead.lead_email}`);
-                  totalNewLeads++;
-                  
-                  // Queue new lead for AI analysis - get the inserted lead ID
-                  const { data: insertedLead } = await supabase
-                    .from('retention_harbor')
-                    .select('id')
-                    .eq('brand_id', leadData.brand_id)
-                    .eq('lead_email', leadData.lead_email)
-                    .single();
-                    
-                  if (insertedLead) {
-                    await analyzeLeadIntents([{ ...leadData, id: insertedLead.id }]);
-                  }
-                }
-              }
-            } catch (leadError) {
-              console.error(`❌ POLLING: Error processing lead ${lead.lead_email}:`, leadError);
-            }
-          }
-        } catch (accountError) {
-          console.error(`❌ POLLING: Error checking account ${account.name}:`, accountError);
-        }
-      }
-      
-      // Show results and refresh UI if we found new data
-      if (totalNewLeads > 0 || totalUpdatedLeads > 0) {
-        const message = `🎉 Found ${totalNewLeads} new leads and updated ${totalUpdatedLeads} existing leads!`;
-        console.log(message);
-        if (isManual) showToast(message, 'success');
-        
-        // Refresh the leads display
-        await fetchLeads();
-      } else {
-        console.log('📭 POLLING: No new replies found');
-        if (isManual) showToast('No new replies found since your last lead', 'info');
-      }
+      // For now, just refresh the existing leads
+      // TODO: Replace with actual API call to get new leads since timestamp
+      await fetchLeads();
       
     } catch (error) {
       console.error('❌ POLLING ERROR:', error);
-      if (isManual) showToast('Error checking for new leads', 'error');
-    } finally {
-      setPollingActive(false);
     }
   };
 
   const fetchLeads = async () => {
-    const startTime = Date.now();
     try {
       
       console.log('📊 FETCH LEADS: Starting fetchLeads function');
-      
-      // Early exit if conditions aren't met (prevents race conditions)
-      if (!brandId || !user?.id || isLoadingApiKeys || apiKeys.accounts.length === 0) {
-        console.log('❌ FETCH LEADS: Conditions not met - aborting early', {
-          hasBrandId: !!brandId,
-          hasUserId: !!user?.id,
-          isLoadingApiKeys,
-          apiKeyCount: apiKeys.accounts.length
-        });
-        setLoading(false);
-        return;
-      }
-      
       setLoading(true);
       setError(null);
       
@@ -2940,29 +2669,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       console.log('🔄 FETCH LEADS: Syncing positive response count...');
       await syncLeadCounts();
       
-      // Track successful API call
-      const duration = Date.now() - startTime;
-      trackAPICall('fetchLeads', duration, true);
-      reportInfo('Leads fetched successfully', { 
-        leadCount: transformedLeads.length,
-        duration: duration,
-        brandId: currentBrandId
-      });
-      
     } catch (err) {
       console.error('Error fetching leads:', err);
       setError(err.message);
-      
-      // Track failed API call and report error
-      const duration = Date.now() - startTime;
-      trackAPICall('fetchLeads', duration, false);
-      reportError(err, {
-        function: 'fetchLeads',
-        brandId: user?.user_metadata?.brand_id,
-        duration: duration,
-        demoMode: demoMode
-      });
-      
     } finally {
       
       console.log('✅ FETCH LEADS: Completed, setting loading to false');
@@ -2970,303 +2679,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   };
 
-  // ===== MASTER INBOX API FUNCTIONS =====
-  
-  // Master Inbox Backfill - Complete version with pagination and database storage
-  const backfillFromMasterInbox = async (apiKey, accountId, selectedConfig = null, daysPast = 30) => {
-    console.log(`🚀 MASTER INBOX BACKFILL: Starting backfill for past ${daysPast} days...`);
-    
-    const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
-    if (!currentBrandId) {
-      throw new Error('No brand ID found - user may need to complete signup');
-    }
-
-    let allLeads = [];
-    let totalProcessed = 0;
-    let estimatedTotal = 0;
-    
-    try {
-      setIsBackfilling(true);
-      setBackfillProgress({ 
-        current: 0, 
-        total: 1, // Start with 1 to show progress bar
-        status: `Fetching leads from past ${daysPast} days...` 
-      });
-
-      // Step 1: Calculate date range for filtering
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - daysPast);
-      
-      console.log(`📅 DATE FILTER: Fetching responses from ${startDate.toISOString()} to ${endDate.toISOString()}`);
-      
-      // Step 2: Fetch pages from Master Inbox API with date filtering and pagination
-      let offset = 0;
-      const limit = 20; // API maximum
-      let hasMorePages = true;
-      
-      while (hasMorePages) {
-        // Build filters object with date range
-        const filters = {
-          replyTimeBetween: [startDate.toISOString(), endDate.toISOString()]
-        };
-        
-        // Add category filters if specified
-        if (selectedConfig?.importCategories) {
-          filters.leadCategories = {
-            categoryIdsIn: selectedConfig.importCategories
-          };
-        }
-        
-        const response = await fetch(`https://server.smartlead.ai/api/v1/master-inbox/inbox-replies?api_key=${encodeURIComponent(apiKey)}&fetch_message_history=true`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            offset: offset,
-            limit: limit,
-            filters: filters,
-            sortBy: "REPLY_TIME_DESC"
-          })
-        });
-
-        if (!response.ok) {
-          let errorBody = '';
-          try {
-            errorBody = await response.text();
-          } catch (e) {
-            console.error('Could not read error response body');
-          }
-          throw new Error(`Master Inbox API failed: ${response.status} - ${response.statusText}. Response: ${errorBody}`);
-        }
-
-        const result = await response.json();
-        const pageLeads = result?.data || [];
-        
-        if (pageLeads.length === 0) {
-          hasMorePages = false;
-          break;
-        }
-        
-        // Process this batch of leads
-        const transformedBatch = transformMasterInboxToLeads({ data: pageLeads });
-        
-        // Parse and validate conversations for this batch
-        const validBatchLeads = [];
-        for (const lead of transformedBatch) {
-          try {
-            const parsedConvo = parseConversationForIntent(lead.email_message_body);
-            if (parsedConvo) {
-              lead.parsed_convo = parsedConvo;
-              validBatchLeads.push(lead);
-            }
-          } catch (error) {
-            // Skip leads that can't be parsed
-          }
-        }
-        
-        // Add valid leads to our collection
-        allLeads.push(...validBatchLeads);
-        totalProcessed += validBatchLeads.length;
-        
-        // Update progress
-        setBackfillProgress({ 
-          current: totalProcessed, 
-          total: totalProcessed + (pageLeads.length === limit ? limit : 0), // Estimate
-          status: `Fetched ${totalProcessed} leads from past ${daysPast} days...` 
-        });
-        
-        // Check if we got fewer than the limit (last page)
-        if (pageLeads.length < limit) {
-          hasMorePages = false;
-        } else {
-          offset += limit;
-          // Rate limit protection: 1.2 second delay (SmartLead allows 60 requests per minute)
-          await new Promise(resolve => setTimeout(resolve, 1200));
-        }
-      }
-
-      // === STEP 1 COMPLETE ===
-      console.log(`📊 BACKFILL STEP 1: ${allLeads.length} leads fetched from API and parsed`);
-      
-      if (allLeads.length === 0) {
-        throw new Error('No leads with parseable conversation data found');
-      }
-      
-      // === STEP 2: UPSERT TO DATABASE ===
-      console.log(`📊 BACKFILL STEP 2: Starting upsert of ${allLeads.length} leads to database...`);
-      setBackfillProgress({ 
-        current: 0, 
-        total: allLeads.length, 
-        status: `Upserting ${allLeads.length} leads to database...` 
-      });
-
-      let storedCount = 0;
-
-      // Prepare all leads for upsert - only using columns that exist in the table
-      const allLeadsForUpsert = allLeads.map((lead, index) => {
-        // Debug: Check if email_message_body is valid before upserting
-        const hasValidMessageBody = lead.email_message_body && lead.email_message_body !== '[]' && lead.email_message_body.length > 10;
-        if (!hasValidMessageBody) {
-          console.log(`⚠️ UPSERT: Lead ${lead.email} has invalid message body: "${lead.email_message_body?.substring(0, 50)}..."`);
-        }
-        
-        // Debug: Log the first few leads to see what data we have
-        if (index < 3) {
-          console.log(`🔍 UPSERT DEBUG: Lead ${index + 1}:`, {
-            email: lead.email,
-            lead_email: lead.lead_email,
-            first_name: lead.first_name,
-            last_name: lead.last_name,
-            campaign_id: lead.campaign_id,
-            campaign_name: lead.campaign_name,
-            id: lead.id,
-            hasMessageBody: hasValidMessageBody
-          });
-        }
-        
-        return {
-          brand_id: currentBrandId,
-          email_account_id: accountId,
-          lead_email: lead.email || lead.lead_email, // Use either field that has data
-          first_name: lead.first_name,
-          last_name: lead.last_name,
-          campaign_ID: lead.campaign_id,
-          lead_ID: lead.id,
-          email_message_body: lead.email_message_body,
-          parsed_convo: lead.parsed_convo ? JSON.stringify(lead.parsed_convo) : null, // ✅ OPTIMIZED: Use already-parsed conversation from batch processing
-          lead_category: lead.lead_category?.toString() || '1',
-          subject: lead.subject,
-          website: lead.website || lead.email?.split('@')[1] || lead.lead_email?.split('@')[1] || '',
-          phone: lead.phone || '',
-          status: 'INBOX',
-          intent: null, // Will be set by AI analysis
-          opened: true, // Default to true based on table default
-          campaign_name: lead.campaign_name || '',
-          last_reply_time: lead.last_reply_time || null, // ✅ FIXED: Include last_reply_time from API
-          // Note: created_at will be auto-set by database default (now())
-          // Note: removed updated_at - column doesn't exist
-        };
-      });
-
-      // Remove duplicates by email + brand + account to prevent "affect row a second time" error
-      const uniqueLeads = [];
-      const seenKeys = new Set();
-      
-      for (const lead of allLeadsForUpsert) {
-        // Create unique key: email + brand + account
-        const uniqueKey = `${lead.lead_email}|${lead.brand_id}|${lead.email_account_id}`;
-        
-        if (!seenKeys.has(uniqueKey)) {
-          seenKeys.add(uniqueKey);
-          uniqueLeads.push(lead);
-        }
-      }
-      
-      // Remove duplicates within this batch
-      const duplicatesRemoved = allLeadsForUpsert.length - uniqueLeads.length;
-      if (duplicatesRemoved > 0) {
-        console.log(`📊 REMOVED ${duplicatesRemoved} duplicates from batch`);
-      }
-
-      // Use upsert with existing constraint (lead_email + brand_id)
-      const { error: upsertError } = await supabase
-        .from('retention_harbor')
-        .upsert(uniqueLeads, {
-          onConflict: 'lead_email,brand_id' // Handle conflicts on the actual unique constraint
-        });
-
-      if (upsertError) {
-        console.error('❌ UPSERT FAILED:', upsertError);
-        throw new Error(`Bulk upsert failed: ${upsertError.message}`);
-      } else {
-        storedCount = uniqueLeads.length;
-        console.log(`📊 BACKFILL STEP 2 COMPLETE: ${storedCount} leads upserted to database`);
-      }
-
-              // === STEP 3: QUEUE FOR AI ANALYSIS ===
-        if (storedCount > 0) {
-          console.log(`📊 BACKFILL STEP 3: Queuing ${storedCount} leads for AI analysis...`);
-          setBackfillProgress({ 
-            current: storedCount, 
-            total: allLeads.length, 
-            status: `Queuing ${storedCount} leads for AI analysis...` 
-          });
-
-          try {
-            // Fetch the actual records from Supabase to get their IDs
-            const leadEmails = allLeads.slice(0, storedCount).map(lead => lead.email);
-            const { data: supabaseLeads, error: fetchError } = await supabase
-              .from('retention_harbor')
-              .select('id, lead_email, email_message_body, brand_id, lead_category')
-              .eq('brand_id', currentBrandId)
-              .in('lead_email', leadEmails);
-
-            if (fetchError) {
-              throw new Error(`Failed to fetch upserted leads: ${fetchError.message}`);
-            }
-
-            // Queue AI intent analysis with actual Supabase IDs
-            const analyzedCount = await analyzeLeadIntents(supabaseLeads, null);
-            console.log(`📊 BACKFILL STEP 3 COMPLETE: ${analyzedCount} leads queued for AI processing`);
-            
-            // Simplified: No queue status tracking needed
-            
-            // Show persistent AI toast if leads were queued
-            if (analyzedCount > 0) {
-              setPersistentAIToast({
-                id: 'master_inbox_ai_' + Date.now(),
-                totalLeads: analyzedCount,
-                processedLeads: 0,
-                startTime: new Date()
-              });
-            }
-          } catch (aiError) {
-            console.error('❌ AI ANALYSIS: Failed to queue leads:', aiError);
-            // Don't fail the entire backfill if AI queueing fails
-          }
-        }
-
-      // === BACKFILL SUMMARY ===
-      console.log(`📊 BACKFILL COMPLETE:`);
-      console.log(`   • ${allLeads.length} leads fetched from API`);
-      console.log(`   • ${storedCount} leads upserted to database`);
-      console.log(`   • All leads queued for AI analysis`);
-        
-        setBackfillProgress({ 
-          current: storedCount, 
-          total: allLeads.length, 
-          status: `✅ Complete! ${storedCount} leads processed` 
-        });
-
-        showToast(`✅ Backfill complete! ${storedCount} leads from past ${daysPast} days processed.`, 'success');
-      
-      // Refresh the leads display
-      setTimeout(() => {
-        fetchLeads();
-        setIsBackfilling(false);
-        setBackfillProgress(null);
-      }, 2000);
-
-      return {
-        success: true,
-        totalFetched: allLeads.length,
-        totalStored: storedCount
-      };
-
-    } catch (error) {
-      console.error('❌ MASTER INBOX BACKFILL: Failed:', error);
-      setBackfillProgress(null);
-      setIsBackfilling(false);
-      showToast(`Backfill failed: ${error.message}`, 'error');
-      throw error;
-    }
+  // ===== SMARTLEAD API FUNCTIONS ONLY =====
+  // REMOVED: Master Inbox functions due to CORS issues - using SmartLead API only
   };
 
-  // Fetch all replies from SmartLead Master Inbox API (simple version - first 20 only)
-  const fetchMasterInboxReplies = async (apiKey) => {
-    console.log('📥 MASTER INBOX: Fetching replies from Master Inbox API...');
+  // REMOVED: All Master Inbox functions - CORS issues, using SmartLead API only
     
     try {
       // Try with minimal parameters first to test basic connectivity
@@ -3305,86 +2722,6 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       
     } catch (error) {
       console.error('❌ MASTER INBOX: Failed to fetch replies:', error);
-      throw error;
-    }
-  };
-
-  // Fetch ALL replies from SmartLead Master Inbox API with pagination (for polling)
-  const fetchMasterInboxRepliesWithPagination = async (apiKey, sinceTimestamp = null) => {
-    console.log('📥 MASTER INBOX POLLING: Fetching ALL recent replies with pagination...');
-    
-    try {
-      let allLeads = [];
-      let offset = 0;
-      const limit = 20; // API maximum
-      let hasMorePages = true;
-      let pageCount = 0;
-      const maxPages = 10; // Safety limit: max 200 leads (10 pages × 20)
-      
-      // Build filters - only get leads since our cutoff time
-      const filters = {};
-      if (sinceTimestamp) {
-        // Filter for replies after our cutoff time
-        const cutoffDate = new Date(sinceTimestamp);
-        filters.replyTimeBetween = [cutoffDate.toISOString(), new Date().toISOString()];
-        console.log(`🔍 POLLING: Filtering for replies after ${cutoffDate.toISOString()}`);
-      }
-      
-      while (hasMorePages && pageCount < maxPages) {
-        pageCount++;
-        console.log(`📥 POLLING: Fetching page ${pageCount} (offset: ${offset})`);
-        
-        const response = await fetch(`https://server.smartlead.ai/api/v1/master-inbox/inbox-replies?api_key=${encodeURIComponent(apiKey)}&fetch_message_history=true`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            offset: offset,
-            limit: limit,
-            filters: filters,
-            sortBy: "REPLY_TIME_DESC"
-          })
-        });
-        
-        if (!response.ok) {
-          let errorBody = '';
-          try {
-            errorBody = await response.text();
-          } catch (e) {
-            console.error('Could not read error response body');
-          }
-          throw new Error(`Master Inbox API failed: ${response.status} - ${response.statusText}. Response: ${errorBody}`);
-        }
-
-        const result = await response.json();
-        const pageLeads = result?.data || [];
-        
-        console.log(`✅ POLLING: Page ${pageCount} retrieved ${pageLeads.length} leads`);
-        
-        if (pageLeads.length === 0) {
-          hasMorePages = false;
-          break;
-        }
-        
-        allLeads.push(...pageLeads);
-        
-        // Check if we got less than the limit (last page)
-        if (pageLeads.length < limit) {
-          hasMorePages = false;
-        } else {
-          offset += limit;
-          // Small delay to respect rate limits
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      }
-      
-      console.log(`✅ POLLING: Retrieved total of ${allLeads.length} leads across ${pageCount} pages`);
-      
-      return { data: allLeads };
-      
-    } catch (error) {
-      console.error('❌ POLLING: Failed to fetch replies with pagination:', error);
       throw error;
     }
   };
@@ -3563,8 +2900,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     return mergedLeads;
   };
 
-  // ✅ REMOVED: fetchLeadsViaMasterInbox() - was unused
-  /*
+  // Fetch leads using Master Inbox API (parallel to current system)
   const fetchLeadsViaMasterInbox = async () => {
     console.log('🚀 MASTER INBOX: Starting hybrid fetch process...');
     
@@ -3720,7 +3056,6 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       setLoading(false);
     }
   };
-  */
 
   // Test Master Inbox API to see actual response structure
   const testMasterInboxAPI = async () => {
@@ -6263,21 +5598,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     } catch (error) {
       console.error('Navvii AI draft call failed:', error);
       
-      // Report error with context
-      reportError(error, {
-        function: 'callNavviiAIForDraftGeneration',
-        apiProvider: 'anthropic',
-        corsProxy: true,
-        promptLength: prompt?.length || 0
-      });
-      
       // Check if it's a CORS/proxy issue
       if (error.message.includes('CORS') || error.message.includes('429') || error.message.includes('fetch')) {
         console.log('💡 CORS proxy issue detected. Draft generation will be skipped.');
-        reportWarning('CORS proxy issue in draft generation', {
-          errorMessage: error.message,
-          function: 'callNavviiAIForDraftGeneration'
-        });
       }
       
       return null;
@@ -6807,11 +6130,7 @@ ${JSON.stringify(parsedConvo)}`;
          ...selectedLead,
          sl_lead_email: editableToEmail.trim(), // Use editable email
          to_name: selectedLead.to_name || selectedLead.first_name,
-         email: editableToEmail.trim(), // Fallback email field
-         // Ensure compatibility with new lead structure
-         campaign_id: selectedLead.campaign_ID || selectedLead.campaign_id,
-         lead_id: selectedLead.lead_ID || selectedLead.lead_id,
-         email_stats_id: selectedLead.email_stats_id || selectedLead.lead_ID // Fallback to lead_ID
+         email: editableToEmail.trim() // Fallback email field
        };
 
        console.log('📋 Lead data for API call:', {
@@ -7100,7 +6419,7 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
   const enrichLeadData = async (lead) => {
     setEnrichingLeads(prev => new Set([...prev, lead.id]));
     try {
-      console.log('🤖 Enriching lead with Navvii AI for:', lead.first_name, lead.lead_email || lead.email);
+      console.log('🤖 Enriching lead with Navvii AI for:', lead.first_name, lead.email);
       
       // Call Navvii AI for enrichment instead of webhook
       const enrichmentText = await callNavviiAIForEnrichment(lead);
@@ -7913,8 +7232,8 @@ ONLY RESPOND WITH THESE FIELDS and the answer/link . Only use the web search too
     }
   };
 
-  // ✅ REMOVED: analyzeMissedLeads() - was unused  
-  /*
+  // AI Intent Analysis Function (optimized with smart filtering)
+  // Analyze missed leads with null intent that should have been processed
   const analyzeMissedLeads = async () => {
     try {
       console.log('🔍 Checking for leads that should have intent but are null...');
@@ -8016,7 +7335,6 @@ ${JSON.stringify(parsedConvo)}`;
       return 0;
     }
   };
-  */
 
   const analyzeLeadIntents = async (leadsToAnalyze, progressId = null) => {
     // Analyze ALL imported leads since they were pre-filtered during import
@@ -8174,8 +7492,7 @@ ${JSON.stringify(parsedConvo)}`;
     return analyzed;
   };
 
-  // ✅ REMOVED: callNavviiAIForIntentAnalysis() - was unused
-  /*
+  // Navvii AI API call with CORS proxy (using correct headers)
   const callNavviiAIForIntentAnalysis = async (prompt) => {
     try {
       // Use corsproxy.io - no rate limits
@@ -8263,7 +7580,6 @@ ${JSON.stringify(parsedConvo)}`;
       return null;
     }
   };
-  */
 
   // Mark account as backfilled after successful backfill
   const markAccountAsBackfilled = async (accountId) => {
@@ -9098,9 +8414,10 @@ ${JSON.stringify(parsedConvo)}`;
     setShowCampaignSelection(false);
     setShowBackfillModal(true);
     
-    // Start backfill with selected configuration using NEW Master Inbox API
-    backfillFromMasterInbox(
+    // Start backfill with selected configuration using SmartLead API
+    backfillLeads(
       pendingBackfillConfig.apiKey,
+      backfillDays,
       pendingBackfillConfig.accountId,
       selectedConfig
     );
@@ -10695,9 +10012,9 @@ ${JSON.stringify(parsedConvo)}`;
                         setShowBackfillModal(false);
                         
                         try {
-                          await backfillFromMasterInbox(decryptedApiKey, account.account_id, null, backfillDays);
+                          await backfillLeads(decryptedApiKey, backfillDays, account.account_id, null);
                         } catch (error) {
-                          console.error('❌ Master Inbox backfill failed:', error);
+                          console.error('❌ SmartLead backfill failed:', error);
                           showToast(`Backfill failed: ${error.message}`, 'error');
                         }
                       }}
@@ -10957,11 +10274,11 @@ ${JSON.stringify(parsedConvo)}`;
                       console.log('💾 RESUME: Starting resumed backfill with modal...');
                       console.log('💾 RESUME: Using selectedConfig:', candidate.selectedConfig);
                       // Don't await - let modal show progress via polling
-                      backfillFromMasterInbox(
+                      backfillLeads(
                         apiKey,
+                        30, // Default to 30 days for resumed backfill
                         accountId,
-                        candidate.selectedConfig,
-                        30 // Default to 30 days for resumed backfill
+                        candidate.selectedConfig
                       ).then(() => {
                         showToast('Backfill resumed and completed successfully!', 'success');
                       }).catch((backfillError) => {
@@ -12469,21 +11786,21 @@ ${JSON.stringify(parsedConvo)}`;
                     </span>
             </button>
             
-            {/* Check for New Replies Button */}
+            {/* Refresh Button */}
             <button
-              onClick={() => pollForNewLeads(true)}
+              onClick={pollForNewLeads}
               className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
               style={{
                 backgroundColor: themeStyles.secondaryBg,
                 border: `1px solid ${themeStyles.border}`,
                 color: themeStyles.textPrimary,
               }}
-              disabled={loading || pollingActive}
+              disabled={loading}
             >
-              <svg className={`w-4 h-4 ${pollingActive ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              {pollingActive ? 'Checking...' : 'Check for New Replies'}
+              Check for New Leads
             </button>
           </div>
 
