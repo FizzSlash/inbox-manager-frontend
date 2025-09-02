@@ -24,8 +24,8 @@ SELECT column_name, data_type, is_nullable
 FROM information_schema.columns 
 WHERE table_name = 'api_settings' AND column_name = 'account_id';
 
--- Optional: Add a check constraint to ensure only valid UUIDs
+-- Optional: Add a check constraint to ensure only valid UUIDs (cast to text first)
 ALTER TABLE api_settings 
 ADD CONSTRAINT api_settings_account_id_uuid_check 
-CHECK (account_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+CHECK (account_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
 
