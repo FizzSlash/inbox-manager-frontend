@@ -2584,7 +2584,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         .from('retention_harbor')
         .select('last_reply_time, created_at_lead, created_at')
         .eq('brand_id', currentBrandId)
-        .order('created_at', { ascending: false })
+        .order('last_reply_time', { ascending: false })
         .limit(1)
         .single();
         
