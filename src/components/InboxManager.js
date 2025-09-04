@@ -2674,49 +2674,29 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
                 last_reply_time: lead.last_reply_time || null
               };
               
-              if (existingLead) {
-                // Update existing lead (FIXED: per brand_id + lead_email) 
-                const { error: updateError } = await supabase
-                  .from('retention_harbor')
-                  .update(leadData)
-                  .eq('brand_id', leadData.brand_id)
-                  .eq('lead_email', leadData.lead_email);
-                  
-                if (updateError) {
-                  console.error(`❌ POLLING: Failed to update lead ${leadData.lead_email}:`, updateError);
-                } else {
+              // Use upsert to handle both new and existing leads efficiently
+              const { data: upsertedLead, error: upsertError } = await supabase
+                .from('retention_harbor')
+                .upsert(leadData, { 
+                  onConflict: 'lead_email,brand_id',
+                  ignoreDuplicates: false 
+                })
+                .select('id, intent')
+                .single();
+                
+              if (upsertError) {
+                console.error(`❌ POLLING: Failed to upsert lead ${leadData.lead_email}:`, upsertError);
+              } else {
+                if (existingLead) {
                   console.log(`🔄 POLLING: Updated existing lead: ${lead.lead_email}`);
                   totalUpdatedLeads++;
-                  
-                  // Queue for AI analysis if conversation changed and no intent yet
-                  if (!existingLead.intent && leadData.parsed_convo !== existingLead.parsed_convo) {
-                    await analyzeLeadIntents([{ ...leadData, id: existingLead.id }]);
-                  }
-                }
-              } else {
-                // Insert new lead
-                const { error: insertError } = await supabase
-                  .from('retention_harbor')
-                  .insert(leadData);
-                  
-                if (insertError) {
-                  console.error(`❌ POLLING: Failed to insert lead ${leadData.lead_email}:`, insertError);
                 } else {
                   console.log(`✅ POLLING: Added new lead: ${lead.lead_email}`);
                   totalNewLeads++;
-                  
-                  // Queue new lead for AI analysis - get the inserted lead ID
-                  const { data: insertedLead } = await supabase
-                    .from('retention_harbor')
-                    .select('id')
-                    .eq('brand_id', leadData.brand_id)
-                    .eq('lead_email', leadData.lead_email)
-                    .single();
-                    
-                  if (insertedLead) {
-                    await analyzeLeadIntents([{ ...leadData, id: insertedLead.id }]);
-                  }
                 }
+                
+                // ALWAYS queue for AI analysis - intent can change with new replies
+                await analyzeLeadIntents([{ ...leadData, id: upsertedLead.id }]);
               }
             } catch (leadError) {
               console.error(`❌ POLLING: Error processing lead ${lead.lead_email}:`, leadError);
@@ -13090,7 +13070,9 @@ ${JSON.stringify(parsedConvo)}`;
                     Conversation History ({selectedLead.conversation.length} messages)
                   </h3>
                   <div className="space-y-6 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin', scrollbarColor: `${themeStyles.accent} ${themeStyles.primaryBg}50`}}>
-                                          {selectedLead.conversation.map((message, index) => (
+                                          {selectedLead.conversation
+                                            .sort((a, b) => new Date(a.time) - new Date(b.time))  // Sort chronologically
+                                            .map((message, index) => (
                         <div key={index} className={`p-5 rounded-xl border shadow-sm transition-colors duration-300`} style={{
                           backgroundColor: message.type === 'SENT' 
                             ? `${themeStyles.accent}08` 
