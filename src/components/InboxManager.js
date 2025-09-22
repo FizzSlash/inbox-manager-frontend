@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Joyride from 'react-joyride';
-import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Info, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot, Settings } from 'lucide-react';
+import { Search, Filter, Send, Edit3, Clock, Mail, User, MessageSquare, ChevronDown, ChevronRight, X, TrendingUp, Calendar, ExternalLink, BarChart3, Users, AlertCircle, CheckCircle, Info, Timer, Zap, Target, DollarSign, Activity, Key, Brain, Database, Loader2, Save, Phone, LogOut, FileText, Bot, Settings, RefreshCw } from 'lucide-react';
 import { leadsService } from '../lib/leadsService';
 import { supabase } from '../lib/supabase';
 import { reportError, reportWarning, reportInfo, trackAPICall, setUser } from '../lib/errorReporting';
@@ -2483,7 +2483,9 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
     }
   }, [user?.id, brandId, isBackfilling, progressId, demoMode, isLoadingApiKeys, apiKeys.accounts.length]);
 
-  // Queue processor polling - THE BEST SOLUTION for reliable AI processing
+  // ✅ COMMENTED OUT: Queue processor polling - replaced with refresh button approach
+  // This was the source of GitHub Actions failures - now using simple user-controlled refresh
+  /*
   useEffect(() => {
     const processQueue = async () => {
       try {
@@ -2534,7 +2536,7 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       // Process immediately on start
       processQueue();
       
-      // ✅ REMOVED: Frontend timer - GitHub Actions handles queue processing
+      // ✅ COMMENTED OUT: Frontend timer - replaced with refresh button
       // queueProcessorIntervalRef.current = setInterval(() => {
       //   processQueue();
       // }, 60000);
@@ -2548,21 +2550,149 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       }
     };
   }, [queueProcessorActive, user?.id]);
+  */
 
-  // Manual-only polling system for new leads
-  const [pollingActive, setPollingActive] = useState(false);
+  // NEW: Smart refresh system - replaces complex polling
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(null);
+  
+  // Clear stuck AI toast on component mount (localStorage cleanup)
+  useEffect(() => {
+    const stuckToast = localStorage.getItem('persistentAIToast');
+    if (stuckToast) {
+      try {
+        const toastData = JSON.parse(stuckToast);
+        const hoursAgo = (Date.now() - new Date(toastData.startTime).getTime()) / (1000 * 60 * 60);
+        
+        // Clear toasts older than 2 hours (definitely stuck)
+        if (hoursAgo > 2) {
+          console.log(`🧹 CLEANUP: Clearing stuck AI toast from ${hoursAgo.toFixed(1)} hours ago`);
+          localStorage.removeItem('persistentAIToast');
+          setPersistentAIToast(null);
+        }
+      } catch (error) {
+        console.log('🧹 CLEANUP: Clearing corrupted AI toast data');
+        localStorage.removeItem('persistentAIToast');
+        setPersistentAIToast(null);
+      }
+    }
+  }, []);
 
-  // Simplified: No complex queue status polling needed
+  // ✅ REMOVED: Direct AI processing - using queue system for everything now
+  /*
+  const processAIDirectly = async (leads) => {
+    console.log(`🧠 DIRECT AI: Processing ${leads.length} leads directly...`);
+    
+    const processed = [];
+    
+    for (const lead of leads) {
+      try {
+        if (!lead.email_message_body) {
+          console.log(`⚠️ Skipping ${lead.lead_email} - no conversation`);
+          continue;
+        }
+        
+        // Parse conversation
+        let parsedConvo;
+        if (lead.parsed_convo) {
+          parsedConvo = JSON.parse(lead.parsed_convo);
+        } else {
+          parsedConvo = parseConversationForIntent(lead.email_message_body);
+        }
+        
+        if (!parsedConvo) {
+          console.log(`⚠️ Skipping ${lead.lead_email} - failed to parse conversation`);
+          continue;
+        }
+        
+        // Create prompt (FIXED: includes out-of-office handling)
+        const prompt = `Analyze the LEAD'S intent based on their responses. ONLY analyze messages where "type": "REPLY" - ignore all "SENT" messages completely.
 
-  // Manual polling system for truly NEW leads only
-  const pollForNewLeads = async (isManual = true) => {
+HIGH INTENT (8-10):
+- Asking for pricing, costs, or rates
+- Wanting to schedule calls or meetings  
+- Asking qualifying questions about your service
+- Requesting more information or materials
+
+MEDIUM INTENT (4-7):
+- Polite interest but non-committal
+- "Maybe", "Possibly", "Sounds interesting"
+- Asked to be contacted later
+
+LOW INTENT (1-3):
+- Clear rejections: "Not interested", "Remove me", "Delete"
+- Negative responses or complaints
+- GDPR requests or unsubscribe requests
+- OUT OF OFFICE messages: "I'm currently out of office", "On vacation", "Away from email"
+- AUTOMATED RESPONSES: "Thank you for your email, I'll get back to you", "This is an automated response"
+- WRONG PERSON: "You have the wrong person", "Not my department", "Try someone else"
+
+CRITICAL RULES:
+1. Only look at messages with "type": "REPLY" - ignore all "SENT" messages
+2. OUT OF OFFICE messages = ALWAYS score 1-2 (very low intent)
+3. AUTOMATED responses = ALWAYS score 1-2 (very low intent)
+
+Respond with only a number 1-10.
+
+${JSON.stringify(parsedConvo)}`;
+        
+        // Direct Claude API call
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          const intentScore = parseInt(result.content[0].text.trim());
+          
+          if (intentScore >= 1 && intentScore <= 10) {
+            // Update database immediately
+            await supabase
+              .from('retention_harbor')
+              .update({ 
+                intent: intentScore,
+                parsed_convo: JSON.stringify(parsedConvo),
+                opened: false // Highlight in UI
+              })
+              .eq('id', lead.id);
+              
+            processed.push({ ...lead, intent: intentScore });
+            console.log(`✅ DIRECT AI: ${lead.lead_email} scored ${intentScore}`);
+          }
+        }
+        
+        // Small delay between calls
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        console.error(`❌ DIRECT AI: Error processing ${lead.lead_email}:`, error);
+      }
+    }
+    
+    console.log(`🎉 DIRECT AI: Processed ${processed.length}/${leads.length} leads`);
+    return processed;
+  };
+  */
+
+  // Main refresh function - replaces pollForNewLeads
+  const refreshInbox = async () => {
     try {
-      console.log(`🔄 POLLING: Manual check for NEW replies only...`);
-      setPollingActive(true);
+      console.log('🔄 REFRESH: Checking for new responses since last refresh...');
+      setRefreshing(true);
       
       const currentBrandId = user?.user_metadata?.brand_id || sessionStorage.getItem('user_brand_id');
       if (!currentBrandId) {
-        setPollingActive(false);
+        showToast('Brand ID not found. Please refresh and try again.', 'error');
         return;
       }
       
@@ -2572,159 +2702,289 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
       );
       
       if (smartleadAccounts.length === 0) {
-        console.log('⚠️ POLLING: No SmartLead API keys configured');
-        if (isManual) showToast('No SmartLead API keys configured', 'warning');
-        setPollingActive(false);
+        showToast('No SmartLead API keys configured', 'warning');
         return;
       }
       
-      // Get the timestamp of the most recent lead's LAST_REPLY_TIME (not created_at)
-      // This ensures we only get leads with replies AFTER our last known reply
+      // Step 1: Get last response timestamp using last_reply_time
       const { data: recentLead } = await supabase
         .from('retention_harbor')
-        .select('last_reply_time, created_at_lead, created_at')
+        .select('last_reply_time')
         .eq('brand_id', currentBrandId)
+        .not('last_reply_time', 'is', null)
         .order('last_reply_time', { ascending: false })
         .limit(1)
         .single();
         
-      // Use the most recent reply time, or fall back to created times
-      const lastKnownReplyTime = recentLead?.last_reply_time || recentLead?.created_at_lead || recentLead?.created_at;
-      const cutoffTime = lastKnownReplyTime || new Date(Date.now() - 60*60*1000).toISOString(); // Default to 1h ago if no existing leads
+      // Use last reply time, or default to 7 days ago for initial refresh
+      const cutoffTime = recentLead?.last_reply_time || 
+                         new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const now = new Date().toISOString();
       
-      console.log(`🔍 POLLING: Looking for leads with replies AFTER: ${cutoffTime}`);
+      console.log(`📅 REFRESH: Looking for responses between ${cutoffTime} and ${now}`);
       
       let totalNewLeads = 0;
       let totalUpdatedLeads = 0;
+      const leadsForAI = []; // Collect leads for background AI processing
       
-      // Check each SmartLead account for new leads
+      // Step 2: Check each SmartLead account using Master Inbox API
       for (const account of smartleadAccounts) {
         const decryptedApiKey = decryptApiKey(account.esp.key);
         
         try {
-          // Fetch recent leads from Master Inbox API with pagination
-          const inboxData = await fetchMasterInboxRepliesWithPagination(decryptedApiKey, cutoffTime);
-          const transformedLeads = transformMasterInboxToLeads(inboxData);
+          console.log(`🔄 REFRESH: Processing account ${account.name} with pagination...`);
           
-          // Filter for leads with replies AFTER our cutoff time (truly new replies)
-          const newLeads = transformedLeads.filter(lead => {
-            // Only consider leads with actual reply times
-            if (!lead.last_reply_time) {
-              console.log(`⚠️ POLLING: Lead ${lead.lead_email} has no last_reply_time, skipping`);
-              return false;
+          // Pagination setup (same as working backfill system)
+          let offset = 0;
+          const limit = 20; // SmartLead API maximum
+          let hasMorePages = true;
+          let totalAccountLeads = 0;
+          
+          while (hasMorePages) {
+            console.log(`📥 REFRESH: Fetching page ${Math.floor(offset/limit) + 1} (offset: ${offset})`);
+            
+            // Use the EXACT same API call as working backfill system
+            const response = await fetch(`https://server.smartlead.ai/api/v1/master-inbox/inbox-replies?api_key=${encodeURIComponent(decryptedApiKey)}&fetch_message_history=true`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ 
+                offset: offset,
+                limit: limit,
+                filters: {
+                  replyTimeBetween: [cutoffTime, now] // Only new responses since last refresh
+                },
+                sortBy: "REPLY_TIME_DESC"
+              })
+            });
+
+            if (!response.ok) {
+              let errorBody = '';
+              try {
+                errorBody = await response.text();
+              } catch (e) {
+                console.error('Could not read error response body');
+              }
+              throw new Error(`Master Inbox API failed: ${response.status} - ${response.statusText}. Response: ${errorBody}`);
+            }
+
+            const result = await response.json();
+            const pageLeads = result?.data || [];
+            
+            console.log(`✅ REFRESH: Page ${Math.floor(offset/limit) + 1} retrieved ${pageLeads.length} leads`);
+            
+            // Check if we have more pages
+            if (pageLeads.length === 0) {
+              hasMorePages = false;
+              break;
             }
             
-            const leadReplyTime = new Date(lead.last_reply_time);
-            const cutoffTimeDate = new Date(cutoffTime);
-            const isNew = leadReplyTime > cutoffTimeDate;
-            
-            if (isNew) {
-              console.log(`🆕 POLLING: NEW reply from ${lead.lead_email} at ${lead.last_reply_time}`);
+            // If we got less than the limit, this is the last page
+            if (pageLeads.length < limit) {
+              hasMorePages = false;
             }
             
-            return isNew;
-          });
-          
-          console.log(`📊 POLLING: Found ${newLeads.length} new leads from account ${account.name}`);
-          
-          if (newLeads.length === 0) continue;
-          
-          // Process each new lead (insert or update)
-          for (const lead of newLeads) {
+            totalAccountLeads += pageLeads.length;
+            
+            // Step 3: Transform basic lead data from Master Inbox
+            const transformedLeads = transformMasterInboxToLeads({ data: pageLeads });
+            
+            // Step 4: Get full conversation history for each lead (2nd API call)
+            console.log(`📞 REFRESH: Fetching full conversation history for ${transformedLeads.length} leads...`);
+            const leadsWithFullHistory = [];
+            
+            for (const lead of transformedLeads) {
+              try {
+                // Get full message history using preserved SmartLead IDs
+                console.log(`📞 REFRESH: Fetching history for ${lead.lead_email} - Campaign: ${lead.sl_campaign_id}, Lead: ${lead.sl_lead_id}`);
+                
+                if (!lead.sl_campaign_id || !lead.sl_lead_id) {
+                  console.warn(`⚠️ REFRESH: Missing SmartLead IDs for ${lead.lead_email} - skipping history fetch`);
+                  // Still include lead but without enhanced conversation
+                  leadsWithFullHistory.push(lead);
+                  continue;
+                }
+                
+                const messageHistory = await fetchMessageHistoryWithRetry(
+                  decryptedApiKey, 
+                  lead.sl_campaign_id, 
+                  lead.sl_lead_id
+                );
+                
+                // Enhance lead with full conversation history
+                const fullConversation = messageHistory?.history || [];
+                console.log(`✅ REFRESH: Retrieved ${fullConversation.length} messages for ${lead.lead_email}`);
+                
+                const enhancedLead = {
+                  ...lead,
+                  conversation: fullConversation,
+                  email_message_body: JSON.stringify(fullConversation),
+                  parsed_convo: fullConversation.length > 0 ? JSON.stringify(fullConversation) : null,
+                  // Update stats based on full conversation
+                  reply_count: fullConversation.filter(msg => msg.type === 'REPLY').length,
+                  sent_count: fullConversation.filter(msg => msg.type === 'SENT').length
+                };
+                
+                leadsWithFullHistory.push(enhancedLead);
+                
+                // Small delay between individual calls to respect rate limits
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+              } catch (historyError) {
+                console.error(`❌ REFRESH: Failed to get history for ${lead.lead_email}:`, historyError);
+                console.log(`🔍 DEBUG: Lead details:`, {
+                  email: lead.lead_email,
+                  sl_campaign_id: lead.sl_campaign_id,
+                  sl_lead_id: lead.sl_lead_id,
+                  campaign_id: lead.campaign_id
+                });
+                
+                // Still include lead but mark that history fetch failed
+                leadsWithFullHistory.push({
+                  ...lead,
+                  conversation: lead.conversation || [], // Keep any existing conversation from Master Inbox
+                  email_message_body: lead.email_message_body || '[]',
+                  parsed_convo: lead.parsed_convo || null,
+                  history_fetch_failed: true // Flag for debugging
+                });
+              }
+            }
+            
+            console.log(`🎉 REFRESH: Enhanced ${leadsWithFullHistory.length} leads with full conversation history`);
+            
+            // Summary of conversation history fetching
+            const successfulHistoryFetches = leadsWithFullHistory.filter(l => !l.history_fetch_failed).length;
+            const failedHistoryFetches = leadsWithFullHistory.filter(l => l.history_fetch_failed).length;
+            
+            console.log(`🎉 REFRESH: Enhanced ${leadsWithFullHistory.length} leads - ${successfulHistoryFetches} with full history, ${failedHistoryFetches} with basic data only`);
+            
+            // Step 5: Process each enhanced lead (insert or update) 
+            for (const lead of leadsWithFullHistory) {
             try {
               // Check if lead already exists
               const { data: existingLead } = await supabase
                 .from('retention_harbor')
-                .select('id, intent, parsed_convo')
+                  .select('id, intent, last_reply_time')
                 .eq('brand_id', currentBrandId)
                 .eq('lead_email', lead.lead_email)
                 .single();
               
-              // Match EXACT backfill structure for consistency
+                // Prepare lead data with full conversation history (enhanced from 2nd API call)
               const leadData = {
                 lead_email: lead.lead_email,
                 lead_category: lead.lead_category?.toString() || '1',
                 first_name: lead.first_name || '',
                 last_name: lead.last_name || '',
                 website: lead.website || null,
-                custom_field: null,
                 subject: lead.subject || null,
-                email_message_body: lead.email_message_body,
-                created_at_lead: lead.created_at || lead.last_reply_time || new Date().toISOString(),
-                intent: null, // Will be set by AI
-                stage: null,
-                campaign_ID: lead.campaign_id, // numeric
+                  email_message_body: lead.email_message_body, // ✅ Now includes FULL conversation from individual API calls
+                  created_at_lead: lead.created_at_lead || new Date().toISOString(),
+                  intent: existingLead?.intent || null, // Keep existing intent, AI will update in background
+                  campaign_ID: lead.campaign_id, // Transformed campaign ID
                 campaign_name: lead.campaign_name || `Campaign ${lead.campaign_id}`,
-                lead_ID: lead.lead_ID, // numeric
-                role: null,
-                company_data: null,
-                personal_linkedin_url: null,
-                business_linkedin_url: null,
+                  lead_ID: lead.sl_lead_id, // Use original SmartLead lead ID
                 phone: lead.phone || null,
                 brand_id: currentBrandId,
                 status: 'INBOX',
-                notes: null,
-                call_booked: false, // boolean default false
-                deal_size: 0, // numeric default 0
-                closed: false, // boolean default false
-                email_account_id: account.account_id, // uuid
-                source_api_key: null,
-                parsed_convo: lead.parsed_convo ? JSON.stringify(lead.parsed_convo) : null,
-                opened: true, // New leads are marked as opened
+                  call_booked: false,
+                  deal_size: 0,
+                  closed: false,
+                  email_account_id: account.account_id,
+                  parsed_convo: lead.parsed_convo, // ✅ Full conversation data from individual API calls
+                  opened: false, // 🎯 KEY: Set to false to highlight new/updated leads in UI
                 last_reply_time: lead.last_reply_time || null
               };
               
-              // Use upsert to handle both new and existing leads efficiently
+                // Upsert the lead
               const { data: upsertedLead, error: upsertError } = await supabase
                 .from('retention_harbor')
                 .upsert(leadData, { 
                   onConflict: 'lead_email,brand_id',
                   ignoreDuplicates: false 
                 })
-                .select('id, intent')
+                  .select('id')
                 .single();
                 
               if (upsertError) {
-                console.error(`❌ POLLING: Failed to upsert lead ${leadData.lead_email}:`, upsertError);
+                  console.error(`❌ REFRESH: Failed to upsert lead ${leadData.lead_email}:`, upsertError);
               } else {
+                  // Track what happened for user feedback
                 if (existingLead) {
-                  console.log(`🔄 POLLING: Updated existing lead: ${lead.lead_email}`);
+                    console.log(`🔄 REFRESH: Updated existing lead: ${lead.lead_email}`);
                   totalUpdatedLeads++;
                 } else {
-                  console.log(`✅ POLLING: Added new lead: ${lead.lead_email}`);
+                    console.log(`✅ REFRESH: Added new lead: ${lead.lead_email}`);
                   totalNewLeads++;
                 }
                 
-                // ALWAYS queue for AI analysis - intent can change with new replies
-                await analyzeLeadIntents([{ ...leadData, id: upsertedLead.id }]);
+                  // Add to AI processing queue (background processing)
+                  leadsForAI.push({ ...leadData, id: upsertedLead.id });
               }
             } catch (leadError) {
-              console.error(`❌ POLLING: Error processing lead ${lead.lead_email}:`, leadError);
+                console.error(`❌ REFRESH: Error processing lead ${lead.lead_email}:`, leadError);
+              }
+            }
+            
+            // Move to next page
+            offset += limit;
+            
+            // Add small delay between pages to be respectful to API
+            if (hasMorePages) {
+              await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 second delay
             }
           }
+          
+          const historySuccessRate = leadsWithFullHistory.length > 0 ? 
+            Math.round((leadsWithFullHistory.filter(l => !l.history_fetch_failed).length / leadsWithFullHistory.length) * 100) : 0;
+          
+          console.log(`🎉 REFRESH: Account ${account.name} complete - processed ${totalAccountLeads} leads across ${Math.ceil(totalAccountLeads/limit) || 1} pages with ${historySuccessRate}% conversation history success rate`);
         } catch (accountError) {
-          console.error(`❌ POLLING: Error checking account ${account.name}:`, accountError);
+          console.error(`❌ REFRESH: Error checking account ${account.name}:`, accountError);
         }
       }
       
-      // Show results and refresh UI if we found new data
+      // Step 6: Update refresh time and show results
+      const refreshTime = new Date();
+      setLastRefreshTime(refreshTime);
+      
       if (totalNewLeads > 0 || totalUpdatedLeads > 0) {
-        const message = `🎉 Found ${totalNewLeads} new leads and updated ${totalUpdatedLeads} existing leads!`;
+        const message = `🎉 Found ${totalNewLeads} new leads and updated ${totalUpdatedLeads} existing leads with full conversation history!`;
         console.log(message);
-        if (isManual) showToast(message, 'success');
+        showToast(message, 'success');
         
-        // Refresh the leads display
+        // Refresh the UI immediately
         await fetchLeads();
+        
+        // Step 7: Queue AI analysis and trigger processing
+        if (leadsForAI.length > 0) {
+          console.log(`🧠 REFRESH: Queuing ${leadsForAI.length} leads for AI analysis...`);
+          try {
+            // Queue the leads
+            await analyzeLeadIntents(leadsForAI);
+            
+            // Manually trigger queue processor to start processing immediately
+            console.log('🚀 REFRESH: Triggering queue processor for immediate AI processing...');
+            await triggerQueueProcessor();
+            
+            // Refresh UI to show updated results
+            fetchLeads();
+            console.log('✅ REFRESH: AI processing triggered successfully');
+          } catch (error) {
+            console.error('❌ REFRESH: AI processing failed:', error);
+            showToast('AI processing failed. You can try again later.', 'warning');
+          }
+        }
       } else {
-        console.log('📭 POLLING: No new replies found');
-        if (isManual) showToast('No new replies found since your last lead', 'info');
+        console.log('📭 REFRESH: No new responses found');
+        showToast('No new responses found', 'info');
       }
       
     } catch (error) {
-      console.error('❌ POLLING ERROR:', error);
-      if (isManual) showToast('Error checking for new leads', 'error');
+      console.error('❌ REFRESH ERROR:', error);
+      showToast(`Refresh failed: ${error.message}`, 'error');
     } finally {
-      setPollingActive(false);
+      setRefreshing(false);
     }
   };
 
@@ -3029,12 +3289,58 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
           break;
         }
         
-        // Process this batch of leads
+        // Process this batch of leads with full conversation history
         const transformedBatch = transformMasterInboxToLeads({ data: pageLeads });
+        
+        // 📞 BACKFILL: Get full conversation history for each lead (same as refresh)
+        console.log(`📞 BACKFILL: Fetching full conversation history for ${transformedBatch.length} leads...`);
+        const leadsWithFullHistory = [];
+        
+        for (const lead of transformedBatch) {
+          try {
+            console.log(`📞 BACKFILL: Fetching history for ${lead.lead_email} - Campaign: ${lead.sl_campaign_id}, Lead: ${lead.sl_lead_id}`);
+            
+            if (!lead.sl_campaign_id || !lead.sl_lead_id) {
+              console.warn(`⚠️ BACKFILL: Missing SmartLead IDs for ${lead.lead_email} - using basic conversation data`);
+              leadsWithFullHistory.push(lead);
+              continue;
+            }
+            
+            const messageHistory = await fetchMessageHistoryWithRetry(
+              apiKey, 
+              lead.sl_campaign_id, 
+              lead.sl_lead_id
+            );
+            
+            // Enhance lead with full conversation history
+            const fullConversation = messageHistory?.history || [];
+            console.log(`✅ BACKFILL: Retrieved ${fullConversation.length} messages for ${lead.lead_email}`);
+            
+            const enhancedLead = {
+              ...lead,
+              conversation: fullConversation,
+              email_message_body: JSON.stringify(fullConversation),
+              parsed_convo: fullConversation.length > 0 ? JSON.stringify(fullConversation) : null
+            };
+            
+            leadsWithFullHistory.push(enhancedLead);
+            
+            // Small delay between individual calls
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+          } catch (historyError) {
+            console.error(`❌ BACKFILL: Failed to get history for ${lead.lead_email}:`, historyError);
+            // Still include lead but with basic conversation data
+            leadsWithFullHistory.push({
+              ...lead,
+              history_fetch_failed: true
+            });
+          }
+        }
         
         // Parse and validate conversations for this batch
         const validBatchLeads = [];
-        for (const lead of transformedBatch) {
+        for (const lead of leadsWithFullHistory) {
           try {
             const parsedConvo = parseConversationForIntent(lead.email_message_body);
             if (parsedConvo) {
@@ -3190,6 +3496,18 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
             // Queue AI intent analysis with actual Supabase IDs
             const analyzedCount = await analyzeLeadIntents(supabaseLeads, null);
             console.log(`📊 BACKFILL STEP 3 COMPLETE: ${analyzedCount} leads queued for AI processing`);
+            
+            // 🎯 TRIGGER BATCH PROCESSING: For large Master Inbox backfills, manually trigger queue processor
+            if (supabaseLeads.length >= 50) {
+              console.log(`🚀 MASTER BACKFILL: Large batch (${supabaseLeads.length} leads) - triggering queue processor...`);
+              try {
+                await triggerQueueProcessor();
+                console.log('✅ MASTER BACKFILL: Batch processing triggered successfully');
+              } catch (error) {
+                console.error('❌ MASTER BACKFILL: Failed to trigger batch processing:', error);
+                showToast('AI batch processing failed to start. You can manually trigger it later.', 'warning');
+              }
+            }
             
             // Simplified: No queue status tracking needed
             
@@ -3450,6 +3768,11 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
         is_archived: lead.is_archived || false,
         is_snoozed: lead.is_snoozed || false,
         revenue: lead.revenue || 0,
+        
+        // 🔑 PRESERVE SmartLead IDs for message history API calls
+        sl_campaign_id: lead.email_campaign_id, // Original SmartLead campaign ID
+        sl_lead_id: lead.email_lead_id || lead.email_lead_map_id, // Original SmartLead lead ID
+        sl_lead_email: lead.lead_email, // For API calls
         
         // Fields that will be merged from Supabase (set to null for now)
         intent: null,
@@ -4913,10 +5236,23 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // Calculate dashboard metrics
   const dashboardMetrics = useMemo(() => {
+    // 🔧 CRITICAL FIX: Add null check to prevent crashes
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      return {
+        totalLeads: 0,
+        highIntentLeads: 0,
+        avgResponseTime: 0,
+        avgEngagement: 0,
+        urgentResponse: 0,
+        needsResponse: 0,
+        needsFollowup: 0
+      };
+    }
+    
     const totalLeads = leads.length;
     const highIntentLeads = leads.filter(lead => lead.intent >= 8).length;
-    const avgResponseTime = leads.reduce((sum, lead) => sum + lead.response_time_avg, 0) / totalLeads;
-    const avgEngagement = leads.reduce((sum, lead) => sum + lead.engagement_score, 0) / totalLeads;
+    const avgResponseTime = leads.reduce((sum, lead) => sum + (lead.response_time_avg || 0), 0) / totalLeads;
+    const avgEngagement = leads.reduce((sum, lead) => sum + (lead.engagement_score || 0), 0) / totalLeads;
     
     const urgentResponse = leads.filter(lead => getResponseUrgency(lead) === 'urgent-response' && !isIntentNull(lead.intent)).length;
     const needsResponse = leads.filter(lead => getResponseUrgency(lead) === 'needs-response' && !isIntentNull(lead.intent)).length;
@@ -4943,7 +5279,8 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
   // Calculate analytics data
   const analyticsData = useMemo(() => {
-    if (!leads.length) return null;
+    // 🔧 CRITICAL FIX: Add proper null checks
+    if (!leads || !Array.isArray(leads) || leads.length === 0) return null;
 
     // Filter leads by date range
     const daysBack = parseInt(analyticsDateRange);
@@ -4957,10 +5294,10 @@ const InboxManager = ({ user, onSignOut, demoMode = false }) => {
 
     // Analyze message content and patterns
     const messageAnalysis = filteredLeads.flatMap(lead => 
-      lead.conversation
-        .filter(msg => msg.type === 'SENT')
+      (lead.conversation || []) // 🔧 SAFE: Default to empty array if conversation is undefined
+        .filter(msg => msg && msg.type === 'SENT') // 🔧 SAFE: Check msg exists
         .map(msg => {
-          const content = msg.content.toLowerCase();
+          const content = (msg.content || '').toLowerCase(); // 🔧 SAFE: Default to empty string
           const wordCount = content.split(/\s+/).length;
           
           // Check for pattern matches in our outbound messages
@@ -7999,18 +8336,140 @@ ${JSON.stringify(parsedConvo)}`;
   */
 
   const analyzeLeadIntents = async (leadsToAnalyze, progressId = null) => {
-    // Analyze ALL imported leads since they were pre-filtered during import
-    const leadsForAnalysis = leadsToAnalyze; // No filtering needed - already filtered at import
+    const leadsForAnalysis = leadsToAnalyze;
     
-    console.log(`🧠 Starting AI intent analysis for ALL ${leadsForAnalysis.length} imported leads...`);
-    console.log(`📊 All imported categories will get AI analysis (filtered during import process)`);
+    console.log(`🧠 Starting AI intent analysis for ${leadsForAnalysis.length} leads using QUEUE SYSTEM...`);
     
+    // ✅ SIMPLIFIED: Always use queue system (it was working perfectly!)
+    // Only the automatic GitHub Actions were the problem, not the queue itself
+    return await analyzeViaQueue(leadsForAnalysis, progressId);
+  };
+  
+  // Direct AI analysis for small batches (refresh button)
+  const analyzeDirectly = async (leadsToAnalyze) => {
+    let analyzed = 0;
+    
+    for (const leadRecord of leadsToAnalyze) {
+      try {
+        if (!leadRecord.email_message_body) {
+          console.log(`⚠️ Skipping ${leadRecord.lead_email} - no conversation`);
+          continue;
+        }
+        
+        // Parse conversation
+        let parsedConvo;
+        if (leadRecord.parsed_convo) {
+          try {
+            parsedConvo = JSON.parse(leadRecord.parsed_convo);
+          } catch (e) {
+            parsedConvo = parseConversationForIntent(leadRecord.email_message_body);
+          }
+        } else {
+          parsedConvo = parseConversationForIntent(leadRecord.email_message_body);
+        }
+        
+        if (!parsedConvo) {
+          console.log(`⚠️ Skipping ${leadRecord.lead_email} - failed to parse conversation`);
+          continue;
+        }
+        
+        // Create prompt (FIXED: includes out-of-office handling)
+        const prompt = `Analyze the LEAD'S intent based on their responses. ONLY analyze messages where "type": "REPLY" - ignore all "SENT" messages completely.
+
+HIGH INTENT (8-10):
+- Asking for pricing, costs, or rates
+- Wanting to schedule calls or meetings  
+- Asking qualifying questions about your service
+- Requesting more information or materials
+
+MEDIUM INTENT (4-7):
+- Polite interest but non-committal
+- "Maybe", "Possibly", "Sounds interesting"
+- Asked to be contacted later
+
+LOW INTENT (1-3):
+- Clear rejections: "Not interested", "Remove me", "Delete"
+- Negative responses or complaints
+- GDPR requests or unsubscribe requests
+- OUT OF OFFICE messages: "I'm currently out of office", "On vacation", "Away from email"
+- AUTOMATED RESPONSES: "Thank you for your email, I'll get back to you", "This is an automated response"
+- WRONG PERSON: "You have the wrong person", "Not my department", "Try someone else"
+
+CRITICAL RULES:
+1. Only look at messages with "type": "REPLY" - ignore all "SENT" messages
+2. OUT OF OFFICE messages = ALWAYS score 1-2 (very low intent)
+3. AUTOMATED responses = ALWAYS score 1-2 (very low intent)
+
+Respond with only a number 1-10.
+
+${JSON.stringify(parsedConvo)}`;
+        
+        // Direct Claude API call using environment variable
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': process.env.REACT_APP_ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          const intentScore = parseInt(result.content[0].text.trim());
+          
+          if (intentScore >= 1 && intentScore <= 10) {
+            // Update database immediately
+            await supabase
+              .from('retention_harbor')
+              .update({ 
+                intent: intentScore,
+                parsed_convo: JSON.stringify(parsedConvo),
+                opened: false // Highlight in UI
+              })
+              .eq('id', leadRecord.id);
+              
+            analyzed++;
+            console.log(`✅ DIRECT: ${leadRecord.lead_email} scored ${intentScore}`);
+          }
+        }
+        
+        // Small delay between calls to be respectful
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        console.error(`❌ DIRECT: Error processing ${leadRecord.lead_email}:`, error);
+      }
+    }
+    
+    console.log(`🎉 DIRECT: Processed ${analyzed}/${leadsToAnalyze.length} leads`);
+    return analyzed;
+  };
+  
+  // Queue-based AI analysis for large batches (backfill)
+  const analyzeViaQueue = async (leadsToAnalyze, progressId = null) => {
     let analyzed = 0;
     let skippedNoHistory = 0;
     let skippedParseFailed = 0;
     let skippedNoReplies = 0;
     
-    for (const leadRecord of leadsForAnalysis) {
+    console.log(`📦 QUEUE: Processing ${leadsToAnalyze.length} leads via queue system...`);
+    
+    // 🔍 DEBUG: Check what data we're working with
+    console.log(`🔍 QUEUE SAMPLE LEAD:`, {
+      email: leadsToAnalyze[0]?.lead_email,
+      id: leadsToAnalyze[0]?.id,
+      brand_id: leadsToAnalyze[0]?.brand_id,
+      hasEmailBody: !!leadsToAnalyze[0]?.email_message_body,
+      sampleKeys: Object.keys(leadsToAnalyze[0] || {})
+    });
+    
+    for (const leadRecord of leadsToAnalyze) { // 🔧 FIXED: was leadsForAnalysis (undefined variable)
       try {
         if (!leadRecord.email_message_body) {
           console.log(`⚠️ Skipping lead ${leadRecord.lead_email} - no message history`);
@@ -8056,38 +8515,61 @@ MEDIUM INTENT (4-7):
 - Initial positive response but then went quiet
 
 LOW INTENT (1-3):
-- Clear rejections: "Not interested", "Remove me", "Delete"
+- Clear rejections: "Not interested", "Remove me", "Delete"  
 - Negative responses or complaints
 - GDPR requests or unsubscribe requests
+- OUT OF OFFICE messages: "I'm currently out of office", "On vacation", "Away from email"
+- AUTOMATED RESPONSES: "Thank you for your email, I'll get back to you", "This is an automated response"
+- WRONG PERSON: "You have the wrong person", "Not my department", "Try someone else"
+- BOUNCED/DELIVERY ISSUES: "Mailbox full", "Email not delivered", "Invalid address"
 
-CRITICAL: Only look at messages with "type": "REPLY". Ignore all "type": "SENT" messages.
+CRITICAL RULES:
+1. Only look at messages with "type": "REPLY" - ignore all "SENT" messages
+2. OUT OF OFFICE messages = ALWAYS score 1-2 (very low intent)
+3. AUTOMATED responses = ALWAYS score 1-2 (very low intent)
+4. Look for keywords: "out of office", "vacation", "away", "automated", "auto-reply", "currently unavailable"
 
 Respond with only a number 1-10.
 
 ${JSON.stringify(parsedConvo)}`;
 
-        // Queue AI intent analysis task (NEW EFFICIENT SYSTEM)
-        const { error: queueError } = await supabase
+        // 🔍 DEBUG: Check lead data before queuing
+        console.log(`🔍 QUEUE DEBUG: Processing lead ${leadRecord.lead_email}`, {
+          hasBrandId: !!leadRecord.brand_id,
+          hasLeadId: !!leadRecord.id,
+          hasConversation: !!parsedConvo,
+          brandId: leadRecord.brand_id,
+          leadId: leadRecord.id
+        });
+        
+        // Queue AI intent analysis task
+        const { error: queueError, data: insertedTask } = await supabase
           .from('processing_queue')
           .insert({
             task_type: 'ai_intent',
             payload: {
-              conversation_history: parsedConvo,  // 🔧 FIX: Use correct field name
-              lead_email: leadRecord.lead_email,  // 🔧 FIX: Use correct field name
-              brand_id: leadRecord.brand_id,      // 🔧 FIX: Add missing brand_id
+              conversation_history: parsedConvo,
+              lead_email: leadRecord.lead_email,
+              brand_id: leadRecord.brand_id,
               prompt: prompt
             },
             status: 'pending',
             priority: 1,
             brand_id: leadRecord.brand_id,
-            lead_id: leadRecord.id, // Use the actual Supabase record ID
-            // Let database set created_at and scheduled_for to NOW()
-            // This prevents timezone/date issues
-          });
+            lead_id: leadRecord.id, // Supabase record ID from retention_harbor
+          })
+          .select('id'); // Return the inserted task ID for confirmation
 
         if (queueError) {
-          console.error(`❌ Failed to queue AI task for ${leadRecord.lead_email}:`, queueError);
+          console.error(`❌ QUEUE ERROR for ${leadRecord.lead_email}:`, queueError);
+          console.error(`🔍 QUEUE ERROR DETAILS:`, {
+            message: queueError.message,
+            code: queueError.code,
+            details: queueError.details,
+            hint: queueError.hint
+          });
         } else {
+          console.log(`✅ QUEUE SUCCESS: Task ${insertedTask?.[0]?.id} created for ${leadRecord.lead_email}`);
           // Update lead with parsed_convo immediately (AI score will be added later by queue processor)
           const { error: updateError } = await supabase
             .from('retention_harbor')
@@ -8105,7 +8587,7 @@ ${JSON.stringify(parsedConvo)}`;
             if (analyzed % 5 === 0) {
               setBackfillProgress(prev => ({ 
                 ...prev,
-                status: `Queued AI analysis for ${analyzed}/${leadsForAnalysis.length} leads...` 
+                status: `Queued AI analysis for ${analyzed}/${leadsToAnalyze.length} leads...` 
               }));
             }
           }
@@ -8118,8 +8600,8 @@ ${JSON.stringify(parsedConvo)}`;
       }
     }
     
-    console.log(`✅ AI tasks queued successfully! Queued ${analyzed}/${leadsForAnalysis.length} leads for background processing`);
-    console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${leadsForAnalysis.length} queued for AI analysis)`);
+    console.log(`✅ AI tasks queued successfully! Queued ${analyzed}/${leadsToAnalyze.length} leads for background processing`);
+    console.log(`📊 Total leads imported: ${leadsToAnalyze.length} (${analyzed} queued for AI analysis)`);
     console.log(`🔄 AI processing will happen in background - check processing_queue table to monitor`);
     
     // Initialize persistent AI processing toast - ALWAYS show when processing
@@ -8141,17 +8623,43 @@ ${JSON.stringify(parsedConvo)}`;
     console.log(`   - ${skippedNoHistory} leads skipped (no message history)`);
     console.log(`   - ${skippedNoReplies} leads skipped (no replies - only SENT messages)`);
     console.log(`   - ${skippedParseFailed} leads skipped (other parse errors)`);
-    console.log(`   - Total processed: ${analyzed + skippedNoHistory + skippedNoReplies + skippedParseFailed}/${leadsForAnalysis.length}`);
+    console.log(`   - Total processed: ${analyzed + skippedNoHistory + skippedNoReplies + skippedParseFailed}/${leadsToAnalyze.length}`);
     
-    if (analyzed < leadsForAnalysis.length) {
-      const remaining = leadsForAnalysis.length - analyzed - skippedNoHistory - skippedNoReplies - skippedParseFailed;
+    if (analyzed < leadsToAnalyze.length) {
+      const remaining = leadsToAnalyze.length - analyzed - skippedNoHistory - skippedNoReplies - skippedParseFailed;
       if (remaining > 0) {
         console.log(`⚠️ ${remaining} leads could not be queued due to database issues.`);
       }
-      console.log('💡 The queue processor will handle AI analysis automatically every 30 seconds.');
+      console.log('💡 For large batches (50+ leads), the queue processor will be triggered manually for efficient batch processing.');
     }
     
     return analyzed;
+  };
+  
+  // Manual queue processor trigger (only for large batches after backfill)
+  const triggerQueueProcessor = async () => {
+    try {
+      console.log('🚀 MANUAL: Triggering queue processor for batch processing...');
+      
+      const response = await fetch('https://xajedwcurzdgzrlnrcqi.supabase.co/functions/v1/queue-processor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhamVkd2N1cnpkZ3pybG5yY3FpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcwNDQ2Nzc0NCwiZXhwIjoyMDIwMDQzNzQ0fQ.pUhLj0rE6AIqkYJSNTxXo1Cya-F2bBnZ6jMnytzNLEk`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ MANUAL: Queue processor completed - ${result.processed} tasks processed, ${result.failed} failed`);
+        return result;
+      } else {
+        throw new Error(`Queue processor failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('❌ MANUAL: Queue processor error:', error);
+      throw error;
+    }
   };
 
   // ✅ REMOVED: callNavviiAIForIntentAnalysis() - was unused
@@ -8861,6 +9369,18 @@ ${JSON.stringify(parsedConvo)}`;
         
         // Queue ALL imported leads for AI analysis (already filtered during import)
         const analyzedCount = await analyzeLeadIntents(insertedLeads, null); // Analyze all imported leads
+        
+        // 🎯 TRIGGER BATCH PROCESSING: For large backfills, manually trigger queue processor
+        if (insertedLeads.length >= 50) {
+          console.log(`🚀 BACKFILL: Large batch (${insertedLeads.length} leads) - triggering queue processor for efficient batch processing...`);
+          try {
+            await triggerQueueProcessor();
+            console.log('✅ BACKFILL: Batch processing triggered successfully');
+          } catch (error) {
+            console.error('❌ BACKFILL: Failed to trigger batch processing:', error);
+            showToast('AI batch processing failed to start. You can manually trigger it later.', 'warning');
+          }
+        }
         
         // Show immediate completion (AI happens in background)
         setBackfillProgress({ 
@@ -10399,18 +10919,85 @@ ${JSON.stringify(parsedConvo)}`;
                   </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
               <div className="text-sm font-mono" style={{ color: themeStyles.accent }}>
                 In Progress
+                </div>
+                <button
+                  onClick={() => {
+                    console.log('🧹 MANUAL: Clearing stuck AI toast');
+                    setPersistentAIToast(null);
+                    showToast('AI processing notification cleared', 'success');
+                  }}
+                  className="p-1 hover:opacity-60 transition-opacity"
+                  title="Clear AI processing notification"
+                >
+                  <X className="w-4 h-4" style={{ color: themeStyles.textMuted }} />
+                </button>
               </div>
             </div>
 
-            {/* Simple Message */}
-            <div className="space-y-2">
+            {/* Manual Processing Controls */}
+            <div className="space-y-3">
               <div className="text-center text-sm" style={{ color: themeStyles.textMuted }}>
-                AI analysis will be completed shortly
+                {persistentAIToast.totalLeads} leads queued for AI analysis
               </div>
+              
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={async () => {
+                    try {
+                      console.log('🚀 AI TOAST: User triggered queue processor');
+                      const result = await triggerQueueProcessor();
+                      
+                      if (result.processed > 0) {
+                        // Update toast progress or clear if complete
+                        setPersistentAIToast(prev => {
+                          const newProcessed = prev.processedLeads + result.processed;
+                          if (newProcessed >= prev.totalLeads) {
+                            // Complete - clear toast
+                            showToast(`🎉 AI processing complete! ${prev.totalLeads} leads analyzed`, 'success');
+                            return null;
+                          } else {
+                            // Update progress
+                            return { ...prev, processedLeads: newProcessed };
+                          }
+                        });
+                        
+                        fetchLeads(); // Refresh to show intent scores
+                      }
+                    } catch (error) {
+                      console.error('❌ AI TOAST: Queue processing failed:', error);
+                      showToast('AI processing failed. Please try again.', 'error');
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-all"
+                  style={{
+                    backgroundColor: themeStyles.accent,
+                    color: '#ffffff'
+                  }}
+                >
+                  🚀 Process Now
+                </button>
+                
+                <button
+                  onClick={() => {
+                    console.log('🧹 AI TOAST: User manually cleared toast');
+                    setPersistentAIToast(null);
+                    showToast('AI processing notification cleared', 'success');
+                  }}
+                  className="px-3 py-2 rounded-lg text-sm font-medium hover:opacity-80 transition-all"
+                  style={{
+                    backgroundColor: `${themeStyles.textMuted}20`,
+                    color: themeStyles.textMuted
+                  }}
+                >
+                  Skip
+                </button>
+              </div>
+              
               <div className="text-center text-xs" style={{ color: themeStyles.textMuted }}>
-                Intent scores will appear automatically when processing finishes
+                Click "Process Now" to analyze intent scores immediately
               </div>
             </div>
           </div>
@@ -12164,6 +12751,82 @@ ${JSON.stringify(parsedConvo)}`;
             />
           </div>
 
+          {/* Refresh Button and Status */}
+          <div className="flex items-center justify-between mb-4 p-3 rounded-lg" style={{backgroundColor: themeStyles.tertiaryBg, border: `1px solid ${themeStyles.border}`}}>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={refreshInbox}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:opacity-80 disabled:opacity-50 transition-all"
+                style={{
+                  backgroundColor: themeStyles.accent,
+                  color: '#ffffff'
+                }}
+              >
+                {refreshing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm font-medium">Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="text-sm font-medium">Refresh Inbox</span>
+                  </>
+                )}
+              </button>
+              
+              {/* Last refresh time display */}
+              <div className="text-xs" style={{color: themeStyles.textMuted}}>
+                {lastRefreshTime ? (
+                  <span>Last updated: {lastRefreshTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                ) : (
+                  <span>Click refresh to check for new responses</span>
+                )}
+              </div>
+              
+              {/* Manual AI Queue Processor Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    console.log('🚀 MANUAL: User triggered queue processor');
+                    showToast('Processing AI queue...', 'info');
+                    const result = await triggerQueueProcessor();
+                    showToast(`✅ AI processing complete! ${result.processed} tasks processed`, 'success');
+                    fetchLeads(); // Refresh to show updated intent scores
+                  } catch (error) {
+                    console.error('❌ MANUAL: Queue processing failed:', error);
+                    showToast('AI queue processing failed', 'error');
+                  }
+                }}
+                className="px-3 py-1 rounded-lg text-xs font-medium hover:opacity-80 transition-all"
+                style={{
+                  backgroundColor: `${themeStyles.accent}20`,
+                  color: themeStyles.accent,
+                  border: `1px solid ${themeStyles.accent}40`
+                }}
+              >
+                🤖 Process AI Queue
+              </button>
+            </div>
+            
+            {/* Status indicators */}
+            <div className="flex items-center gap-2 text-xs" style={{color: themeStyles.textMuted}}>
+              <div className="flex items-center gap-1">
+                <div className={`w-2 h-2 rounded-full ${
+                  refreshing ? 'bg-yellow-400 animate-pulse' :
+                  leads.some(l => !l.opened) ? 'bg-green-400' :
+                  'bg-gray-400'
+                }`} />
+                <span>
+                  {refreshing ? 'Checking...' :
+                   leads.some(l => !l.opened) ? `${leads.filter(l => !l.opened).length} new` :
+                   'Up to date'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Sort and Filter Buttons */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="relative">
@@ -12449,22 +13112,7 @@ ${JSON.stringify(parsedConvo)}`;
                     </span>
             </button>
             
-            {/* Check for New Replies Button */}
-            <button
-              onClick={() => pollForNewLeads(true)}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-              style={{
-                backgroundColor: themeStyles.secondaryBg,
-                border: `1px solid ${themeStyles.border}`,
-                color: themeStyles.textPrimary,
-              }}
-              disabled={loading || pollingActive}
-            >
-              <svg className={`w-4 h-4 ${pollingActive ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {pollingActive ? 'Checking...' : 'Check for New Replies'}
-            </button>
+            {/* Removed old polling button - replaced with new refresh button in search area */}
           </div>
 
 

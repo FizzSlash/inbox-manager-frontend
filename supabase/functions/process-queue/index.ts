@@ -10,8 +10,9 @@ serve(async (req)=>{
       headers: corsHeaders
     });
   }
+  
   try {
-    console.log('🔄 Queue processor started with COMPLETE BATCHES API');
+    console.log('🔄 Queue processor started - MANUAL TRIGGER ONLY (no auto-schedule)');
     const startTime = Date.now();
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
       auth: {
@@ -189,6 +190,7 @@ serve(async (req)=>{
     });
   }
 });
+
 // Check for completed batches and retrieve results
 async function checkCompletedBatches(supabase) {
   try {
